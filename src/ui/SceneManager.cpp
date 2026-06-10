@@ -245,6 +245,58 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(NOCT_W - 6, sbY, 3, sbH, ORANGE);
 }
 
+/* Ambient screensaver: drifting starfield + wandering wolf + big clock.
+ * Replaces the old "dim to black" — any button press wakes it. */
+void SceneManager::drawScreensaver(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  unsigned long now = ui.now;
+
+  /* starfield — 48 deterministic stars drifting down, twinkling */
+  for (int i = 0; i < 48; i++) {
+    uint32_t h = i * 2654435761u; /* Knuth hash → pseudo-random but stable */
+    int sx = (h >> 8) % NOCT_W;
+    int speed = 8 + (h % 5);
+    int sy = (int)(((h >> 3) + now / (40 / speed)) % NOCT_H);
+    int tw = (int)((now / 120 + i) % 6);
+    uint16_t c = tw < 3 ? lerp565(BG, INFO, 60 + tw * 50) : DIM;
+    g.drawPixel(sx, sy, c);
+    if (i % 7 == 0) g.drawPixel(sx, (sy + 1) % NOCT_H, c);
+  }
+
+  /* big clock, centered */
+  if (ui.st.pcClock[0]) {
+    g.setFont(&theme::F_HUGE);
+    g.setTextSize(2);
+    int cw = g.textWidth(ui.st.pcClock);
+    textCenter(g, NOCT_W / 2, 18 - (g.fontHeight() - 64) / 2, ui.st.pcClock,
+               lerp565(ORANGE, TEXT, 80));
+    g.setTextSize(1);
+    (void)cw;
+  }
+
+  /* wandering wolf — bounces left↔right along the lower third */
+  int span = NOCT_W - 64;
+  int phase = (int)((now / 24) % (2 * span));
+  int wx = phase < span ? phase : 2 * span - phase;
+  int wy = 96 + (int)(sinf(now / 360.0f) * 6);
+  const unsigned char *frame = ((now / 200) & 3) == 0 ? wolf_blink : wolf_idle;
+  if (!ui.st.link.tcpConnected) frame = wolf_idle;
+  widgets::xbmScaled(g, wx, wy, frame, 32, 32, 2, ORANGE);
+
+  /* tiny ambient PC line + hint */
+  g.setFont(&theme::F_TEXT);
+  if (ui.st.link.tcpConnected && !ui.st.link.signalLost) {
+    char buf[40];
+    snprintf(buf, sizeof(buf), "CPU %dC   GPU %dC   RAM %.0f%%", ui.st.hw.ct,
+             ui.st.hw.gt,
+             ui.st.hw.ra > 0.1f ? ui.st.hw.ru * 100 / ui.st.hw.ra : 0);
+    textCenter(g, NOCT_W / 2, 80, buf, DIM);
+  }
+  if ((now / 700) & 1)
+    textCenter(g, NOCT_W / 2, NOCT_H - 12, "нажми кнопку", ORANGE_DIM);
+  /* framebuffer is pushed by the main loop after draw() returns */
+}
+
 void SceneManager::draw(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
@@ -284,16 +336,21 @@ void SceneManager::draw(UiCtx &ui) {
     gotoScene(next, ui);
   }
 
-  /* screen dim */
+  /* screensaver: after the dim timeout, dim a little and show the ambient
+   * clock+wolf scene (not a black screen). Any input wakes it. */
   if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
     dimmed_ = true;
-    d_.disp->setBrightness(15);
+    d_.disp->setBrightness(s.brightness > 90 ? 90 : s.brightness);
   }
   if (dimmed_ && alertActive(ui)) {
     dimmed_ = false;
     d_.disp->setBrightness(s.brightness);
+  }
+  if (dimmed_ && !alertActive(ui)) {
+    drawScreensaver(ui);
+    return;
   }
 
   /* alert takeover hijacks the scene — but NEVER the Forza HUD */

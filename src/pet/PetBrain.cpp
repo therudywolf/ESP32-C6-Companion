@@ -80,15 +80,17 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
   return c;
 }
 
-/* PC counts as idle when the owner is away and the GPU is free — only then
- * may the wolf spend GPU time thinking (user request: LLM only when idle). */
+/* PC counts as idle when the owner has clearly stepped away AND the machine
+ * is quiet — only then may the wolf spend GPU time thinking. Strict on
+ * purpose (user: "LLM не должна юзаться если я пользуюсь пк"): explicit TALK
+ * still forces a reply regardless of this gate. */
 bool PetBrain::pcIdle(const AppState &st) const {
   if (st.forzaLive) return false;
   if (!st.link.tcpConnected || st.link.signalLost) return false;
   if (st.alertActive) return false;
-  bool away = st.pcIdleSec >= 0 && st.pcIdleSec >= 60;
-  bool light = st.hw.gl < 25 && st.hw.cl < 40;
-  return away && light;
+  bool away = st.pcIdleSec >= 0 && st.pcIdleSec >= 90; /* ≥1.5 min no input */
+  bool quiet = st.hw.gl < 18 && st.hw.cl < 30;          /* GPU/CPU near-free */
+  return away && quiet;
 }
 
 void PetBrain::show(const String &p, unsigned long now) {
