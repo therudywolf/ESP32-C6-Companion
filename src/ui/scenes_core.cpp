@@ -87,16 +87,21 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
                                     : ORANGE;
   xbmScaled(g, wx, wy, wolfFrame(ui), WOLF_SPR_W, WOLF_SPR_H, 2, wc);
 
-  /* tech bracket around the wolf */
+  /* tech bracket around the wolf — corners pulse in sequence (scanning HUD) */
   int bx = wx - 6, by = wy - 6, bs = 76;
-  g.drawFastHLine(bx, by, 12, ORANGE_DIM);
-  g.drawFastVLine(bx, by, 12, ORANGE_DIM);
-  g.drawFastHLine(bx + bs - 12, by, 12, ORANGE_DIM);
-  g.drawFastVLine(bx + bs, by, 12, ORANGE_DIM);
-  g.drawFastHLine(bx, by + bs, 12, ORANGE_DIM);
-  g.drawFastVLine(bx, by + bs - 12, 12, ORANGE_DIM);
-  g.drawFastHLine(bx + bs - 12, by + bs, 12, ORANGE_DIM);
-  g.drawFastVLine(bx + bs, by + bs - 12, 12, ORANGE_DIM);
+  int activeCorner = (now / 350) % 4;
+  uint16_t c0 = (activeCorner == 0) ? ORANGE : ORANGE_DIM;
+  uint16_t c1 = (activeCorner == 1) ? ORANGE : ORANGE_DIM;
+  uint16_t c2 = (activeCorner == 2) ? ORANGE : ORANGE_DIM;
+  uint16_t c3 = (activeCorner == 3) ? ORANGE : ORANGE_DIM;
+  g.drawFastHLine(bx, by, 12, c0);
+  g.drawFastVLine(bx, by, 12, c0);
+  g.drawFastHLine(bx + bs - 12, by, 12, c1);
+  g.drawFastVLine(bx + bs, by, 12, c1);
+  g.drawFastHLine(bx + bs - 12, by + bs, 12, c2);
+  g.drawFastVLine(bx + bs, by + bs - 12, 12, c2);
+  g.drawFastHLine(bx, by + bs, 12, c3);
+  g.drawFastVLine(bx, by + bs - 12, 12, c3);
 
   /* Zzz while sleeping */
   if (ui.pet.isSleeping() && ui.pet.isAlive()) {

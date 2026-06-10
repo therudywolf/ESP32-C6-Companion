@@ -58,6 +58,12 @@ void weatherIcon(LGFX_Sprite &g, int cx, int cy, int r, int wmo,
 /* kb/s humanizer: "1.2M" / "850K". */
 void fmtRate(char *out, size_t cap, int kbs);
 
+/* Word-wrap text into a box at the current font, breaking overlong words by
+ * characters (UTF-8 aware). Returns the next y after the last line drawn.
+ * Stops at maxLines / box bottom. */
+int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
+             int maxLines, uint16_t color);
+
 } // namespace widgets
 
 #endif

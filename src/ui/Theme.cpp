@@ -15,6 +15,16 @@ const lgfx::U8g2font F_HUGE(u8g2_font_logisoso32_tr);
 uint16_t BG, ORANGE, ORANGE_DIM, TEXT, DIM, PANEL, GOOD, WARN, CRIT, INFO,
     ACCENT;
 int currentPreset = 0;
+unsigned long nowMs = 0;
+
+uint16_t lerp565(uint16_t a, uint16_t b, int t) {
+  int ar = (a >> 11) & 0x1F, ag = (a >> 5) & 0x3F, ab = a & 0x1F;
+  int br = (b >> 11) & 0x1F, bg = (b >> 5) & 0x3F, bb = b & 0x1F;
+  int r = ar + (br - ar) * t / 255;
+  int gg = ag + (bg - ag) * t / 255;
+  int bl = ab + (bb - ab) * t / 255;
+  return (uint16_t)((r << 11) | (gg << 5) | bl);
+}
 
 struct Preset {
   const char *name;
@@ -94,6 +104,16 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
   g.drawFastVLine(x + w - 1, y, h - cut, color);
   g.drawFastHLine(x, y + h - 1, w - cut, color);
   g.drawLine(x + w - 1, y + h - 1 - cut, x + w - 1 - cut, y + h - 1, color);
+  /* animated glint travelling clockwise along the top + right edges */
+  int peri = 2 * (w + h);
+  int p = (int)((nowMs / 16 + (x * 7 + y * 13)) % peri); /* phase per panel */
+  int gx, gy;
+  if (p < w) { gx = x + p; gy = y; }
+  else if (p < w + h) { gx = x + w - 1; gy = y + (p - w); }
+  else if (p < 2 * w + h) { gx = x + w - 1 - (p - w - h); gy = y + h - 1; }
+  else { gx = x; gy = y + h - 1 - (p - 2 * w - h); }
+  uint16_t glint = lerp565(color, titleColor, 200);
+  g.fillRect(gx - 1, gy - 1, 3, 3, glint);
   if (title && title[0]) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
@@ -113,6 +133,10 @@ void hBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
   if (fill > 0) {
     ditherRect(g, x + 2, y + 2, fill, h - 4, color);
     g.drawFastVLine(x + 2 + fill - 1, y + 2, h - 4, color); /* solid tip */
+    /* bright shimmer sweeping left→right across the filled region */
+    int sx = x + 2 + (int)((nowMs / 9 + x * 5) % (fill + 1));
+    uint16_t hi = lerp565(color, TEXT, 150);
+    g.drawFastVLine(sx, y + 2, h - 4, hi);
   }
 }
 
@@ -122,8 +146,13 @@ void vBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
   g.drawRect(x, y, w, h, ORANGE_DIM);
   int fill = (h - 4) * pct / 100;
   if (fill > 0) {
-    ditherRect(g, x + 2, y + h - 2 - fill, w - 4, fill, color);
-    g.drawFastHLine(x + 2, y + h - 2 - fill, w - 4, color);
+    int top = y + h - 2 - fill;
+    ditherRect(g, x + 2, top, w - 4, fill, color);
+    g.drawFastHLine(x + 2, top, w - 4, color);
+    /* shimmer sweeping up the column */
+    int sy = y + h - 2 - (int)((nowMs / 9 + y * 5) % (fill + 1));
+    uint16_t hi = lerp565(color, TEXT, 150);
+    g.drawFastHLine(x + 2, sy, w - 4, hi);
   }
 }
 
