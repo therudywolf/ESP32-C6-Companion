@@ -22,6 +22,9 @@ public:
   void tick(unsigned long now, bool wifiUp, AppState &state, Graphs &graphs);
   void sendScreen(int n);
   void sendCmd(const char *cmd); /* "claude" | "status" */
+  /* report wolf state upstream so the companion app can show it */
+  void sendWolf(int hunger, int joy, int energy, int mood, bool alive,
+                bool sleeping, unsigned long ageDays);
   bool connected() const { return tcpConnected_; }
   bool signalLost(unsigned long now) const;
   bool hasData() const { return firstData_; }
