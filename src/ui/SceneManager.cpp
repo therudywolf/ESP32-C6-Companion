@@ -259,9 +259,9 @@ void SceneManager::draw(UiCtx &ui) {
     preForzaScene_ = -1;
   }
 
-  /* carousel */
+  /* carousel — never while the Forza HUD is open */
   if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !alertActive(ui) &&
-      !(scene_ == SCENE_FORZA && ui.forzaLive) &&
+      scene_ != SCENE_FORZA &&
       ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
@@ -271,7 +271,7 @@ void SceneManager::draw(UiCtx &ui) {
   }
 
   /* screen dim */
-  if (s.displayTimeoutSec > 0 && !dimmed_ &&
+  if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
     dimmed_ = true;
@@ -282,9 +282,9 @@ void SceneManager::draw(UiCtx &ui) {
     d_.disp->setBrightness(s.brightness);
   }
 
-  /* alert takeover hijacks the scene */
+  /* alert takeover hijacks the scene — but NEVER the Forza HUD */
   int effScene = scene_;
-  if (alertActive(ui)) {
+  if (alertActive(ui) && scene_ != SCENE_FORZA) {
     if (preAlertScene_ < 0) preAlertScene_ = scene_;
     effScene = ui.st.alertTargetScene;
   } else {
@@ -317,16 +317,18 @@ void SceneManager::draw(UiCtx &ui) {
   case SCENE_FORZA: scenes::drawForza(ui); break;
   }
 
-  /* chrome */
-  widgets::statusBar(ui, scenes::title(effScene));
-  if (denActionMode_ && effScene == SCENE_DEN)
-    widgets::footer(ui, "долгое=да", effScene, SCENE_FORZA);
-  else
-    widgets::footer(ui, scenes::actionHint(effScene, ui), effScene,
-                    SCENE_FORZA);
+  /* chrome — the Forza HUD owns the whole screen, no bars */
+  if (effScene != SCENE_FORZA) {
+    widgets::statusBar(ui, scenes::title(effScene));
+    if (denActionMode_ && effScene == SCENE_DEN)
+      widgets::footer(ui, "долгое=да", effScene, SCENE_FORZA);
+    else
+      widgets::footer(ui, scenes::actionHint(effScene, ui), effScene,
+                      SCENE_FORZA);
+  }
 
   /* alert frame on top */
-  if (alertActive(ui)) {
+  if (alertActive(ui) && effScene != SCENE_FORZA) {
     bool on = (ui.now / 250) & 1;
     uint16_t c = on ? CRIT : ORANGE_DIM;
     g.drawRect(0, 0, NOCT_W, NOCT_H, c);
