@@ -1,4 +1,6 @@
-/* Nocturne C6 — hardware scenes: CPU, GPU, RAM, DISKS, FANS, MB, NET. */
+/* Nocturne C6 — hardware scenes: CPU, GPU, RAM, DISKS, FANS, MB, NET.
+ * Metre-readability rule: one hero number per panel (32-64 px), secondary
+ * data at 16 px minimum, tertiary data dropped. */
 #include "core/config.h"
 #include "ui/Scenes.h"
 
@@ -15,16 +17,35 @@ static bool gate(UiCtx &ui) {
   return true;
 }
 
-static void bigTemp(LGFX_Sprite &g, int x, int y, int t, uint16_t c) {
+/* 64 px hero temperature with a small unit */
+static void heroTemp(LGFX_Sprite &g, int x, int y, int t, uint16_t c) {
   char v[8];
   snprintf(v, sizeof(v), "%d", t);
   g.setFont(&F_HUGE);
+  g.setTextSize(2);
   int vw = g.textWidth(v);
   textAt(g, x, y, v, c);
+  g.setTextSize(1);
   g.setFont(&F_TEXT);
   g.setTextSize(2);
-  textAt(g, x + vw + 4, y + 14, "C", DIM);
+  textAt(g, x + vw + 4, y + 44, "C", DIM);
   g.setTextSize(1);
+}
+
+/* big number + small unit on one baseline */
+static void bigVal(LGFX_Sprite &g, int x, int y, const char *num,
+                   const char *unit, uint16_t c, bool rightAlign = false) {
+  g.setFont(&F_BIG);
+  int nw = g.textWidth(num);
+  g.setFont(&F_TEXT);
+  int uw = unit ? g.textWidth(unit) : 0;
+  int x0 = rightAlign ? x - nw - uw - 4 : x;
+  g.setFont(&F_BIG);
+  textAt(g, x0, y, num, c);
+  if (unit) {
+    g.setFont(&F_TEXT);
+    textAt(g, x0 + nw + 4, y + 13, unit, DIM);
+  }
 }
 
 void drawCpu(UiCtx &ui) {
@@ -34,27 +55,23 @@ void drawCpu(UiCtx &ui) {
   char v[32];
 
   panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
-  bigTemp(g, 16, 42, hw.ct, tempColor(hw.ct, 75, 85));
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "%dW  %dMHz", hw.pw, hw.cc);
-  textAt(g, 14, 94, v, DIM);
+  heroTemp(g, 14, 36, hw.ct, tempColor(hw.ct, 75, 85));
 
   panel(g, 140, 26, 176, 50, "НАГРУЗКА");
   g.setFont(&F_VALUE);
+  g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.cl);
-  textAt(g, 148, 38, v, pctColor(hw.cl));
-  sparkline(g, 196, 34, 112, 34, ui.gr.cpuLoad, GOOD);
+  textAt(g, 148, 36, v, pctColor(hw.cl));
+  g.setTextSize(1);
+  sparkline(g, 232, 34, 76, 34, ui.gr.cpuLoad, GOOD);
 
-  panel(g, 140, 82, 176, 32, "КУЛЕР");
-  g.setFont(&F_VALUE);
-  snprintf(v, sizeof(v), "%d RPM", hw.fans[0]);
-  textAt(g, 148, 92, v, TEXT);
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "помпа %d", hw.fans[1]);
-  textRight(g, 308, 94, v, DIM);
+  panel(g, 140, 82, 176, 32, "КУЛЕР / ПИТАНИЕ");
+  snprintf(v, sizeof(v), "%d", hw.fans[0]);
+  bigVal(g, 148, 86, v, "RPM", TEXT);
+  snprintf(v, sizeof(v), "%d", hw.pw);
+  bigVal(g, 308, 86, v, "W", TEXT, true);
 
-  /* top process — big, plus runner-up */
-  panel(g, 4, 120, 312, 30, "ТОП ПРОЦЕСС");
+  panel(g, 4, 120, 312, 30, "ТОП ПРОЦЕСС / ТАКТ");
   if (ui.st.process.cpuNames[0].length()) {
     g.setFont(&F_TEXT);
     g.setTextSize(2);
@@ -62,12 +79,9 @@ void drawCpu(UiCtx &ui) {
              ui.st.process.cpuPercent[0]);
     textAt(g, 12, 128, v, TEXT);
     g.setTextSize(1);
-    if (ui.st.process.cpuNames[1].length()) {
-      snprintf(v, sizeof(v), "%.11s %d%%", ui.st.process.cpuNames[1].c_str(),
-               ui.st.process.cpuPercent[1]);
-      textRight(g, 306, 132, v, DIM);
-    }
   }
+  snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
+  bigVal(g, 306, 124, v, "GHz", INFO, true);
 }
 
 void drawGpu(UiCtx &ui) {
@@ -77,31 +91,31 @@ void drawGpu(UiCtx &ui) {
   char v[32];
 
   panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
-  bigTemp(g, 16, 42, hw.gt, tempColor(hw.gt, 70, 80));
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "hotspot %dC", hw.gh);
-  textAt(g, 14, 94, v, tempColor(hw.gh, 85, 95));
+  heroTemp(g, 14, 36, hw.gt, tempColor(hw.gt, 70, 80));
 
   panel(g, 140, 26, 176, 50, "НАГРУЗКА");
   g.setFont(&F_VALUE);
+  g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.gl);
-  textAt(g, 148, 38, v, pctColor(hw.gl));
-  sparkline(g, 196, 34, 112, 34, ui.gr.gpuLoad, GOOD);
+  textAt(g, 148, 36, v, pctColor(hw.gl));
+  g.setTextSize(1);
+  sparkline(g, 232, 34, 76, 34, ui.gr.gpuLoad, GOOD);
 
   panel(g, 140, 82, 176, 32, "VRAM");
-  g.setFont(&F_VALUE);
+  g.setFont(&F_TEXT);
+  g.setTextSize(2);
   snprintf(v, sizeof(v), "%.1f/%.0fG", hw.vu, hw.vt);
-  textAt(g, 148, 92, v, TEXT);
-  hBar(g, 236, 90, 72, 12, hw.gv, pctColor(hw.gv));
+  textAt(g, 148, 90, v, TEXT);
+  g.setTextSize(1);
+  hBar(g, 252, 90, 56, 14, hw.gv, pctColor(hw.gv));
 
-  panel(g, 4, 120, 312, 30, "ЧАСТОТА / ПИТАНИЕ / ФАН");
-  g.setFont(&F_VALUE);
-  snprintf(v, sizeof(v), "%d MHz", hw.gclock);
-  textAt(g, 14, 130, v, TEXT);
-  snprintf(v, sizeof(v), "%d W", hw.gtdp);
-  textCenter(g, 168, 130, v, TEXT);
-  snprintf(v, sizeof(v), "%d RPM", hw.gf);
-  textRight(g, 306, 130, v, DIM);
+  panel(g, 4, 120, 312, 30, "ТАКТ / ПИТАНИЕ / ГОР.ТОЧКА");
+  snprintf(v, sizeof(v), "%d", hw.gclock);
+  bigVal(g, 14, 124, v, "MHz", TEXT);
+  snprintf(v, sizeof(v), "%d", hw.gtdp);
+  bigVal(g, 178, 124, v, "W", TEXT);
+  snprintf(v, sizeof(v), "%d", hw.gh);
+  bigVal(g, 306, 124, v, "C", tempColor(hw.gh, 85, 95), true);
 }
 
 void drawRam(UiCtx &ui) {
@@ -111,32 +125,37 @@ void drawRam(UiCtx &ui) {
   char v[40];
   int rpct = hw.ra > 0.1f ? (int)(hw.ru * 100 / hw.ra) : 0;
 
-  panel(g, 4, 26, 312, 62, "ОПЕРАТИВКА");
+  panel(g, 4, 26, 312, 74, "ОПЕРАТИВКА");
   g.setFont(&F_HUGE);
+  g.setTextSize(2);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw = g.textWidth(v);
-  textAt(g, 16, 38, v, pctColor(rpct));
+  textAt(g, 14, 32, v, pctColor(rpct));
+  g.setTextSize(1);
   g.setFont(&F_TEXT);
   g.setTextSize(2);
-  snprintf(v, sizeof(v), "/ %.0f ГБ", hw.ra);
-  textAt(g, 24 + vw, 52, v, DIM);
+  snprintf(v, sizeof(v), "/%.0fГБ", hw.ra);
+  textAt(g, 22 + vw, 76, v, DIM);
   g.setTextSize(1);
-  snprintf(v, sizeof(v), "%d%%", rpct);
   g.setFont(&F_VALUE);
-  textRight(g, 304, 36, v, TEXT);
-  hBar(g, 12, 72, 296, 10, rpct, pctColor(rpct));
+  g.setTextSize(2);
+  snprintf(v, sizeof(v), "%d%%", rpct);
+  textRight(g, 306, 34, v, pctColor(rpct));
+  g.setTextSize(1);
+  hBar(g, 230, 70, 76, 18, rpct, pctColor(rpct));
 
-  panel(g, 4, 96, 312, 54, "ТОП ПО ПАМЯТИ");
+  panel(g, 4, 108, 312, 42, "ТОП ПО ПАМЯТИ");
   g.setFont(&F_TEXT);
+  g.setTextSize(2);
   for (int i = 0; i < 2; i++) {
     if (ui.st.process.ramNames[i].length() == 0) continue;
-    int y = 108 + i * 18;
-    textAt(g, 14, y, ui.st.process.ramNames[i].c_str(), TEXT);
+    int y = 114 + i * 17;
+    snprintf(v, sizeof(v), "%.14s", ui.st.process.ramNames[i].c_str());
+    textAt(g, 12, y, v, i == 0 ? TEXT : DIM);
     snprintf(v, sizeof(v), "%d МБ", ui.st.process.ramMb[i]);
-    textRight(g, 240, y, v, DIM);
-    int pmax = ui.st.process.ramMb[0] > 0 ? ui.st.process.ramMb[0] : 1;
-    hBar(g, 248, y + 1, 60, 8, ui.st.process.ramMb[i] * 100 / pmax, INFO);
+    textRight(g, 306, y, v, INFO);
   }
+  g.setTextSize(1);
 }
 
 void drawDisks(UiCtx &ui) {
@@ -147,21 +166,26 @@ void drawDisks(UiCtx &ui) {
 
   for (int i = 0; i < NOCT_HDD_COUNT; i++) {
     HddEntry &d = hw.hdd[i];
-    int y = 26 + i * 26;
+    int y = 25 + i * 26;
     if (d.total_gb < 0.1f) continue;
     int pct = (int)(d.used_gb * 100 / d.total_gb);
-    g.setFont(&F_VALUE);
-    snprintf(v, sizeof(v), "%s:", d.name);
+    g.setFont(&F_TEXT);
+    g.setTextSize(2);
+    snprintf(v, sizeof(v), "%s", d.name);
     textAt(g, 8, y + 3, v, ORANGE);
-    hBar(g, 34, y + 4, 156, 13, pct, pctColor(pct));
+    g.setTextSize(1);
+    hBar(g, 30, y + 4, 130, 15, pct, pctColor(pct));
+    g.setFont(&F_TEXT);
+    g.setTextSize(2);
     if (d.total_gb >= 1000)
-      snprintf(v, sizeof(v), "%.2f/%.2fT", d.used_gb / 1000,
+      snprintf(v, sizeof(v), "%.1f/%.0fT", d.used_gb / 1000,
                d.total_gb / 1000);
     else
       snprintf(v, sizeof(v), "%.0f/%.0fG", d.used_gb, d.total_gb);
-    textAt(g, 198, y + 4, v, TEXT);
+    textAt(g, 168, y + 3, v, TEXT);
     snprintf(v, sizeof(v), "%dC", d.temp);
-    textRight(g, 314, y + 4, v, tempColor(d.temp, 45, 55));
+    textRight(g, 314, y + 3, v, tempColor(d.temp, 45, 55));
+    g.setTextSize(1);
   }
 
   g.setFont(&F_TEXT);
@@ -187,18 +211,19 @@ void drawFans(UiCtx &ui) {
     int x = 10 + i * 78;
     int rpm = hw.fans[i];
     int pct = hw.fan_controls[i];
-    /* normalize bar by typical max 2200 rpm */
     int barPct = rpm * 100 / 2200;
     if (barPct > 100) barPct = 100;
-    vBar(g, x + 18, 30, 26, 76, barPct, rpm > 0 ? GOOD : PANEL);
+    vBar(g, x + 16, 28, 30, 68, barPct, rpm > 0 ? GOOD : PANEL);
     g.setFont(&F_TEXT);
-    textCenter(g, x + 31, 110, names[i], DIM);
-    g.setFont(&F_VALUE);
+    textCenter(g, x + 31, 100, names[i], DIM);
+    g.setFont(&F_BIG);
     snprintf(v, sizeof(v), "%d", rpm);
-    textCenter(g, x + 31, 121, v, TEXT);
+    textCenter(g, x + 31, 112, v, TEXT);
     g.setFont(&F_TEXT);
+    g.setTextSize(2);
     snprintf(v, sizeof(v), "%d%%", pct);
-    textCenter(g, x + 31, 138, v, ORANGE_DIM);
+    textCenter(g, x + 31, 136, v, ORANGE);
+    g.setTextSize(1);
   }
 }
 
@@ -221,14 +246,14 @@ void drawMb(UiCtx &ui) {
     int x = 6 + (i % 4) * 78;
     int y = 28 + (i / 4) * 60;
     panel(g, x, y, 72, 52, tiles[i].n);
-    g.setFont(&F_VALUE);
     bool isFan = i == 7;
     snprintf(v, sizeof(v), "%d", tiles[i].t);
-    uint16_t c = isFan ? INFO : tempColor(tiles[i].t, tiles[i].warn,
-                                          tiles[i].crit);
-    textCenter(g, x + 36, y + 16, v, c);
-    g.setFont(&F_SMALL);
-    textCenter(g, x + 36, y + 38, isFan ? "RPM" : "C", DIM);
+    g.setFont(&F_BIG);
+    uint16_t c = isFan ? INFO
+                       : tempColor(tiles[i].t, tiles[i].warn, tiles[i].crit);
+    textCenter(g, x + 36, y + 12, v, c);
+    g.setFont(&F_TEXT);
+    textCenter(g, x + 36, y + 40, isFan ? "RPM" : "C", DIM);
   }
 }
 
@@ -240,26 +265,19 @@ void drawNet(UiCtx &ui) {
 
   panel(g, 4, 26, 156, 60, "ВХОДЯЩИЙ");
   fmtRate(r, sizeof(r), hw.nd);
-  g.setFont(&F_VALUE);
-  textAt(g, 14, 40, r, INFO);
-  g.setFont(&F_SMALL);
-  textAt(g, 14, 60, "КБ/с", DIM);
-  sparkline(g, 70, 56, 84, 24, ui.gr.netDown, INFO, 1000);
+  bigVal(g, 14, 36, r, "Б/с", INFO);
+  sparkline(g, 14, 64, 134, 18, ui.gr.netDown, INFO, 1000);
 
   panel(g, 164, 26, 152, 60, "ИСХОДЯЩИЙ");
   fmtRate(r, sizeof(r), hw.nu);
-  g.setFont(&F_VALUE);
-  textAt(g, 174, 40, r, GOOD);
-  g.setFont(&F_SMALL);
-  textAt(g, 174, 60, "КБ/с", DIM);
-  sparkline(g, 228, 56, 82, 24, ui.gr.netUp, GOOD, 200);
+  bigVal(g, 174, 36, r, "Б/с", GOOD);
+  sparkline(g, 174, 64, 132, 18, ui.gr.netUp, GOOD, 200);
 
   panel(g, 4, 94, 156, 56, "ПИНГ");
-  g.setFont(&F_VALUE);
-  snprintf(v, sizeof(v), "%d ms", hw.pg);
-  textAt(g, 14, 108, v, hw.pg > 80 ? WARN : GOOD);
+  snprintf(v, sizeof(v), "%d", hw.pg);
+  bigVal(g, 14, 104, v, "ms", hw.pg > 80 ? WARN : GOOD);
   g.setFont(&F_TEXT);
-  textAt(g, 14, 132, "google:443", DIM);
+  textAt(g, 14, 134, "google:443", DIM);
 
   panel(g, 164, 94, 152, 56, "УСТРОЙСТВО");
   g.setFont(&F_TEXT);

@@ -100,8 +100,11 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
   if (!urgent && now - lastSpeech_ < NOCT_LLM_COOLDOWN_MS) return;
   if (thinking_) return; /* one request in flight, latest-wins not needed */
 
+  /* The LLM runs on the owner's GPU: never steal frames from a game or a
+   * heavy job — fall back to cached phrases while the PC is busy. */
+  bool pcBusy = st.forzaLive || st.hw.gl >= 40 || st.hw.cl >= 85;
   bool canLlm = st.settings.petLlm && llm_ && !llm_->busy() &&
-                st.link.wifiConnected;
+                st.link.wifiConnected && !pcBusy;
   if (canLlm && llm_->request(buildContext(eventRu, st))) {
     strncpy(pendingBucket_, bucket, sizeof(pendingBucket_) - 1);
     pendingBucket_[sizeof(pendingBucket_) - 1] = '\0';

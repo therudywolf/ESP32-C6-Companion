@@ -130,7 +130,7 @@ void loop() {
   pet.tick(now);
   brain.tick(now, state);
 
-  /* mood light: alert > forza > llm > breathe */
+  /* mood light: alert > forza > thinking > speaking > offline > warm > mood */
   if (state.alertActive) {
     led.setMode(StatusLed::ALERT);
   } else if (forzaLive && forza.state().raceOn) {
@@ -138,7 +138,24 @@ void loop() {
     led.setMode(StatusLed::FORZA);
   } else if (state.link.llmBusy) {
     led.setMode(StatusLed::LLM);
+  } else if (brain.bubbleVisible(now)) {
+    led.setMode(StatusLed::SPEAK);
+  } else if (!state.link.wifiConnected || !state.link.tcpConnected) {
+    led.setMode(StatusLed::NOLINK);
+  } else if (state.hw.ct >= 85 || state.hw.gt >= 80 || state.hw.cl >= 90 ||
+             state.hw.gl >= 95) {
+    led.setMode(StatusLed::WARNP);
   } else {
+    if (!pet.isAlive())
+      led.setMoodColor(60, 60, 60); /* gray-out */
+    else if (pet.isSleeping())
+      led.setMoodColor(10, 10, 80); /* deep night blue */
+    else if (pet.mood() == 2)
+      led.setMoodColor(252, 238, 10); /* cyber yellow — happy */
+    else if (pet.mood() == 1)
+      led.setMoodColor(255, 120, 0); /* amber — meh */
+    else
+      led.setMoodColor(0, 40, 200); /* sad blue */
     led.setMode(StatusLed::BREATHE);
   }
   led.tick(now);

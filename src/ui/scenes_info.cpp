@@ -129,10 +129,10 @@ void drawClaude(UiCtx &ui) {
   /* 5h window gauge */
   panel(g, 4, 30, 200, 54, "ОКНО 5Ч");
   int win = c.windowPct < 0 ? 0 : c.windowPct;
-  g.setFont(&F_VALUE);
+  g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.windowPct < 0 ? "n/a" : "%d%%", win);
-  textAt(g, 14, 42, v, pctColor(win));
-  hBar(g, 70, 44, 124, 14, win, pctColor(win));
+  textAt(g, 14, 38, v, pctColor(win));
+  hBar(g, 96, 42, 98, 18, win, pctColor(win));
   g.setFont(&F_TEXT);
   if (c.resetsInMin >= 0) {
     snprintf(v, sizeof(v), "сброс через %dч %02dм", c.resetsInMin / 60,
@@ -143,10 +143,10 @@ void drawClaude(UiCtx &ui) {
   /* weekly gauge */
   panel(g, 4, 94, 200, 54, "НЕДЕЛЯ");
   int wk = c.weeklyPct < 0 ? 0 : c.weeklyPct;
-  g.setFont(&F_VALUE);
+  g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.weeklyPct < 0 ? "n/a" : "%d%%", wk);
-  textAt(g, 14, 106, v, pctColor(wk));
-  hBar(g, 70, 108, 124, 14, wk, pctColor(wk));
+  textAt(g, 14, 102, v, pctColor(wk));
+  hBar(g, 96, 106, 98, 18, wk, pctColor(wk));
   g.setFont(&F_TEXT);
   if (c.weeklyResetMin >= 0) {
     snprintf(v, sizeof(v), "сброс через %dд %dч", c.weeklyResetMin / 1440,
@@ -157,22 +157,26 @@ void drawClaude(UiCtx &ui) {
   /* right column: plan + today numbers */
   panel(g, 212, 30, 104, 118, "СЕГОДНЯ");
   g.setFont(&F_TEXT);
+  g.setTextSize(2);
   if (c.plan.length()) {
     String p = c.plan;
     p.toUpperCase();
-    g.fillRoundRect(222, 38, g.textWidth(p.c_str()) + 10, 14, 3, ORANGE);
-    textAt(g, 227, 41, p.c_str(), BG);
+    g.fillRoundRect(220, 36, g.textWidth(p.c_str()) + 12, 20, 3, ORANGE);
+    textAt(g, 226, 38, p.c_str(), BG);
   }
   if (c.todayTokens >= 1000000)
-    snprintf(v, sizeof(v), "%.1fM ток", c.todayTokens / 1e6);
+    snprintf(v, sizeof(v), "%.1fM", c.todayTokens / 1e6);
   else
-    snprintf(v, sizeof(v), "%ldK ток", c.todayTokens / 1000);
+    snprintf(v, sizeof(v), "%ldK", c.todayTokens / 1000);
   textAt(g, 222, 62, v, TEXT);
-  snprintf(v, sizeof(v), "%d сообщ", c.todayMsgs);
-  textAt(g, 222, 78, v, DIM);
-  snprintf(v, sizeof(v), "%d тулз", c.todayTools);
-  textAt(g, 222, 94, v, DIM);
-  if (c.stale) textAt(g, 222, 116, "данные устарели", WARN);
+  g.setTextSize(1);
+  textAt(g, 222, 80, "токенов", DIM);
+  g.setTextSize(2);
+  snprintf(v, sizeof(v), "%d", c.todayMsgs);
+  textAt(g, 222, 92, v, TEXT);
+  g.setTextSize(1);
+  textAt(g, 222, 110, "сообщений", DIM);
+  if (c.stale) textAt(g, 222, 126, "устарело", WARN);
 }
 
 /* ── FOREST ──────────────────────────────────────────────────────────── */
@@ -199,13 +203,18 @@ void drawForest(UiCtx &ui) {
     panel(g, x, y, cw, chh);
     uint16_t c = stColor(n.status);
     bool down = strcmp(n.status, "down") == 0;
-    if (!down || ((ui.now / 400) & 1)) g.fillCircle(x + 10, y + 10, 4, c);
+    if (!down || ((ui.now / 400) & 1)) g.fillCircle(x + 11, y + 11, 5, c);
     g.setFont(&F_TEXT);
-    textAt(g, x + 20, y + 5, n.name, TEXT);
+    g.setTextSize(2);
+    char nm[16];
+    snprintf(nm, sizeof(nm), "%.12s", n.name);
+    textAt(g, x + 22, y + 4, nm, TEXT);
     if (down) {
-      textAt(g, x + 20, y + 20, "OFFLINE", CRIT);
+      textAt(g, x + 22, y + 22, "OFFLINE", CRIT);
+      g.setTextSize(1);
       continue;
     }
+    g.setTextSize(1);
     g.setFont(&F_SMALL);
     struct {
       const char *l;
@@ -232,20 +241,21 @@ void drawServices(UiCtx &ui) {
     textCenter(g, NOCT_W / 2, 80, "нет данных о сервисах", DIM);
     return;
   }
-  int shown = s.count > ServiceData::kMaxServices ? ServiceData::kMaxServices
-                                                  : s.count;
+  int shown = s.count > 7 ? 7 : s.count;
   for (int i = 0; i < shown; i++) {
     ServiceEntry &e = s.list[i];
-    int y = 28 + i * 15;
+    int y = 26 + i * 17;
     uint16_t c = stColor(e.status);
-    g.fillCircle(12, y + 4, 3, c);
+    g.fillCircle(13, y + 7, 4, c);
     g.setFont(&F_TEXT);
-    textAt(g, 24, y, e.name, TEXT);
+    g.setTextSize(2);
+    snprintf(v, sizeof(v), "%.11s", e.name);
+    textAt(g, 24, y, v, TEXT);
     if (e.ms >= 0) {
-      snprintf(v, sizeof(v), "%d ms", e.ms);
-      textRight(g, 200, y, v, e.ms > 500 ? WARN : DIM);
+      snprintf(v, sizeof(v), "%dms", e.ms);
+      textRight(g, 208, y, v, e.ms > 500 ? WARN : DIM);
     }
-    g.drawFastHLine(8, y + 11, 200, PANEL);
+    g.setTextSize(1);
   }
 
   /* docker summary */

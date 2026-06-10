@@ -103,9 +103,13 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   switch (ev) {
-  case EV_SHORT:
-    gotoScene(scene_ + 1, ui);
+  case EV_SHORT: {
+    /* FORZA is an app, not a ring member: cycle DEN..EVENTS */
+    int next = scene_ + 1;
+    if (next >= SCENE_FORZA) next = SCENE_DEN;
+    gotoScene(next, ui);
     break;
+  }
   case EV_DOUBLE:
     menuOpen_ = true;
     menuSel_ = 0;
@@ -206,17 +210,28 @@ void SceneManager::drawMenu(UiCtx &ui) {
                                 "LED",          "Волк LLM",
                                 "WiFi",         "Переворот",
                                 "Инфо системы", "Закрыть"};
+  /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
+  const int kRows = 8, kVisible = 6, rowH = 22;
+  int scroll = menuSel_ - (kVisible - 1);
+  if (scroll < 0) scroll = 0;
   g.setFont(&F_TEXT);
   g.setTextSize(2);
-  for (int i = 0; i < 8; i++) {
-    int y = NOCT_CONTENT_TOP + 4 + i * 17;
+  for (int i = scroll; i < kRows && i < scroll + kVisible; i++) {
+    int y = NOCT_CONTENT_TOP + 6 + (i - scroll) * rowH;
     bool sel = i == menuSel_;
-    if (sel) g.fillRect(2, y - 1, NOCT_W - 4, 17, ORANGE);
-    textAt(g, 12, y, names[i], sel ? BG : TEXT);
+    if (sel) g.fillRect(2, y - 2, NOCT_W - 12, rowH - 2, ORANGE);
+    textAt(g, 14, y, names[i], sel ? BG : TEXT);
     if (i < 7 && val[i][0])
-      textRight(g, NOCT_W - 12, y, val[i], sel ? BG : DIM);
+      textRight(g, NOCT_W - 18, y, val[i], sel ? BG : DIM);
   }
   g.setTextSize(1);
+  /* scrollbar */
+  int sbH = (NOCT_H - NOCT_CONTENT_TOP - 8) * kVisible / kRows;
+  int sbY = NOCT_CONTENT_TOP + 4 +
+            (NOCT_H - NOCT_CONTENT_TOP - 8 - sbH) * scroll / (kRows - kVisible);
+  g.fillRect(NOCT_W - 6, NOCT_CONTENT_TOP + 4, 3,
+             NOCT_H - NOCT_CONTENT_TOP - 8, PANEL);
+  g.fillRect(NOCT_W - 6, sbY, 3, sbH, ORANGE);
 }
 
 void SceneManager::draw(UiCtx &ui) {
@@ -245,7 +260,7 @@ void SceneManager::draw(UiCtx &ui) {
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
     int next = scene_ + 1;
-    if (next >= SCENE_COUNT) next = SCENE_DASH; /* ring without DEN */
+    if (next >= SCENE_FORZA) next = SCENE_DASH; /* ring sans DEN/FORZA */
     gotoScene(next, ui);
   }
 
@@ -299,9 +314,10 @@ void SceneManager::draw(UiCtx &ui) {
   /* chrome */
   widgets::statusBar(ui, scenes::title(effScene));
   if (denActionMode_ && effScene == SCENE_DEN)
-    widgets::footer(ui, "—выполнить");
+    widgets::footer(ui, "долгое=да", effScene, SCENE_FORZA);
   else
-    widgets::footer(ui, scenes::actionHint(effScene, ui));
+    widgets::footer(ui, scenes::actionHint(effScene, ui), effScene,
+                    SCENE_FORZA);
 
   /* alert frame on top */
   if (alertActive(ui)) {
