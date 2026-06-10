@@ -128,23 +128,70 @@ void loop() {
   if (state.rcNew) {
     state.rcNew = false;
     bool persist = false;
+    Settings &cfg = state.settings;
     if (state.rcTheme >= 0) {
       theme::applyPreset(state.rcTheme);
-      state.settings.themePreset = state.rcTheme;
+      cfg.themePreset = state.rcTheme;
       persist = true;
     }
     if (state.rcChromeR >= 0)
       theme::setChrome(state.rcChromeR, state.rcChromeG, state.rcChromeB);
+    if (state.rcAccentR >= 0)
+      theme::setAccent(state.rcAccentR, state.rcAccentG, state.rcAccentB);
     if (state.rcBright >= 10) {
-      state.settings.brightness = state.rcBright;
+      cfg.brightness = state.rcBright;
       display.setBrightness(state.rcBright);
       persist = true;
     }
+    if (state.rcLed >= 0) {
+      cfg.ledEnabled = state.rcLed != 0;
+      led.setEnabled(cfg.ledEnabled);
+      persist = true;
+    }
+    if (state.rcCarousel != -2) {
+      if (state.rcCarousel < 0) {
+        cfg.carouselEnabled = false;
+      } else {
+        cfg.carouselEnabled = true;
+        cfg.carouselIntervalSec = state.rcCarousel;
+      }
+      persist = true;
+    }
+    if (state.rcPetLlm >= 0) {
+      cfg.petLlm = state.rcPetLlm != 0;
+      persist = true;
+    }
+    if (state.rcFlip >= 0) {
+      cfg.flipped = state.rcFlip != 0;
+      display.setFlipped(cfg.flipped);
+      persist = true;
+    }
+    if (state.rcTimeout >= 0) {
+      cfg.displayTimeoutSec = state.rcTimeout;
+      persist = true;
+    }
+    if (state.rcAction.length()) {
+      int a = state.rcAction == "feed"  ? WolfPet::ACT_FEED
+              : state.rcAction == "play" ? WolfPet::ACT_PLAY
+                                         : WolfPet::ACT_TALK;
+      pet.doAction(a);
+      brain.onAction(a);
+      led.setMode(StatusLed::BLIP_OK);
+    }
     if (state.rcScreen >= 0) sceneMgr.requestScene(state.rcScreen);
     if (state.rcSay.length()) brain.sayNow(state.rcSay);
-    if (persist) settings::save(state.settings);
-    Serial.printf("[RC] seq=%ld screen=%d theme=%d say='%s'\n", state.rcSeq,
-                  state.rcScreen, state.rcTheme, state.rcSay.c_str());
+    if (persist) settings::save(cfg);
+    Serial.printf("[RC] seq=%ld screen=%d theme=%d action='%s' say='%s'\n",
+                  state.rcSeq, state.rcScreen, state.rcTheme,
+                  state.rcAction.c_str(), state.rcSay.c_str());
+  }
+
+  /* report wolf state upstream every 2 s so the companion app can show it */
+  static unsigned long lastWolfReport = 0;
+  if (tcp.connected() && now - lastWolfReport > 2000) {
+    lastWolfReport = now;
+    tcp.sendWolf(pet.hunger(), pet.happy(), pet.energy(), pet.mood(),
+                 pet.isAlive(), pet.isSleeping(), pet.ageDays());
   }
 
   forza.tick(now, wifi.connected());

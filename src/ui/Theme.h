@@ -31,11 +31,12 @@ extern uint16_t CRIT;       /* alarm (blinks) */
 extern uint16_t INFO;       /* data / net / LLM */
 extern uint16_t ACCENT;     /* secondary accent */
 
-/* Theme control. Presets: 0 Cyberpunk, 1 Matrix, 2 Amber, 3 Synthwave,
- * 4 Ice. setChrome overrides just the chrome hue on top of the preset. */
-static const int THEME_PRESETS = 5;
+/* Theme control. 12 presets (see kPresets in Theme.cpp). setChrome/setAccent
+ * override individual hues on top of the active preset. */
+static const int THEME_PRESETS = 12;
 void applyPreset(int idx);
 void setChrome(uint8_t r, uint8_t g, uint8_t b);
+void setAccent(uint8_t r, uint8_t g, uint8_t b);
 const char *presetName(int idx);
 extern int currentPreset;
 

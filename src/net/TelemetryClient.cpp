@@ -41,6 +41,14 @@ void TelemetryClient::sendCmd(const char *cmd) {
   client_.printf("cmd:%s\n", cmd);
 }
 
+void TelemetryClient::sendWolf(int hunger, int joy, int energy, int mood,
+                               bool alive, bool sleeping,
+                               unsigned long ageDays) {
+  if (!tcpConnected_) return;
+  client_.printf("wolf:%d,%d,%d,%d,%d,%d,%lu\n", hunger, joy, energy, mood,
+                 alive ? 1 : 0, sleeping ? 1 : 0, ageDays);
+}
+
 bool TelemetryClient::signalLost(unsigned long now) const {
   if (!tcpConnected_) return true;
   if (!firstData_) return (now - connectTime_) > NOCT_SIGNAL_GRACE_MS;
@@ -295,11 +303,23 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcSay = (const char *)(rc["say"] | "");
       state.rcTheme = rc["theme"] | -1;
       state.rcBright = rc["bright"] | -1;
+      state.rcAction = (const char *)(rc["action"] | "");
+      state.rcLed = rc["led"] | -1;
+      state.rcCarousel = rc["carousel"] | -2;
+      state.rcPetLlm = rc["petllm"] | -1;
+      state.rcFlip = rc["flip"] | -1;
+      state.rcTimeout = rc["timeout"] | -1;
       state.rcChromeR = state.rcChromeG = state.rcChromeB = -1;
       if (rc["chrome"].is<JsonArray>() && rc["chrome"].size() == 3) {
         state.rcChromeR = rc["chrome"][0] | -1;
         state.rcChromeG = rc["chrome"][1] | -1;
         state.rcChromeB = rc["chrome"][2] | -1;
+      }
+      state.rcAccentR = state.rcAccentG = state.rcAccentB = -1;
+      if (rc["accent"].is<JsonArray>() && rc["accent"].size() == 3) {
+        state.rcAccentR = rc["accent"][0] | -1;
+        state.rcAccentG = rc["accent"][1] | -1;
+        state.rcAccentB = rc["accent"][2] | -1;
       }
     }
   }

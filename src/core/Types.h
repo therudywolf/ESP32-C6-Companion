@@ -169,7 +169,14 @@ struct AppState {
   String rcSay;                  /* make the wolf say this, "" = none */
   int rcTheme = -1;              /* theme preset, -1 = none */
   int rcChromeR = -1, rcChromeG = -1, rcChromeB = -1; /* custom chrome */
+  int rcAccentR = -1, rcAccentG = -1, rcAccentB = -1; /* custom accent */
   int rcBright = -1;             /* backlight 10..255, -1 = none */
+  String rcAction;               /* "feed"|"play"|"talk", "" = none */
+  int rcLed = -1;                /* 0/1, -1 = none */
+  int rcCarousel = -2;           /* -1 off, 5/10/15 sec, -2 = none */
+  int rcPetLlm = -1;             /* 0/1, -1 = none */
+  int rcFlip = -1;               /* 0/1, -1 = none */
+  int rcTimeout = -1;            /* 0/30/60 dim sec, -1 = none */
 };
 
 #endif

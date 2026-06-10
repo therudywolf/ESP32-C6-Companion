@@ -53,6 +53,34 @@ static const Preset kPresets[THEME_PRESETS] = {
     {"Ice", rgb(2, 6, 12), rgb(80, 200, 255), rgb(240, 250, 255),
      rgb(120, 160, 190), rgb(10, 22, 34), rgb(80, 255, 200), rgb(255, 210, 80),
      rgb(255, 80, 100), rgb(120, 230, 255), rgb(160, 220, 255)},
+    /* 5 Vaporwave — pink / cyan / purple */
+    {"Vaporwave", rgb(12, 6, 22), rgb(255, 113, 206), rgb(241, 250, 255),
+     rgb(150, 130, 200), rgb(40, 15, 50), rgb(5, 255, 161), rgb(255, 200, 40),
+     rgb(255, 80, 120), rgb(1, 205, 254), rgb(185, 103, 255)},
+    /* 6 Gruvbox — warm retro */
+    {"Gruvbox", rgb(20, 18, 16), rgb(254, 128, 25), rgb(235, 219, 178),
+     rgb(168, 153, 132), rgb(40, 36, 33), rgb(184, 187, 38), rgb(250, 189, 47),
+     rgb(251, 73, 52), rgb(131, 165, 152), rgb(211, 134, 155)},
+    /* 7 Dracula — purple / pink */
+    {"Dracula", rgb(20, 21, 28), rgb(189, 147, 249), rgb(248, 248, 242),
+     rgb(98, 114, 164), rgb(40, 42, 54), rgb(80, 250, 123), rgb(241, 250, 140),
+     rgb(255, 85, 85), rgb(139, 233, 253), rgb(255, 121, 198)},
+    /* 8 Nord — cool blue / grey */
+    {"Nord", rgb(20, 24, 32), rgb(136, 192, 208), rgb(236, 239, 244),
+     rgb(118, 138, 160), rgb(46, 52, 64), rgb(163, 190, 140), rgb(235, 203, 139),
+     rgb(191, 97, 106), rgb(129, 161, 193), rgb(180, 142, 173)},
+    /* 9 Blood — aggressive red / black */
+    {"Blood", rgb(12, 2, 2), rgb(255, 40, 40), rgb(255, 230, 230),
+     rgb(160, 90, 90), rgb(40, 8, 8), rgb(0, 220, 120), rgb(255, 180, 0),
+     rgb(255, 0, 0), rgb(255, 120, 120), rgb(255, 80, 80)},
+    /* 10 Forest — green / earth */
+    {"Forest", rgb(6, 14, 6), rgb(120, 200, 80), rgb(230, 245, 220),
+     rgb(120, 150, 120), rgb(16, 30, 16), rgb(150, 230, 90), rgb(230, 200, 60),
+     rgb(240, 90, 60), rgb(110, 210, 160), rgb(180, 230, 120)},
+    /* 11 Mono — minimal white / grey */
+    {"Mono", rgb(8, 9, 11), rgb(230, 230, 235), rgb(255, 255, 255),
+     rgb(130, 140, 150), rgb(28, 30, 34), rgb(120, 230, 160), rgb(240, 210, 90),
+     rgb(255, 90, 90), rgb(150, 200, 255), rgb(200, 200, 210)},
 };
 
 /* slightly darker chrome for inactive frames */
@@ -82,6 +110,8 @@ void setChrome(uint8_t r, uint8_t g, uint8_t b) {
   ORANGE = rgb(r, g, b);
   ORANGE_DIM = dimmer(ORANGE);
 }
+
+void setAccent(uint8_t r, uint8_t g, uint8_t b) { ACCENT = rgb(r, g, b); }
 
 const char *presetName(int idx) {
   if (idx < 0 || idx >= THEME_PRESETS) idx = 0;
