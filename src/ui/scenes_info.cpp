@@ -76,25 +76,55 @@ void drawMedia(UiCtx &ui) {
 
 /* ── WEATHER ─────────────────────────────────────────────────────────── */
 
+/* WMO -> Russian, short enough for the right column */
+static const char *wmoRu(int wmo) {
+  if (wmo == 0) return "ясно";
+  if (wmo <= 2) return "малооблачно";
+  if (wmo == 3) return "пасмурно";
+  if (wmo >= 95) return "гроза";
+  if (wmo >= 85) return "снег";
+  if (wmo >= 80) return "ливень";
+  if (wmo >= 71) return "снег";
+  if (wmo >= 66) return "ледяной дождь";
+  if (wmo == 65) return "ливень";
+  if (wmo >= 61) return "дождь";
+  if (wmo >= 51) return "морось";
+  if (wmo >= 45) return "туман";
+  return "облачно";
+}
+
 void drawWeather(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   WeatherData &w = ui.st.weather;
   if (!ui.st.weatherReceived) {
-    g.setFont(&F_TEXT);
+    g.setFont(&F_MED);
     textCenter(g, NOCT_W / 2, 80, "нет данных о погоде", DIM);
     return;
   }
   char v[32];
 
-  weatherIcon(g, 50, 60, 26, w.wmoCode, ui.now);
+  /* icon | 64px temperature | russian description in the right column */
+  weatherIcon(g, 40, 58, 24, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
+  g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  textAt(g, 96, 38, v, TEXT);
-  g.setFont(&F_MED);
+  textAt(g, 78, 26, v, TEXT);
   g.setTextSize(1);
-  textAt(g, 100 + vw, 52, "C", DIM);
-  textAt(g, 98, 72, w.desc.c_str(), ORANGE);
+  g.setFont(&F_MED);
+  textAt(g, 82 + vw, 66, "C", DIM);
+  {
+    String d = wmoRu(w.wmoCode);
+    int dx = 82 + vw + 28;
+    if (dx < 198) dx = 198;
+    int sp = d.indexOf(' ');
+    if (sp > 0 && dx + g.textWidth(d.c_str()) > NOCT_W - 4) {
+      textAt(g, dx, 34, d.substring(0, sp).c_str(), ORANGE);
+      textAt(g, dx, 56, d.substring(sp + 1).c_str(), ORANGE);
+    } else {
+      textAt(g, dx, 44, d.c_str(), ORANGE);
+    }
+  }
 
   /* 5-day forecast */
   static const char *dayNames[] = {"сег", "+1", "+2", "+3", "+4"};

@@ -35,7 +35,7 @@
 #define NOCT_FOOTER_TOP 152 /* footer/hints: y 152..171 */
 
 /* ── Render loop ──────────────────────────────────────────────────────── */
-#define NOCT_FRAME_MS 33        /* ~30 fps global tick */
+#define NOCT_FRAME_MS 40        /* 25 fps — cooler board, still fluid */
 #define NOCT_TRANSITION_MS 180  /* scene slide duration (ported) */
 #define NOCT_TOAST_MS 1800
 
@@ -73,6 +73,6 @@
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 #define NOCT_SD_SPI_HZ 25000000
 #define NOCT_SCREENSAVER_DEFAULT_SEC 0 /* 0 = off */
-#define NOCT_VERSION "0.3.0"
+#define NOCT_VERSION "0.3.1"
 
 #endif

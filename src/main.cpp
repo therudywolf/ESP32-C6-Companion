@@ -127,6 +127,13 @@ void loop() {
   bool forzaLive = forza.connected(now);
   state.forzaLive = forzaLive;
 
+  /* full radio power only while racing (UDP latency); else modem sleep */
+  static bool wifiFast = false;
+  if (forzaLive != wifiFast && wifi.connected()) {
+    wifiFast = forzaLive;
+    WiFi.setSleep(!wifiFast);
+  }
+
   pet.tick(now);
   brain.tick(now, state);
 
