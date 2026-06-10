@@ -59,7 +59,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 8;
+    const int kMenuItems = 9;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -173,11 +173,15 @@ void SceneManager::menuAction(UiCtx &ui) {
     s.flipped = !s.flipped;
     d_.disp->setFlipped(s.flipped);
     break;
-  case 6: /* sysinfo */
+  case 6: /* Forza HUD (manual open — it also auto-enters on telemetry) */
+    menuOpen_ = false;
+    gotoScene(SCENE_FORZA, ui);
+    break;
+  case 7: /* sysinfo */
     sysInfo_ = true;
     menuOpen_ = false;
     break;
-  case 7: /* close */
+  case 8: /* close */
     menuOpen_ = false;
     break;
   }
@@ -191,7 +195,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[7][20];
+  char val[9][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -205,13 +209,16 @@ void SceneManager::drawMenu(UiCtx &ui) {
     snprintf(val[4], 20, "%.10s", d_.wifiNames[s.netSel]);
   snprintf(val[5], 20, "%s", s.flipped ? "180" : "0");
   val[6][0] = '\0';
+  val[7][0] = '\0';
+  val[8][0] = '\0';
 
   static const char *names[] = {"Карусель",     "Яркость",
                                 "LED",          "Волк LLM",
                                 "WiFi",         "Переворот",
-                                "Инфо системы", "Закрыть"};
+                                "Forza HUD",    "Инфо системы",
+                                "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 8, kVisible = 6, rowH = 22;
+  const int kRows = 9, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -221,8 +228,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
     bool sel = i == menuSel_;
     if (sel) g.fillRect(2, y - 2, NOCT_W - 12, rowH - 2, ORANGE);
     textAt(g, 14, y, names[i], sel ? BG : TEXT);
-    if (i < 7 && val[i][0])
-      textRight(g, NOCT_W - 18, y, val[i], sel ? BG : DIM);
+    if (val[i][0]) textRight(g, NOCT_W - 18, y, val[i], sel ? BG : DIM);
   }
   g.setTextSize(1);
   /* scrollbar */

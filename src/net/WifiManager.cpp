@@ -73,8 +73,10 @@ void WifiManager::connectTo(int idx, unsigned long now) {
   curIdx_ = idx;
   Serial.printf("[WIFI] connecting to '%s'...\n", nets_[idx].ssid);
   WiFi.begin(nets_[idx].ssid, nets_[idx].pass);
-  WiFi.setSleep(false); /* USB powered; latency over power */
-  esp_wifi_set_ps(WIFI_PS_NONE);
+  /* Modem sleep: the radio at PS_NONE makes the board noticeably hot and
+   * buys nothing for 2 Hz telemetry. main() lifts it during Forza (UDP
+   * latency matters there). */
+  WiFi.setSleep(true);
   phase_ = CONNECTING;
   phaseStart_ = now;
   lastAttempt_ = now;

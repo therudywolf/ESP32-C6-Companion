@@ -16,18 +16,18 @@ constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 /* Cyberpunk 2077 HUD: samurai-red chrome, cyan data, amber accents —
- * luminance pushed up for contrast at arm's length+. */
-constexpr uint16_t BG = rgb(0x05, 0x04, 0x06);
-constexpr uint16_t ORANGE = rgb(0xFF, 0x33, 0x55);      /* chrome: samurai red */
-constexpr uint16_t ORANGE_DIM = rgb(0x96, 0x1E, 0x34);  /* inactive chrome */
-constexpr uint16_t TEXT = rgb(0xF0, 0xFC, 0xFF);        /* near-white cyan */
-constexpr uint16_t DIM = rgb(0x8E, 0xAC, 0xB8);         /* secondary text */
-constexpr uint16_t PANEL = rgb(0x22, 0x10, 0x16);       /* panel fill */
-constexpr uint16_t GOOD = rgb(0x14, 0xF0, 0xB4);        /* ok = cyan-green */
-constexpr uint16_t WARN = rgb(0xFF, 0xBE, 0x0A);        /* amber */
-constexpr uint16_t CRIT = rgb(0xFF, 0x1E, 0x4C);        /* alarm red (blinks) */
-constexpr uint16_t INFO = rgb(0x28, 0xF5, 0xFF);        /* data cyan */
-constexpr uint16_t ACCENT = rgb(0xFF, 0xBE, 0x0A);      /* amber accent */
+ * max saturation, high luminance: readable from a metre on a 1.47". */
+constexpr uint16_t BG = rgb(0x06, 0x04, 0x08);
+constexpr uint16_t ORANGE = rgb(0xFF, 0x3D, 0x5E);      /* chrome: samurai red */
+constexpr uint16_t ORANGE_DIM = rgb(0xA8, 0x20, 0x3C);  /* inactive chrome */
+constexpr uint16_t TEXT = rgb(0xFA, 0xFE, 0xFF);        /* near-pure white */
+constexpr uint16_t DIM = rgb(0x9E, 0xC4, 0xD2);         /* secondary text */
+constexpr uint16_t PANEL = rgb(0x2C, 0x12, 0x1C);       /* panel fill */
+constexpr uint16_t GOOD = rgb(0x00, 0xFF, 0xC0);        /* ok = neon mint */
+constexpr uint16_t WARN = rgb(0xFF, 0xC8, 0x14);        /* amber */
+constexpr uint16_t CRIT = rgb(0xFF, 0x28, 0x55);        /* alarm red (blinks) */
+constexpr uint16_t INFO = rgb(0x20, 0xFF, 0xFF);        /* pure data cyan */
+constexpr uint16_t ACCENT = rgb(0xFF, 0xC8, 0x14);      /* amber accent */
 
 /* Fonts (lgfx wrappers over U8g2 font data — Cyrillic capable where needed;
  * defined in Theme.cpp). Chunky 2x integer scaling = the Flipper aesthetic. */
