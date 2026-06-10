@@ -8,6 +8,20 @@ Port of [Nocturne OS PC Companion](../Heltec-V3-V4-PC-COMPANION) from
 Heltec ESP32-S3 (128×64 mono OLED) to the
 **Waveshare ESP32-C6-LCD-1.47** (172×320 ST7789, microSD, WS2812, BOOT button).
 
+## Companion control center 🎛️
+
+A web app served by the Nocturne PC server (`http://<pc>:8899/`) drives the
+device with no button presses and mirrors its live state:
+- live readout: PC clock, CPU/GPU temps+load, RAM, weather, media, **and the
+  wolf's stats/face reported back from the device**
+- pet the wolf remotely: feed / play / talk / custom speech
+- jump to any of the 16 screens
+- **12 colour themes** with real palette swatches + custom chrome & accent
+- every setting: brightness, LED, wolf-LLM, 180° flip, carousel, dim timeout
+
+Commands ride the telemetry `rc` block (device acts once per `seq` change);
+the device reports pet state via an inbound `wolf:` line.
+
 ## Highlights
 
 - **Flipper Den UI** — orange-on-black chrome, dithered fills, chunky-pixel
