@@ -133,7 +133,8 @@ struct LinkState {
   int rssi = 0;
   char ssid[33] = {0};
   bool tcpConnected = false;
-  bool signalLost = false; /* TCP up but payload stale */
+  bool signalLost = false; /* payload stale >5s (status-bar dot) */
+  bool dataDead = true;    /* no payload >30s — only then blank the scenes */
   bool sdOk = false;
   bool llmBusy = false;    /* request in flight (status bar spark) */
   bool llmOk = false;      /* last LLM call succeeded */

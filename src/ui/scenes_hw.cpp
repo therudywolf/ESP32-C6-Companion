@@ -10,7 +10,7 @@ using namespace widgets;
 namespace scenes {
 
 static bool gate(UiCtx &ui) {
-  if (ui.st.link.signalLost && !ui.st.hw.cc) {
+  if (ui.st.link.dataDead) {
     noSignal(ui);
     return false;
   }
