@@ -15,16 +15,18 @@ constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
   return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
 
-constexpr uint16_t BG = rgb(0x00, 0x00, 0x00);
-constexpr uint16_t ORANGE = rgb(0xFF, 0x82, 0x00);      /* Flipper chrome */
-constexpr uint16_t ORANGE_DIM = rgb(0x7A, 0x3E, 0x00);  /* inactive chrome */
-constexpr uint16_t TEXT = rgb(0xF2, 0xEF, 0xE8);        /* warm white */
-constexpr uint16_t DIM = rgb(0x8A, 0x8A, 0x80);         /* secondary text */
-constexpr uint16_t PANEL = rgb(0x1C, 0x1C, 0x18);       /* panel fill */
-constexpr uint16_t GOOD = rgb(0x3D, 0xDC, 0x84);
-constexpr uint16_t WARN = rgb(0xFF, 0xC5, 0x3D);
-constexpr uint16_t CRIT = rgb(0xFF, 0x3B, 0x30);
-constexpr uint16_t INFO = rgb(0x33, 0xC5, 0xD6);        /* net / LLM spark */
+/* Cyberpunk 2077 HUD palette: cyber-yellow chrome, cyan data, samurai red. */
+constexpr uint16_t BG = rgb(0x03, 0x03, 0x05);
+constexpr uint16_t ORANGE = rgb(0xFC, 0xEE, 0x0A);      /* cyber yellow chrome */
+constexpr uint16_t ORANGE_DIM = rgb(0x66, 0x60, 0x04);  /* inactive chrome */
+constexpr uint16_t TEXT = rgb(0xD6, 0xF8, 0xFF);        /* cyan-white */
+constexpr uint16_t DIM = rgb(0x4E, 0x6E, 0x78);         /* secondary text */
+constexpr uint16_t PANEL = rgb(0x0C, 0x12, 0x18);       /* panel fill */
+constexpr uint16_t GOOD = rgb(0x00, 0xE5, 0xA0);        /* ok = cyan-green */
+constexpr uint16_t WARN = rgb(0xFF, 0x80, 0x00);
+constexpr uint16_t CRIT = rgb(0xFF, 0x00, 0x3C);        /* samurai red */
+constexpr uint16_t INFO = rgb(0x00, 0xF0, 0xFF);        /* data cyan */
+constexpr uint16_t ACCENT = rgb(0xFF, 0x2B, 0xD6);      /* netrunner magenta */
 
 /* Fonts (lgfx wrappers over U8g2 font data — Cyrillic capable where needed;
  * defined in Theme.cpp). Chunky 2x integer scaling = the Flipper aesthetic. */

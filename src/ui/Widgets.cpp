@@ -92,9 +92,15 @@ void statusBar(UiCtx &ui, const char *title) {
   }
 }
 
-void footer(UiCtx &ui, const char *action) {
+void footer(UiCtx &ui, const char *action, int scene, int sceneCount) {
   LGFX_Sprite &g = ui.g;
   g.drawFastHLine(0, NOCT_FOOTER_TOP, NOCT_W, ORANGE_DIM);
+  /* ring position ticker on the separator line itself */
+  if (scene >= 0 && sceneCount > 0) {
+    int seg = NOCT_W / sceneCount;
+    g.drawFastHLine(scene * seg, NOCT_FOOTER_TOP, seg, ORANGE);
+    g.drawFastHLine(scene * seg, NOCT_FOOTER_TOP + 1, seg, ORANGE);
+  }
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   int y = NOCT_FOOTER_TOP + 6;
@@ -144,11 +150,12 @@ void valueTile(LGFX_Sprite &g, int x, int y, int w, int h, const char *label,
 void labelBar(LGFX_Sprite &g, int x, int y, int w, const char *label, int pct,
               const char *valueText, uint16_t color) {
   g.setFont(&F_TEXT);
-  g.setTextSize(1);
+  g.setTextSize(2);
   textAt(g, x, y, label, DIM);
+  g.setTextSize(1);
   g.setFont(&F_VALUE);
-  textRight(g, x + w, y - 2, valueText, TEXT);
-  hBar(g, x, y + 10, w, 9, pct, color);
+  textRight(g, x + w, y + 3, valueText, TEXT);
+  hBar(g, x, y + 16, w, 9, pct, color);
 }
 
 void speechBubble(UiCtx &ui, int x, int y, int w, int h) {

@@ -111,25 +111,22 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
 
   /* right column: stats */
   int sx = 226, sw = 88;
-  g.setFont(&F_TEXT);
   char v[16];
   snprintf(v, sizeof(v), "%d", ui.pet.hunger());
-  labelBar(g, sx, 28, sw, "СЫТОСТЬ", ui.pet.hunger(), v,
+  labelBar(g, sx, 26, sw, "СЫТОСТЬ", ui.pet.hunger(), v,
            ui.pet.hunger() < 25 ? CRIT : ORANGE);
   snprintf(v, sizeof(v), "%d", ui.pet.happy());
   labelBar(g, sx, 54, sw, "РАДОСТЬ", ui.pet.happy(), v,
            ui.pet.happy() < 25 ? WARN : ORANGE);
   snprintf(v, sizeof(v), "%d", ui.pet.energy());
-  labelBar(g, sx, 80, sw, "ЭНЕРГИЯ", ui.pet.energy(), v,
+  labelBar(g, sx, 82, sw, "ЭНЕРГИЯ", ui.pet.energy(), v,
            ui.pet.energy() < 25 ? INFO : ORANGE);
 
-  /* age + deterministic status */
-  g.setFont(&F_SMALL);
-  char age[24];
-  snprintf(age, sizeof(age), "возраст: %luд", (unsigned long)ui.pet.ageDays());
-  textAt(g, sx, 104, age, DIM);
+  /* deterministic status, big */
   g.setFont(&F_TEXT);
-  textAt(g, sx, 114, ui.pet.statusText(), TEXT);
+  g.setTextSize(2);
+  textAt(g, sx, 108, ui.pet.statusText(), TEXT);
+  g.setTextSize(1);
 
   /* speech bubble (covers the stats while talking) or ambient PC status */
   if (ui.brain.bubbleVisible(now)) {
@@ -153,6 +150,14 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
       g.setFont(&F_HUGE);
       textAt(g, px, py + 44, ui.st.pcClock, ORANGE_DIM);
     }
+  }
+
+  /* action mode: dim the scene so the chips become THE focus */
+  if (actionMode) {
+    theme::ditherRect(g, 0, 20, NOCT_W, 102, BG);
+    g.setFont(&F_TEXT);
+    g.setTextSize(2);
+    textAt(g, 10, 102, "ВЫБЕРИ ДЕЙСТВИЕ:", ORANGE);
   }
 
   /* action chips — big and obvious; selector frame blinks in action mode */
@@ -199,63 +204,58 @@ void drawDash(UiCtx &ui) {
   const Tile t[4] = {{4, 26, 154, 60}, {162, 26, 154, 60},
                      {4, 90, 154, 60}, {162, 90, 154, 60}};
 
-  /* CPU */
-  panel(g, t[0].x, t[0].y, t[0].w, t[0].h, "CPU");
-  g.setFont(&F_BIG);
-  snprintf(v, sizeof(v), "%d", hw.ct);
-  int vw = g.textWidth(v);
-  textAt(g, t[0].x + 8, t[0].y + 10, v, tempColor(hw.ct, 75, 85));
-  g.setFont(&F_TEXT);
-  textAt(g, t[0].x + 11 + vw, t[0].y + 12, "C", DIM);
-  g.setFont(&F_VALUE);
-  snprintf(v, sizeof(v), "%d%%", hw.cl);
-  textRight(g, t[0].x + t[0].w - 8, t[0].y + 8, v, TEXT);
-  sparkline(g, t[0].x + 70, t[0].y + 22, t[0].w - 78, 20, ui.gr.cpuLoad, GOOD);
-  hBar(g, t[0].x + 6, t[0].y + 46, t[0].w - 12, 9, hw.cl, pctColor(hw.cl));
-
-  /* GPU */
-  panel(g, t[1].x, t[1].y, t[1].w, t[1].h, "GPU");
-  g.setFont(&F_BIG);
-  snprintf(v, sizeof(v), "%d", hw.gt);
-  vw = g.textWidth(v);
-  textAt(g, t[1].x + 8, t[1].y + 10, v, tempColor(hw.gt, 70, 80));
-  g.setFont(&F_TEXT);
-  textAt(g, t[1].x + 11 + vw, t[1].y + 12, "C", DIM);
-  g.setFont(&F_VALUE);
-  snprintf(v, sizeof(v), "%d%%", hw.gl);
-  textRight(g, t[1].x + t[1].w - 8, t[1].y + 8, v, TEXT);
-  sparkline(g, t[1].x + 70, t[1].y + 22, t[1].w - 78, 20, ui.gr.gpuLoad, GOOD);
-  hBar(g, t[1].x + 6, t[1].y + 46, t[1].w - 12, 9, hw.gl, pctColor(hw.gl));
+  /* CPU / GPU: hero temp + load% + bar */
+  for (int k = 0; k < 2; k++) {
+    bool cpu = k == 0;
+    panel(g, t[k].x, t[k].y, t[k].w, t[k].h, cpu ? "CPU" : "GPU");
+    int temp = cpu ? hw.ct : hw.gt;
+    int load = cpu ? hw.cl : hw.gl;
+    g.setFont(&F_HUGE);
+    snprintf(v, sizeof(v), "%d", temp);
+    int vw = g.textWidth(v);
+    textAt(g, t[k].x + 8, t[k].y + 8, v,
+           tempColor(temp, cpu ? 75 : 70, cpu ? 85 : 80));
+    g.setFont(&F_TEXT);
+    g.setTextSize(2);
+    textAt(g, t[k].x + 11 + vw, t[k].y + 24, "C", DIM);
+    g.setFont(&F_VALUE);
+    snprintf(v, sizeof(v), "%d%%", load);
+    textRight(g, t[k].x + t[k].w - 8, t[k].y + 8, v, pctColor(load));
+    g.setTextSize(1);
+    hBar(g, t[k].x + 6, t[k].y + 45, t[k].w - 12, 11, load, pctColor(load));
+  }
 
   /* RAM */
   panel(g, t[2].x, t[2].y, t[2].w, t[2].h, "RAM");
   int rpct = hw.ra > 0.1f ? (int)(hw.ru * 100 / hw.ra) : 0;
-  g.setFont(&F_VALUE);
+  g.setFont(&F_HUGE);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
-  textAt(g, t[2].x + 8, t[2].y + 14, v, pctColor(rpct));
+  int vw2 = g.textWidth(v);
+  textAt(g, t[2].x + 8, t[2].y + 8, v, pctColor(rpct));
   g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "/ %.0fG", hw.ra);
-  textAt(g, t[2].x + 56, t[2].y + 17, v, DIM);
-  snprintf(v, sizeof(v), "%d%%", rpct);
-  textRight(g, t[2].x + t[2].w - 8, t[2].y + 8, v, TEXT);
-  hBar(g, t[2].x + 6, t[2].y + 40, t[2].w - 12, 12, rpct, pctColor(rpct));
+  g.setTextSize(2);
+  snprintf(v, sizeof(v), "/%.0fG", hw.ra);
+  textAt(g, t[2].x + 11 + vw2, t[2].y + 24, v, DIM);
+  g.setTextSize(1);
+  hBar(g, t[2].x + 6, t[2].y + 45, t[2].w - 12, 11, rpct, pctColor(rpct));
 
   /* NET */
   panel(g, t[3].x, t[3].y, t[3].w, t[3].h, "NET");
   char r1[12], r2[12];
   fmtRate(r1, sizeof(r1), hw.nd);
   fmtRate(r2, sizeof(r2), hw.nu);
+  g.fillTriangle(t[3].x + 10, t[3].y + 14, t[3].x + 20, t[3].y + 14,
+                 t[3].x + 15, t[3].y + 22, INFO); /* down */
+  g.setFont(&F_BIG);
+  textAt(g, t[3].x + 26, t[3].y + 6, r1, INFO);
+  g.fillTriangle(t[3].x + 10, t[3].y + 46, t[3].x + 20, t[3].y + 46,
+                 t[3].x + 15, t[3].y + 38, GOOD); /* up */
+  textAt(g, t[3].x + 26, t[3].y + 32, r2, GOOD);
   g.setFont(&F_TEXT);
-  g.fillTriangle(t[3].x + 8, t[3].y + 10, t[3].x + 14, t[3].y + 10,
-                 t[3].x + 11, t[3].y + 15, INFO); /* down */
-  textAt(g, t[3].x + 18, t[3].y + 8, r1, INFO);
-  g.fillTriangle(t[3].x + 8, t[3].y + 29, t[3].x + 14, t[3].y + 29,
-                 t[3].x + 11, t[3].y + 24, GOOD); /* up */
-  textAt(g, t[3].x + 18, t[3].y + 22, r2, GOOD);
-  snprintf(v, sizeof(v), "ping %dms", hw.pg);
+  g.setTextSize(2);
+  snprintf(v, sizeof(v), "%dms", hw.pg);
   textRight(g, t[3].x + t[3].w - 8, t[3].y + 8, v, DIM);
-  sparkline(g, t[3].x + 64, t[3].y + 22, t[3].w - 72, 30, ui.gr.netDown,
-            INFO, 1000);
+  g.setTextSize(1);
 }
 
 } // namespace scenes
