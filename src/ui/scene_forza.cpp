@@ -1,8 +1,8 @@
 /* Nocturne C6 — FORZA HUD, RPM-first fullscreen dash.
- * Hierarchy: shift lamp (24px strip) > 64px RPM > animated gear > pedals,
- * slip, fuel > info row (speed / boost / hp / lap·pos).
- * Untouchable: no chrome, no alert takeover (corner triangle only).
- * Gear changes play a 220ms slide animation with a border flash. */
+ * Zones (320x172): shift lamp 2..26 | mid band 32..120: gear box 4..92,
+ * RPM hero 96..236, pedals 240..284, slip+fuel 288..318 | info row 127..166.
+ * Big-font glyphs are placed via inkTop(): the u8g2 logisoso line box is
+ * taller than the visible digits, so we anchor the INK, not the line. */
 #include <WiFi.h>
 
 #include "core/config.h"
@@ -25,6 +25,14 @@ static uint16_t slipColor(float s) {
   if (s >= 1.0f) return CRIT;
   if (s >= 0.5f) return WARN;
   return GOOD;
+}
+
+/* y to pass to textAt so the visible glyph TOP lands at wantTop.
+ * inkH = the glyph height we expect (64 for F_HUGE size2). */
+static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
+  int off = g.fontHeight() - inkH;
+  if (off < 0) off = 0;
+  return wantTop - off; /* the line-box leading sits above the ink */
 }
 
 /* one cell of the bottom info row: small caption, 20px value */
@@ -80,25 +88,11 @@ void drawForza(UiCtx &ui) {
       g.fillRect(x + 1, 2, sw - 2, 24, c);
     } else {
       g.drawRect(x + 1, 2, sw - 2, 24, ORANGE_DIM);
-      g.drawFastHLine(x + 2, 24, sw - 4, i < 5 ? GOOD : (i < 9 ? WARN : CRIT));
+      g.drawFastHLine(x + 2, 24, sw - 4, c);
     }
   }
 
-  /* ── hero RPM: 64px digits right of the gear box ── */
-  int rpm = (int)f.rpm;
-  if (rpm > 99999) rpm = 99999;
-  snprintf(v, sizeof(v), "%d", rpm);
-  g.setFont(&F_HUGE);
-  g.setTextSize(2);
-  uint16_t rc = shiftNow ? (flash ? CRIT : TEXT)
-                         : (pct >= 0.80f ? WARN : TEXT);
-  textCenter(g, 168, 34, v, rc);
-  g.setTextSize(1);
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "ОБОРОТЫ  /  MAX %d", (int)f.maxRpm);
-  textCenter(g, 168, 102, v, DIM);
-
-  /* ── gear box with a shift animation (slide + border flash) ── */
+  /* ── gear box (left), ink-anchored glyph + roll animation ── */
   static int curGear = -1, prevGear = -1;
   static unsigned long gearAt = 0;
   if (f.gear != curGear) {
@@ -111,51 +105,63 @@ void drawForza(UiCtx &ui) {
   bool animating = gt < 1.0f && prevGear != -1;
   uint16_t frame = animating ? ACCENT
                    : (shiftNow && flash ? CRIT : ORANGE_DIM);
-  g.drawRoundRect(6, 32, 88, 80, 8, frame);
-  g.drawRoundRect(7, 33, 86, 78, 8, animating ? ACCENT : PANEL);
+  g.drawRoundRect(4, 32, 88, 88, 8, frame);
+  g.drawRoundRect(5, 33, 86, 86, 8, animating ? ACCENT : PANEL);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
+  /* center the 64px ink inside the 88px box: ink top = 32+(88-64)/2 = 44 */
+  int gy = inkTop(g, 44, 64);
   if (animating) {
-    /* upshift: digit rolls up; downshift: rolls down */
     int dir = (curGear > prevGear && prevGear != 0) ? 1 : -1;
-    int off = (int)(gt * 76);
-    g.setClipRect(10, 36, 80, 72);
-    textCenter(g, 50, 40 - dir * off, gearStr(prevGear),
-               DIM);
-    textCenter(g, 50, 40 + dir * (76 - off), gearStr(curGear), ORANGE);
+    int off = (int)(gt * 84);
+    g.setClipRect(8, 36, 80, 80);
+    textCenter(g, 48, gy - dir * off, gearStr(prevGear), DIM);
+    textCenter(g, 48, gy + dir * (84 - off), gearStr(curGear), ORANGE);
     g.clearClipRect();
   } else {
-    textCenter(g, 50, 40, gearStr(curGear),
+    textCenter(g, 48, gy, gearStr(curGear),
                shiftNow ? (flash ? CRIT : TEXT) : ORANGE);
   }
   g.setTextSize(1);
-  g.setFont(&F_TEXT);
-  textCenter(g, 50, 116, "ПЕРЕДАЧА", DIM);
 
-  /* ── pedals ── */
-  vBar(g, 248, 32, 16, 80, f.throttle * 100 / 255, GOOD);
-  vBar(g, 272, 32, 16, 80, f.brake * 100 / 255, CRIT);
+  /* ── hero RPM: 64px ink at 32..96, caption under ── */
+  int rpm = (int)f.rpm;
+  if (rpm > 99999) rpm = 99999;
+  snprintf(v, sizeof(v), "%d", rpm);
+  g.setFont(&F_HUGE);
+  g.setTextSize(2);
+  uint16_t rc = shiftNow ? (flash ? CRIT : TEXT)
+                         : (pct >= 0.80f ? WARN : TEXT);
+  textCenter(g, 166, inkTop(g, 34, 64), v, rc);
+  g.setTextSize(1);
   g.setFont(&F_TEXT);
-  textCenter(g, 257, 116, "ГАЗ", GOOD);
-  textCenter(g, 281, 116, "ТРМ", CRIT);
+  snprintf(v, sizeof(v), "ОБОРОТЫ / MAX %d", (int)f.maxRpm);
+  textCenter(g, 166, 104, v, DIM);
 
-  /* ── slip 2x2 + fuel, far right ── */
-  static const int tix[4] = {296, 310, 296, 310};
-  static const int tiy[4] = {32, 32, 56, 56};
+  /* ── pedals (240..284) ── */
+  vBar(g, 240, 32, 19, 80, f.throttle * 100 / 255, GOOD);
+  vBar(g, 264, 32, 19, 80, f.brake * 100 / 255, CRIT);
+  g.setFont(&F_TEXT);
+  textCenter(g, 249, 116, "ГАЗ", GOOD);
+  textCenter(g, 273, 116, "ТРМ", CRIT);
+
+  /* ── slip 2x2 (bigger, on-screen) + fuel (288..318) ── */
+  static const int tix[4] = {289, 304, 289, 304};
+  static const int tiy[4] = {32, 32, 58, 58};
   for (int i = 0; i < 4; i++) {
     uint16_t c = slipColor(f.slip[i]);
     bool severe = f.slip[i] >= 1.0f;
     bool filled = severe ? flash : f.slip[i] >= 0.5f;
     if (filled)
-      g.fillRoundRect(tix[i], tiy[i], 11, 21, 2, c);
+      g.fillRoundRect(tix[i], tiy[i], 13, 23, 2, c);
     else
-      g.drawRoundRect(tix[i], tiy[i], 11, 21, 2, c);
+      g.drawRoundRect(tix[i], tiy[i], 13, 23, 2, c);
   }
   g.setFont(&F_TEXT);
-  textCenter(g, 304, 80, "SLIP", DIM);
+  textCenter(g, 303, 84, "SLIP", DIM);
   int fuelPct = (int)(f.fuel * 100);
-  vBar(g, 298, 90, 16, 22, fuelPct, fuelPct < 15 ? CRIT : ACCENT);
-  textCenter(g, 306, 116, "FUEL", DIM);
+  hBar(g, 288, 96, 30, 14, fuelPct, fuelPct < 15 ? CRIT : ACCENT);
+  textCenter(g, 303, 114, "FUEL", DIM);
 
   /* ── info row: speed | boost | power | race — one aligned grid ── */
   g.drawFastHLine(4, 127, NOCT_W - 8, PANEL);
@@ -178,12 +184,11 @@ void drawForza(UiCtx &ui) {
   /* ── overlays ── */
   if (!f.raceOn) {
     g.setFont(&F_MED);
-    g.fillRoundRect(118, 52, 100, 26, 4, PANEL);
-    g.drawRoundRect(118, 52, 100, 26, 4, ACCENT);
-    textCenter(g, 168, 55, "ПАУЗА", ACCENT);
+    g.fillRoundRect(116, 50, 104, 26, 4, PANEL);
+    g.drawRoundRect(116, 50, 104, 26, 4, ACCENT);
+    textCenter(g, 168, 53, "ПАУЗА", ACCENT);
   }
   if (ui.st.alertActive && ((ui.now / 300) & 1)) {
-    /* free spot between the rpm caption and the info divider */
     g.fillTriangle(160, 124, 176, 124, 168, 112, CRIT);
   }
 }
