@@ -88,6 +88,10 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
 
   state.link.tcpConnected = tcpConnected_;
   state.link.signalLost = signalLost(now);
+  /* scenes keep showing the last data through reconnects; only a long
+   * silence blanks them */
+  state.link.dataDead =
+      !firstData_ || (now - lastUpdate_) > 30000UL;
 }
 
 void TelemetryClient::parsePayload(const char *line, size_t len,
@@ -150,10 +154,15 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   hw.dr = doc["dr"] | hw.dr;
   hw.dw = doc["dw"] | hw.dw;
 
-  if (doc["wt"].is<int>() || doc["wd"].is<const char *>()) {
+  if (!doc["wt"].isNull() || doc["wd"].is<const char *>()) {
     state.weather.temp = doc["wt"] | state.weather.temp;
-    state.weather.desc = (const char *)(doc["wd"] | state.weather.desc.c_str());
+    if (doc["wd"].is<const char *>())
+      state.weather.desc = (const char *)doc["wd"];
     state.weather.wmoCode = doc["wi"] | state.weather.wmoCode;
+    if (!state.weatherReceived)
+      Serial.printf("[NET] weather: %s %dC wmo=%d\n",
+                    state.weather.desc.c_str(), state.weather.temp,
+                    state.weather.wmoCode);
     state.weatherReceived = true;
   }
   if (doc["wf"].is<JsonArray>()) {

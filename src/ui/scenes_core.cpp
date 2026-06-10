@@ -109,23 +109,29 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
     g.setTextSize(1);
   }
 
-  /* right column: stats */
-  int sx = 226, sw = 88;
-  char v[16];
-  snprintf(v, sizeof(v), "%d", ui.pet.hunger());
-  labelBar(g, sx, 26, sw, "СЫТОСТЬ", ui.pet.hunger(), v,
-           ui.pet.hunger() < 25 ? CRIT : ORANGE);
-  snprintf(v, sizeof(v), "%d", ui.pet.happy());
-  labelBar(g, sx, 54, sw, "РАДОСТЬ", ui.pet.happy(), v,
-           ui.pet.happy() < 25 ? WARN : ORANGE);
-  snprintf(v, sizeof(v), "%d", ui.pet.energy());
-  labelBar(g, sx, 82, sw, "ЭНЕРГИЯ", ui.pet.energy(), v,
-           ui.pet.energy() < 25 ? INFO : ORANGE);
+  /* right column: stat bars with the label INSIDE (no stacking overlaps) */
+  int sx = 222, sw = 92;
+  auto statBar = [&](int y, const char *label, int val, uint16_t c) {
+    g.drawRect(sx, y, sw, 20, ORANGE_DIM);
+    int fill = (sw - 4) * val / 100;
+    if (fill > 0) theme::ditherRect(g, sx + 2, y + 2, fill, 16, c);
+    g.setFont(&F_TEXT);
+    g.setTextSize(2);
+    textAt(g, sx + 5, y + 3, label, BG); /* shadow for contrast */
+    textAt(g, sx + 4, y + 2, label, TEXT);
+    g.setTextSize(1);
+  };
+  statBar(26, "СЫТОСТЬ", ui.pet.hunger(),
+          ui.pet.hunger() < 25 ? CRIT : GOOD);
+  statBar(50, "РАДОСТЬ", ui.pet.happy(),
+          ui.pet.happy() < 25 ? WARN : GOOD);
+  statBar(74, "ЭНЕРГИЯ", ui.pet.energy(),
+          ui.pet.energy() < 25 ? INFO : GOOD);
 
   /* deterministic status, big */
   g.setFont(&F_TEXT);
   g.setTextSize(2);
-  textAt(g, sx, 108, ui.pet.statusText(), TEXT);
+  textAt(g, sx, 102, ui.pet.statusText(), ORANGE);
   g.setTextSize(1);
 
   /* speech bubble (covers the stats while talking) or ambient PC status */
@@ -188,11 +194,9 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
 /* ── DASH — 2x2 overview ─────────────────────────────────────────────── */
 
 void drawDash(UiCtx &ui) {
-  if (!ui.st.link.tcpConnected || !ui.st.hw.cc) {
-    if (ui.st.link.signalLost) {
-      noSignal(ui);
-      return;
-    }
+  if (ui.st.link.dataDead) {
+    noSignal(ui);
+    return;
   }
   LGFX_Sprite &g = ui.g;
   HardwareData &hw = ui.st.hw;

@@ -104,7 +104,7 @@ void drawWeather(UiCtx &ui) {
   for (int i = 0; i < w.wfDays && i < 5; i++) {
     int x = 8 + i * 62;
     panel(g, x, 96, 56, 52);
-    g.setFont(&F_SMALL);
+    g.setFont(&F_TEXT);
     textCenter(g, x + 28, 100, dayNames[i], DIM);
     weatherIcon(g, x + 28, 118, 9, w.wfCode[i], ui.now);
     g.setFont(&F_TEXT);
@@ -215,17 +215,22 @@ void drawForest(UiCtx &ui) {
       continue;
     }
     g.setTextSize(1);
-    g.setFont(&F_SMALL);
     struct {
       const char *l;
       int val;
     } bars[] = {{"CPU", n.cpu}, {"RAM", n.ram}, {"HDD", n.disk}};
+    bool roomy = chh >= 50;
     for (int b = 0; b < 3; b++) {
       int bx = x + 8 + b * ((cw - 16) / 3);
       int val = bars[b].val < 0 ? 0 : bars[b].val;
-      snprintf(v, sizeof(v), "%s %d%%", bars[b].l, val);
-      textAt(g, bx, y + 20, v, DIM);
-      hBar(g, bx, y + 29, (cw - 24) / 3 - 6, 7, val, pctColor(val));
+      if (roomy) {
+        g.setFont(&F_TEXT);
+        snprintf(v, sizeof(v), "%s %d%%", bars[b].l, val);
+        textAt(g, bx, y + 26, v, DIM);
+        hBar(g, bx, y + 37, (cw - 24) / 3 - 6, 9, val, pctColor(val));
+      } else {
+        hBar(g, bx, y + 26, (cw - 24) / 3 - 6, 9, val, pctColor(val));
+      }
     }
   }
 }
@@ -241,10 +246,10 @@ void drawServices(UiCtx &ui) {
     textCenter(g, NOCT_W / 2, 80, "нет данных о сервисах", DIM);
     return;
   }
-  int shown = s.count > 7 ? 7 : s.count;
+  int shown = s.count > 6 ? 6 : s.count;
   for (int i = 0; i < shown; i++) {
     ServiceEntry &e = s.list[i];
-    int y = 26 + i * 17;
+    int y = 27 + i * 20;
     uint16_t c = stColor(e.status);
     g.fillCircle(13, y + 7, 4, c);
     g.setFont(&F_TEXT);
@@ -302,14 +307,12 @@ void drawEvents(UiCtx &ui) {
   g.setFont(&F_TEXT);
   g.setTextSize(2);
   textAt(g, 38, 32, e.top, sc);
-  g.setTextSize(1);
-  snprintf(v, sizeof(v), "%s  всего: %d", e.severity, e.count);
-  textAt(g, 8, 66, v, DIM);
+  snprintf(v, sizeof(v), "%s · %d", e.severity, e.count);
+  textAt(g, 8, 64, v, DIM);
 
-  /* human text, wrapped */
-  g.setFont(&F_TEXT);
+  /* human text, wrapped big (up to 3 lines) */
   String txt = e.text;
-  int y = 80, x = 8;
+  int y = 86, x = 8;
   String word;
   for (size_t i = 0; i <= (size_t)txt.length(); i++) {
     char ch = i < (size_t)txt.length() ? txt[i] : ' ';
@@ -317,24 +320,23 @@ void drawEvents(UiCtx &ui) {
       int ww = g.textWidth(word.c_str());
       if (x + ww > 312) {
         x = 8;
-        y += 13;
-        if (y > 104) break;
+        y += 19;
+        if (y > 124) break;
       }
       textAt(g, x, y, word.c_str(), TEXT);
-      x += ww + 5;
+      x += ww + 7;
       word = "";
     } else {
       word += ch;
     }
   }
+  g.setTextSize(1);
 
-  /* firing list */
-  int ly = 118;
-  g.setFont(&F_SMALL);
-  for (int i = 0; i < EventsData::kMaxList && e.list[i][0]; i++) {
-    g.fillCircle(12, ly + 3, 2, sc);
-    textAt(g, 20, ly, e.list[i], DIM);
-    ly += 10;
+  /* other firing alerts, one line */
+  if (e.count > 1 && e.list[1][0]) {
+    g.setFont(&F_TEXT);
+    snprintf(v, sizeof(v), "+ %s", e.list[1]);
+    textAt(g, 8, 138, v, DIM);
   }
 }
 
