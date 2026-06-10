@@ -30,6 +30,8 @@ public:
   void draw(UiCtx &ui);
   void toast(const String &msg);
   int currentScene() const { return scene_; }
+  /* remote-control: jump to a scene on the next draw (companion app). */
+  void requestScene(int s) { pendingScene_ = s; }
 
   void bootAnimation(UiCtx &ui); /* blocking, ~3 s, incl. panel test card */
 
@@ -53,6 +55,7 @@ private:
 
   bool forzaLatched_ = false;
   int preForzaScene_ = -1;
+  int pendingScene_ = -1; /* set by requestScene(), applied in draw() */
 
   /* DEN action submenu: LONG enters, SHORT cycles, LONG executes */
   bool denActionMode_ = false;

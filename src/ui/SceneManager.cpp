@@ -59,7 +59,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 9;
+    const int kMenuItems = 10;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -173,15 +173,20 @@ void SceneManager::menuAction(UiCtx &ui) {
     s.flipped = !s.flipped;
     d_.disp->setFlipped(s.flipped);
     break;
-  case 6: /* Forza HUD (manual open — it also auto-enters on telemetry) */
+  case 6: /* theme preset */
+    s.themePreset = (s.themePreset + 1) % theme::THEME_PRESETS;
+    theme::applyPreset(s.themePreset);
+    toast(theme::presetName(s.themePreset));
+    break;
+  case 7: /* Forza HUD (manual open — it also auto-enters on telemetry) */
     menuOpen_ = false;
     gotoScene(SCENE_FORZA, ui);
     break;
-  case 7: /* sysinfo */
+  case 8: /* sysinfo */
     sysInfo_ = true;
     menuOpen_ = false;
     break;
-  case 8: /* close */
+  case 9: /* close */
     menuOpen_ = false;
     break;
   }
@@ -195,7 +200,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[9][20];
+  char val[10][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -208,17 +213,17 @@ void SceneManager::drawMenu(UiCtx &ui) {
   else
     snprintf(val[4], 20, "%.10s", d_.wifiNames[s.netSel]);
   snprintf(val[5], 20, "%s", s.flipped ? "180" : "0");
-  val[6][0] = '\0';
+  snprintf(val[6], 20, "%.10s", theme::presetName(s.themePreset));
   val[7][0] = '\0';
   val[8][0] = '\0';
+  val[9][0] = '\0';
 
-  static const char *names[] = {"Карусель",     "Яркость",
-                                "LED",          "Волк LLM",
-                                "WiFi",         "Переворот",
-                                "Forza HUD",    "Инфо системы",
+  static const char *names[] = {"Карусель",  "Яркость",      "LED",
+                                "Волк LLM",  "WiFi",         "Переворот",
+                                "Тема",      "Forza HUD",    "Инфо системы",
                                 "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 9, kVisible = 6, rowH = 22;
+  const int kRows = 10, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -244,6 +249,14 @@ void SceneManager::draw(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
   g.fillSprite(BG);
+
+  /* remote scene jump (companion app) */
+  if (pendingScene_ >= 0 && pendingScene_ < SCENE_COUNT) {
+    menuOpen_ = false;
+    sysInfo_ = false;
+    gotoScene(pendingScene_, ui);
+    pendingScene_ = -1;
+  }
 
   /* Forza auto-enter/exit: telemetry hijacks the screen like a real dash */
   if (ui.forzaLive && scene_ != SCENE_FORZA && !forzaLatched_) {

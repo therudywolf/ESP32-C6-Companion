@@ -21,6 +21,8 @@ public:
   void begin(WolfPet *pet, LlmClient *llm, PhraseCache *cache, SdStore *sd);
   void onAction(int action); /* ACT_FEED / ACT_PLAY / ACT_TALK from the UI */
   void tick(unsigned long now, AppState &st);
+  /* remote: make the wolf say a literal line right now (companion app). */
+  void sayNow(const String &text) { show(text, millis()); }
 
   /* Rendering state */
   bool bubbleVisible(unsigned long now) const;
@@ -31,7 +33,8 @@ public:
 
 private:
   void trigger(const char *bucket, const char *eventRu, unsigned long now,
-               AppState &st, bool urgent);
+               AppState &st, bool urgent, bool forceLlm = false);
+  bool pcIdle(const AppState &st) const;
   void show(const String &p, unsigned long now);
   String buildContext(const char *eventRu, AppState &st);
   void diary(const char *ev);

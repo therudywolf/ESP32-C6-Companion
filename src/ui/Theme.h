@@ -15,19 +15,29 @@ constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
   return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
 
-/* Cyberpunk 2077 HUD: samurai-red chrome, cyan data, amber accents —
- * max saturation, high luminance: readable from a metre on a 1.47". */
-constexpr uint16_t BG = rgb(0x06, 0x04, 0x08);
-constexpr uint16_t ORANGE = rgb(0xFF, 0x3D, 0x5E);      /* chrome: samurai red */
-constexpr uint16_t ORANGE_DIM = rgb(0xA8, 0x20, 0x3C);  /* inactive chrome */
-constexpr uint16_t TEXT = rgb(0xFA, 0xFE, 0xFF);        /* near-pure white */
-constexpr uint16_t DIM = rgb(0x9E, 0xC4, 0xD2);         /* secondary text */
-constexpr uint16_t PANEL = rgb(0x2C, 0x12, 0x1C);       /* panel fill */
-constexpr uint16_t GOOD = rgb(0x00, 0xFF, 0xC0);        /* ok = neon mint */
-constexpr uint16_t WARN = rgb(0xFF, 0xC8, 0x14);        /* amber */
-constexpr uint16_t CRIT = rgb(0xFF, 0x28, 0x55);        /* alarm red (blinks) */
-constexpr uint16_t INFO = rgb(0x20, 0xFF, 0xFF);        /* pure data cyan */
-constexpr uint16_t ACCENT = rgb(0xFF, 0xC8, 0x14);      /* amber accent */
+/* Palette is RUNTIME now (extern globals, defined in Theme.cpp): the user
+ * can switch presets or set a custom chrome color from the menu or the
+ * companion app. Defaults = Cyberpunk 2077 preset. Draw code reads these
+ * as plain variables; default args below bind them at each call. */
+extern uint16_t BG;
+extern uint16_t ORANGE;     /* chrome: frames, headers, selection */
+extern uint16_t ORANGE_DIM; /* inactive chrome */
+extern uint16_t TEXT;       /* primary text */
+extern uint16_t DIM;        /* secondary text */
+extern uint16_t PANEL;      /* panel fill */
+extern uint16_t GOOD;       /* ok state */
+extern uint16_t WARN;       /* warning state */
+extern uint16_t CRIT;       /* alarm (blinks) */
+extern uint16_t INFO;       /* data / net / LLM */
+extern uint16_t ACCENT;     /* secondary accent */
+
+/* Theme control. Presets: 0 Cyberpunk, 1 Matrix, 2 Amber, 3 Synthwave,
+ * 4 Ice. setChrome overrides just the chrome hue on top of the preset. */
+static const int THEME_PRESETS = 5;
+void applyPreset(int idx);
+void setChrome(uint8_t r, uint8_t g, uint8_t b);
+const char *presetName(int idx);
+extern int currentPreset;
 
 /* Fonts (lgfx wrappers over U8g2 font data — Cyrillic capable where needed;
  * defined in Theme.cpp). Chunky 2x integer scaling = the Flipper aesthetic. */

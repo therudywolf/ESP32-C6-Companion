@@ -284,6 +284,26 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   if (doc["clk"].is<const char *>())
     copyStr(state.pcClock, sizeof(state.pcClock), doc["clk"]);
 
+  /* Remote control: act once per seq change (companion app). */
+  if (doc["rc"].is<JsonObject>()) {
+    JsonObject rc = doc["rc"];
+    long seq = rc["seq"] | -1L;
+    if (seq >= 0 && seq != state.rcSeq) {
+      state.rcSeq = seq;
+      state.rcNew = true;
+      state.rcScreen = rc["screen"] | -1;
+      state.rcSay = (const char *)(rc["say"] | "");
+      state.rcTheme = rc["theme"] | -1;
+      state.rcBright = rc["bright"] | -1;
+      state.rcChromeR = state.rcChromeG = state.rcChromeB = -1;
+      if (rc["chrome"].is<JsonArray>() && rc["chrome"].size() == 3) {
+        state.rcChromeR = rc["chrome"][0] | -1;
+        state.rcChromeG = rc["chrome"][1] | -1;
+        state.rcChromeB = rc["chrome"][2] | -1;
+      }
+    }
+  }
+
   const char *alert = doc["alert"] | "";
   state.alertActive = (strcmp(alert, "CRITICAL") == 0);
   if (state.alertActive) {
