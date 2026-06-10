@@ -20,9 +20,10 @@ void statusBar(UiCtx &ui, const char *title) {
 
   g.setFont(&F_MED);
   g.setTextSize(1);
-  textAt(g, 4, 0, title, ORANGE);
+  /* 12px corner inset: the physical panel corners are rounded */
+  textAt(g, 12, 0, title, ORANGE);
 
-  int x = NOCT_W - 4;
+  int x = NOCT_W - 12;
 
   /* clock from server payload */
   if (ui.st.pcClock[0]) {
@@ -101,14 +102,14 @@ void footer(UiCtx &ui, const char *action, int scene, int sceneCount) {
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   int y = NOCT_FOOTER_TOP + 6;
-  textAt(g, 5, y, "1x", ORANGE);
-  textAt(g, 20, y, "далее", DIM);
-  textAt(g, 62, y, "2x", ORANGE);
-  textAt(g, 77, y, "меню", DIM);
-  textAt(g, 112, y, "3x", ORANGE);
-  textAt(g, 127, y, "домой", DIM);
+  textAt(g, 14, y, "1x", ORANGE);
+  textAt(g, 29, y, "далее", DIM);
+  textAt(g, 71, y, "2x", ORANGE);
+  textAt(g, 86, y, "меню", DIM);
+  textAt(g, 121, y, "3x", ORANGE);
+  textAt(g, 136, y, "домой", DIM);
   if (action && action[0]) {
-    textRight(g, NOCT_W - 5, y, action, ORANGE);
+    textRight(g, NOCT_W - 14, y, action, ORANGE);
   }
 }
 

@@ -109,7 +109,7 @@ void drawWeather(UiCtx &ui) {
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  textAt(g, 78, 28 - (g.fontHeight() - 64), v, TEXT);
+  textAt(g, 78, 28 - (g.fontHeight() - 64) / 2, v, TEXT);
   g.setTextSize(1);
   g.setFont(&F_MED);
   textAt(g, 82 + vw, 66, "C", DIM);

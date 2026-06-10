@@ -74,8 +74,8 @@ void drawForza(UiCtx &ui) {
   bool shiftNow = pct >= NOCT_FORZA_SHIFT_PCT;
   bool flash = (ui.now / 80) & 1;
 
-  /* ── THE shift lamp: 12 fat segments, 24px, edge to edge ── */
-  const int segs = 12, sx = 4, sw = (NOCT_W - 8) / segs;
+  /* ── THE shift lamp: 12 fat segments, 24px, corner-safe insets ── */
+  const int segs = 12, sx = 10, sw = (NOCT_W - 20) / segs;
   float lo = 0.40f;
   int lit =
       pct <= lo ? 0 : (int)((pct - lo) / (NOCT_FORZA_SHIFT_PCT - lo) * segs);
@@ -166,23 +166,23 @@ void drawForza(UiCtx &ui) {
   hBar(g, 288, 96, 30, 14, fuelPct, fuelPct < 15 ? CRIT : ACCENT);
   textCenter(g, 303, 114, "FUEL", DIM);
 
-  /* ── info row: speed | boost | power | race — one aligned grid ── */
-  g.drawFastHLine(4, 127, NOCT_W - 8, PANEL);
+  /* ── info row: speed | boost | power | race — corner-safe grid ── */
+  g.drawFastHLine(10, 127, NOCT_W - 20, PANEL);
   snprintf(v, sizeof(v), "%d", (int)(f.speedKmh + 0.5f));
-  infoCell(g, 4, 80, "КМ/Ч", v, TEXT);
+  infoCell(g, 10, 76, "КМ/Ч", v, TEXT);
   if (f.boostPsi > 0.3f)
     snprintf(v, sizeof(v), "%.1f", f.boostPsi * 0.0689f);
   else
     snprintf(v, sizeof(v), "-");
-  infoCell(g, 84, 80, "БУСТ BAR", v, INFO);
+  infoCell(g, 86, 76, "БУСТ BAR", v, INFO);
   int hp = (int)(f.powerW / 745.7f);
   snprintf(v, sizeof(v), "%d", hp > 0 ? hp : 0);
-  infoCell(g, 164, 80, "Л.С.", v, ACCENT);
+  infoCell(g, 162, 76, "Л.С.", v, ACCENT);
   if (f.lap > 0 || f.racePos > 0)
     snprintf(v, sizeof(v), "%d/%d", f.lap + 1, f.racePos);
   else
     snprintf(v, sizeof(v), "-");
-  infoCell(g, 244, 72, "КРУГ/МЕСТО", v, TEXT);
+  infoCell(g, 238, 72, "КРУГ/МЕСТО", v, TEXT);
 
   /* ── overlays ── */
   if (!f.raceOn) {
