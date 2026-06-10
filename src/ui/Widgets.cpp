@@ -13,6 +13,65 @@ void fmtRate(char *out, size_t cap, int kbs) {
     snprintf(out, cap, "%dK", kbs);
 }
 
+/* UTF-8 word-wrap with hard char-break for overlong words. */
+int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
+             int maxLines, uint16_t color) {
+  String line;
+  String word;
+  int lines = 0;
+  auto flush = [&](bool force) {
+    if (line.length() == 0 && !force) return;
+    textAt(g, x, y, line.c_str(), color);
+    y += lineH;
+    lines++;
+    line = "";
+  };
+  size_t i = 0, n = strlen(s);
+  while (i <= n && lines < maxLines) {
+    bool end = (i == n);
+    char c = end ? ' ' : s[i];
+    if (c == ' ' || end) {
+      /* word complete: does it fit on the current line? */
+      String trial = line.length() ? line + " " + word : word;
+      if (g.textWidth(trial.c_str()) <= w) {
+        line = trial;
+      } else if (line.length()) {
+        flush(false);
+        line = word;
+        if (g.textWidth(line.c_str()) > w) line = ""; /* fall to char-break */
+      }
+      if (line.length() == 0 && g.textWidth(word.c_str()) > w) {
+        /* word alone too wide: break it character by character */
+        String acc;
+        for (size_t k = 0; k < (size_t)word.length() && lines < maxLines;) {
+          int bytes = (word[k] & 0x80) == 0      ? 1
+                      : (word[k] & 0xE0) == 0xC0 ? 2
+                                                 : 3;
+          String ch = word.substring(k, k + bytes);
+          if (g.textWidth((acc + ch).c_str()) > w && acc.length()) {
+            line = acc;
+            flush(false);
+            acc = ch;
+          } else {
+            acc += ch;
+          }
+          k += bytes;
+        }
+        line = acc;
+      }
+      word = "";
+      i++;
+      if (end) break;
+      continue;
+    }
+    int bytes = (c & 0x80) == 0 ? 1 : (c & 0xE0) == 0xC0 ? 2 : 3;
+    word += String(s).substring(i, i + bytes);
+    i += bytes;
+  }
+  if (lines < maxLines) flush(false);
+  return y;
+}
+
 void statusBar(UiCtx &ui, const char *title) {
   LGFX_Sprite &g = ui.g;
   g.fillRect(0, 0, NOCT_W, NOCT_STATUS_H, BG);
@@ -127,7 +186,11 @@ void sparkline(LGFX_Sprite &g, int x, int y, int w, int h,
     px = vx;
     py = vy;
   }
-  if (px >= 0) g.fillCircle(px, py, 1, TEXT);
+  if (px >= 0) { /* pulsing tip beacon */
+    int pr = 1 + (int)((sinf(theme::nowMs / 280.0f) + 1) * 1.2f);
+    g.fillCircle(px, py, pr, lerp565(color, TEXT, 200));
+    g.drawCircle(px, py, pr + 1, color);
+  }
 }
 
 void valueTile(LGFX_Sprite &g, int x, int y, int w, int h, const char *label,
@@ -234,44 +297,59 @@ void xbmScaled(LGFX_Sprite &g, int x, int y, const unsigned char *bits, int w,
 
 void weatherIcon(LGFX_Sprite &g, int cx, int cy, int r, int wmo,
                  unsigned long now) {
+  /* gentle horizontal drift so every cloud "breathes" */
+  int drift = (int)(sinf(now / 900.0f) * (r / 6.0f));
   auto cloud = [&](int dx, int dy, uint16_t c) {
+    dx += drift;
     g.fillCircle(cx - r / 2 + dx, cy + dy, r / 2, c);
     g.fillCircle(cx + dx, cy - r / 4 + dy, r / 2 + 2, c);
     g.fillCircle(cx + r / 2 + dx, cy + dy, r / 2, c);
     g.fillRect(cx - r / 2 + dx, cy + dy, r, r / 2, c);
   };
-  if (wmo == 0) { /* clear */
-    g.fillCircle(cx, cy, r / 2 + 2, WARN);
-    for (int i = 0; i < 8; i++) {
-      float a = i * PI / 4 + (now % 8000) * PI / 8000.0f / 4;
-      g.drawLine(cx + cosf(a) * (r / 2 + 5), cy + sinf(a) * (r / 2 + 5),
-                 cx + cosf(a) * (r - 1), cy + sinf(a) * (r - 1), WARN);
-    }
-  } else if (wmo <= 3) { /* partly cloudy */
-    g.fillCircle(cx + r / 3, cy - r / 3, r / 2, WARN);
+  /* pulsing sun disc shared by clear + partly-cloudy */
+  auto sun = [&](int sx, int sy, int rad, bool rays) {
+    int pulse = (int)(sinf(now / 500.0f) * (rad / 6.0f + 1));
+    g.fillCircle(sx, sy, rad + pulse, WARN);
+    g.fillCircle(sx, sy, rad + pulse - 2, lerp565(WARN, TEXT, 90));
+    if (rays)
+      for (int i = 0; i < 8; i++) {
+        float a = i * PI / 4 + (now % 8000) * PI / 8000.0f * 2;
+        int r0 = rad + 3 + pulse, r1 = rad + 7 + pulse;
+        g.drawLine(sx + cosf(a) * r0, sy + sinf(a) * r0, sx + cosf(a) * r1,
+                   sy + sinf(a) * r1, WARN);
+      }
+  };
+
+  if (wmo == 0) { /* clear — pulsing sun with rotating rays */
+    sun(cx, cy, r / 2, true);
+  } else if (wmo <= 3) { /* partly cloudy — sun peeking, cloud drifting */
+    sun(cx + r / 3, cy - r / 3, r / 3, true);
     cloud(0, r / 5, DIM);
-  } else if (wmo >= 45 && wmo <= 48) { /* fog */
-    for (int i = -2; i <= 2; i++)
-      g.drawFastHLine(cx - r + ((i & 1) ? 4 : 0), cy + i * (r / 3), 2 * r - 6,
-                      DIM);
+  } else if (wmo >= 45 && wmo <= 48) { /* fog — scrolling bands */
+    for (int i = -2; i <= 2; i++) {
+      int off = (int)(sinf(now / 600.0f + i) * 4);
+      g.drawFastHLine(cx - r + 3 + off, cy + i * (r / 3), 2 * r - 6,
+                      lerp565(DIM, TEXT, 60));
+    }
   } else if ((wmo >= 51 && wmo <= 67) || (wmo >= 80 && wmo <= 82)) { /* rain */
     cloud(0, -r / 4, DIM);
     for (int i = -1; i <= 1; i++) {
-      int ph = (now / 120 + i * 3) % 10;
-      g.drawLine(cx + i * (r / 2), cy + r / 3 + ph, cx + i * (r / 2) - 2,
-                 cy + r / 3 + ph + 5, INFO);
+      int ph = (now / 110 + i * 4) % 12;
+      int rx = cx + i * (r / 2) + drift;
+      g.drawLine(rx, cy + r / 4 + ph, rx - 2, cy + r / 4 + ph + 5, INFO);
     }
   } else if ((wmo >= 71 && wmo <= 77) || wmo == 85 || wmo == 86) { /* snow */
     cloud(0, -r / 4, DIM);
     for (int i = -1; i <= 1; i++) {
-      int ph = (now / 250 + i * 4) % 12;
-      int sx = cx + i * (r / 2), sy = cy + r / 3 + ph;
+      int ph = (now / 220 + i * 5) % 14;
+      int sx = cx + i * (r / 2) + drift + (int)(sinf(now / 300.0f + i) * 3);
+      int sy = cy + r / 4 + ph;
       g.drawLine(sx - 2, sy, sx + 2, sy, TEXT);
       g.drawLine(sx, sy - 2, sx, sy + 2, TEXT);
     }
-  } else if (wmo >= 95) { /* storm */
-    cloud(0, -r / 4, DIM);
-    bool on = (now / 300) & 1;
+  } else if (wmo >= 95) { /* storm — flashing bolt + flicker cloud */
+    bool on = (now / 250) & 1;
+    cloud(0, -r / 4, on ? lerp565(DIM, WARN, 60) : DIM);
     if (on) {
       g.fillTriangle(cx, cy, cx - r / 3, cy + r / 2, cx + 2, cy + r / 4, WARN);
       g.fillTriangle(cx + 2, cy + r / 4, cx + r / 3, cy + r / 2, cx - 2,

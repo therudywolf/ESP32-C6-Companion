@@ -39,6 +39,12 @@ void setChrome(uint8_t r, uint8_t g, uint8_t b);
 const char *presetName(int idx);
 extern int currentPreset;
 
+/* Frame clock for animations — set once per frame in SceneManager::draw, read
+ * by draw helpers so they animate without threading `now` through every call. */
+extern unsigned long nowMs;
+/* Linear-interpolate two RGB565 colors (t = 0..255). */
+uint16_t lerp565(uint16_t a, uint16_t b, int t);
+
 /* Fonts (lgfx wrappers over U8g2 font data — Cyrillic capable where needed;
  * defined in Theme.cpp). Chunky 2x integer scaling = the Flipper aesthetic. */
 extern const lgfx::U8g2font F_SMALL;  /* 5x8 cyrillic: labels, hints */

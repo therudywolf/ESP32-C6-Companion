@@ -103,27 +103,25 @@ void drawWeather(UiCtx &ui) {
   }
   char v[32];
 
-  /* icon | 64px temperature | russian description in the right column */
-  weatherIcon(g, 40, 58, 24, w.wmoCode, ui.now);
+  /* Layout: animated icon (left) | 64px temperature (center) | description
+   * in a FIXED right box that word-wraps — no more clipped "малооблач". */
+  weatherIcon(g, 36, 58, 22, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  textAt(g, 78, 28 - (g.fontHeight() - 64) / 2, v, TEXT);
+  textAt(g, 70, 28 - (g.fontHeight() - 64) / 2, v, TEXT);
   g.setTextSize(1);
   g.setFont(&F_MED);
-  textAt(g, 82 + vw, 66, "C", DIM);
+  textAt(g, 74 + vw, 66, "C", DIM);
   {
+    /* fixed box x186..314 (128px) — fits "малооблачно"; longer wrap to 2 */
+    const int bx = 186, bw = NOCT_W - bx - 6;
+    g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
-    int dx = 82 + vw + 28;
-    if (dx < 198) dx = 198;
-    int sp = d.indexOf(' ');
-    if (sp > 0 && dx + g.textWidth(d.c_str()) > NOCT_W - 4) {
-      textAt(g, dx, 34, d.substring(0, sp).c_str(), ORANGE);
-      textAt(g, dx, 56, d.substring(sp + 1).c_str(), ORANGE);
-    } else {
-      textAt(g, dx, 44, d.c_str(), ORANGE);
-    }
+    int lineW = g.textWidth(d.c_str());
+    int y0 = (lineW <= bw) ? 50 : 36; /* 1 line centered, else 2 lines */
+    textWrap(g, d.c_str(), bx, y0, bw, 22, 2, ORANGE);
   }
 
   /* 5-day forecast */
@@ -337,31 +335,15 @@ void drawEvents(UiCtx &ui) {
   snprintf(v, sizeof(v), "%s · %d", e.severity, e.count);
   textAt(g, 8, 64, v, DIM);
 
-  /* human text, wrapped big (up to 2 lines) */
-  String txt = e.text;
-  int y = 86, x = 8;
-  String word;
-  for (size_t i = 0; i <= (size_t)txt.length(); i++) {
-    char ch = i < (size_t)txt.length() ? txt[i] : ' ';
-    if (ch == ' ') {
-      int ww = g.textWidth(word.c_str());
-      if (x + ww > 312) {
-        x = 8;
-        y += 21;
-        if (y > 108) break;
-      }
-      textAt(g, x, y, word.c_str(), TEXT);
-      x += ww + 7;
-      word = "";
-    } else {
-      word += ch;
-    }
-  }
+  /* human text — robust word+char wrap (long CVE ids etc.), up to 2 lines */
+  g.setFont(&F_MED);
+  textWrap(g, e.text, 8, 86, NOCT_W - 16, 21, 2, TEXT);
 
   /* other firing alerts, one line */
   if (e.count > 1 && e.list[1][0]) {
+    g.setFont(&F_TEXT);
     snprintf(v, sizeof(v), "+ %s", e.list[1]);
-    textAt(g, 8, 130, v, DIM);
+    textAt(g, 8, 132, v, DIM);
   }
 }
 

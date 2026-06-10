@@ -248,6 +248,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
 void SceneManager::draw(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
+  theme::nowMs = ui.now; /* frame clock for animated draw helpers */
   g.fillSprite(BG);
 
   /* remote scene jump (companion app) */
