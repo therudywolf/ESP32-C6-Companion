@@ -17,19 +17,25 @@ static bool gate(UiCtx &ui) {
   return true;
 }
 
-/* 64 px hero temperature with a small unit */
+/* y to pass to textAt so the visible glyph TOP lands at wantTop (the u8g2
+ * logisoso line box is taller than the digits — leading sits above). */
+static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
+  int off = g.fontHeight() - inkH;
+  if (off < 0) off = 0;
+  return wantTop - off;
+}
+
+/* 64 px hero temperature with a small unit; y = desired INK top */
 static void heroTemp(LGFX_Sprite &g, int x, int y, int t, uint16_t c) {
   char v[8];
   snprintf(v, sizeof(v), "%d", t);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   int vw = g.textWidth(v);
-  textAt(g, x, y, v, c);
+  textAt(g, x, inkTop(g, y, 64), v, c);
   g.setTextSize(1);
   g.setFont(&F_MED);
-  g.setTextSize(1);
   textAt(g, x + vw + 4, y + 44, "C", DIM);
-  g.setTextSize(1);
 }
 
 /* big number + small unit on one baseline */
@@ -130,7 +136,7 @@ void drawRam(UiCtx &ui) {
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw = g.textWidth(v);
-  textAt(g, 14, 32, v, pctColor(rpct));
+  textAt(g, 14, inkTop(g, 31, 64), v, pctColor(rpct));
   g.setTextSize(1);
   g.setFont(&F_MED);
   g.setTextSize(1);
