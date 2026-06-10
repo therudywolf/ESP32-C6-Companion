@@ -32,7 +32,7 @@ static uint16_t slipColor(float s) {
 static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
   int off = g.fontHeight() - inkH;
   if (off < 0) off = 0;
-  return wantTop - off; /* the line-box leading sits above the ink */
+  return wantTop - off / 2; /* leading splits above/below the ink */
 }
 
 /* one cell of the bottom info row: small caption, 20px value */
@@ -135,7 +135,10 @@ void drawForza(UiCtx &ui) {
   textCenter(g, 166, inkTop(g, 34, 64), v, rc);
   g.setTextSize(1);
   g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "ОБОРОТЫ / MAX %d", (int)f.maxRpm);
+  if (f.maxRpm > 1000) /* game menus send no engine data */
+    snprintf(v, sizeof(v), "ОБОРОТЫ / MAX %d", (int)f.maxRpm);
+  else
+    snprintf(v, sizeof(v), "ОБОРОТЫ");
   textCenter(g, 166, 104, v, DIM);
 
   /* ── pedals (240..284) ── */

@@ -22,7 +22,7 @@ static bool gate(UiCtx &ui) {
 static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
   int off = g.fontHeight() - inkH;
   if (off < 0) off = 0;
-  return wantTop - off;
+  return wantTop - off / 2; /* leading splits above/below the ink */
 }
 
 /* 64 px hero temperature with a small unit; y = desired INK top */
