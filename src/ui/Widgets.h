@@ -6,6 +6,7 @@
 #define NOCT_WIDGETS_H
 
 #include "core/Graphs.h"
+#include "core/HourHistory.h"
 #include "core/Types.h"
 #include "net/ForzaManager.h"
 #include "pet/PetBrain.h"
@@ -21,6 +22,7 @@ struct UiCtx {
   unsigned long now;
   const ForzaState *forza = nullptr;
   bool forzaLive = false; /* packets within the timeout window */
+  const Histories *hist = nullptr; /* on-device hour history */
 };
 
 namespace widgets {

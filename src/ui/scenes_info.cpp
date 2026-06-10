@@ -350,6 +350,64 @@ void drawEvents(UiCtx &ui) {
   }
 }
 
+/* ── HISTORY — last hour mini-graphs ─────────────────────────────────── */
+
+static void hourGraph(LGFX_Sprite &g, int x, int y, int w, int h,
+                      const char *title, const HourGraph &hg,
+                      const char *unit, uint16_t color, int floorMax) {
+  panel(g, x, y, w, h, title);
+  /* current value, big, top-right */
+  char v[12];
+  snprintf(v, sizeof(v), "%d%s", hg.now(), unit);
+  g.setFont(&F_VALUE);
+  g.setTextSize(2);
+  textRight(g, x + w - 6, y + 4, v, color);
+  g.setTextSize(1);
+
+  int gx = x + 4, gy = y + 22, gw = w - 8, gh = h - 26;
+  g.drawRect(gx, gy, gw, gh, PANEL);
+  if (hg.count < 2) {
+    g.setFont(&F_TEXT);
+    textCenter(g, x + w / 2, y + h / 2, "сбор данных...", DIM);
+    return;
+  }
+  int mx = hg.maxVal(floorMax), mn = hg.minVal();
+  if (mx <= mn) mx = mn + 1;
+  /* min/max ticks */
+  g.setFont(&F_SMALL);
+  char t[8];
+  snprintf(t, sizeof(t), "%d", mx);
+  textAt(g, gx + 2, gy + 1, t, DIM);
+  snprintf(t, sizeof(t), "%d", mn);
+  textAt(g, gx + 2, gy + gh - 8, t, DIM);
+  /* curve, filled under */
+  int n = hg.count, px = -1, py = -1;
+  for (int i = 0; i < n; i++) {
+    int vx = gx + 1 + (gw - 3) * i / (n - 1);
+    int vy = gy + gh - 2 - (gh - 4) * (hg.at(i) - mn) / (mx - mn);
+    g.drawFastVLine(vx, vy, gy + gh - 2 - vy, lerp565(BG, color, 60));
+    if (px >= 0) g.drawLine(px, py, vx, vy, color);
+    px = vx;
+    py = vy;
+  }
+  if (px >= 0) g.fillCircle(px, py, 2, TEXT);
+}
+
+void drawHistory(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  if (!ui.hist) return;
+  const Histories &h = *ui.hist;
+  int span = h.ct.count;
+  hourGraph(g, 4, 26, 154, 58, "CPU C", h.ct, "", INFO, 60);
+  hourGraph(g, 162, 26, 154, 58, "GPU C", h.gt, "", GOOD, 60);
+  hourGraph(g, 4, 88, 154, 58, "CPU %", h.cl, "", WARN, 100);
+  hourGraph(g, 162, 88, 154, 58, "RAM %", h.ram, "", ACCENT, 100);
+  g.setFont(&F_SMALL);
+  char buf[24];
+  snprintf(buf, sizeof(buf), "окно: %d мин", span < 60 ? span : 60);
+  textCenter(g, NOCT_W / 2, NOCT_H - 8, buf, DIM);
+}
+
 /* ── SYSINFO (overlay from menu) ─────────────────────────────────────── */
 
 void drawSysInfo(UiCtx &ui) {
