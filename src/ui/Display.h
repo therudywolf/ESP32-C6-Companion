@@ -27,7 +27,9 @@ public:
       cfg.freq_write = 80000000; /* above 62.5MHz spec; verified on this board.
                                     Drop to 40000000 if artifacts appear. */
       cfg.freq_read = 6000000;
-      cfg.spi_3wire = true; /* no MISO wired to the panel */
+      cfg.spi_3wire = false; /* panel has no MISO anyway; 3-wire half-duplex
+                                leaves MOSI in a state that breaks the SD
+                                sharing the bus (Select Failed) */
       cfg.use_lock = true;
       cfg.dma_channel = SPI_DMA_CH_AUTO;
       cfg.pin_sclk = NOCT_PIN_LCD_SCLK;
@@ -76,9 +78,9 @@ public:
 
   Display() : fb(&tft) {}
 
-  bool begin(uint8_t brightness) {
+  bool begin(uint8_t brightness, bool flipped) {
     tft.init();
-    tft.setRotation(1); /* landscape 320x172, offsets auto-swap to 0/34 */
+    setFlipped(flipped);
     tft.setBrightness(brightness);
     fb.setColorDepth(16);
     if (!fb.createSprite(NOCT_W, NOCT_H)) return false;
@@ -88,6 +90,8 @@ public:
 
   void push() { fb.pushSprite(0, 0); }
   void setBrightness(uint8_t b) { tft.setBrightness(b); }
+  /* landscape both ways: USB on the left (3, default) or right (1) */
+  void setFlipped(bool f) { tft.setRotation(f ? 1 : 3); }
 };
 
 #endif

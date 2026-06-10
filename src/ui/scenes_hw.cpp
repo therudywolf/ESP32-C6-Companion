@@ -46,23 +46,27 @@ void drawCpu(UiCtx &ui) {
   sparkline(g, 196, 34, 112, 34, ui.gr.cpuLoad, GOOD);
 
   panel(g, 140, 82, 176, 32, "КУЛЕР");
-  g.setFont(&F_TEXT);
+  g.setFont(&F_VALUE);
   snprintf(v, sizeof(v), "%d RPM", hw.fans[0]);
   textAt(g, 148, 92, v, TEXT);
-  snprintf(v, sizeof(v), "помпа %d", hw.fans[1]);
-  textRight(g, 308, 92, v, DIM);
-
-  /* top processes */
-  panel(g, 4, 120, 312, 30, "ТОП ПРОЦЕССЫ");
   g.setFont(&F_TEXT);
-  int px = 12;
-  for (int i = 0; i < 3; i++) {
-    if (ui.st.process.cpuNames[i].length() == 0) continue;
-    snprintf(v, sizeof(v), "%s %d%%", ui.st.process.cpuNames[i].c_str(),
-             ui.st.process.cpuPercent[i]);
-    textAt(g, px, 132, v, i == 0 ? TEXT : DIM);
-    px += g.textWidth(v) + 14;
-    if (px > 280) break;
+  snprintf(v, sizeof(v), "помпа %d", hw.fans[1]);
+  textRight(g, 308, 94, v, DIM);
+
+  /* top process — big, plus runner-up */
+  panel(g, 4, 120, 312, 30, "ТОП ПРОЦЕСС");
+  if (ui.st.process.cpuNames[0].length()) {
+    g.setFont(&F_TEXT);
+    g.setTextSize(2);
+    snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[0].c_str(),
+             ui.st.process.cpuPercent[0]);
+    textAt(g, 12, 128, v, TEXT);
+    g.setTextSize(1);
+    if (ui.st.process.cpuNames[1].length()) {
+      snprintf(v, sizeof(v), "%.11s %d%%", ui.st.process.cpuNames[1].c_str(),
+               ui.st.process.cpuPercent[1]);
+      textRight(g, 306, 132, v, DIM);
+    }
   }
 }
 
@@ -85,21 +89,19 @@ void drawGpu(UiCtx &ui) {
   sparkline(g, 196, 34, 112, 34, ui.gr.gpuLoad, GOOD);
 
   panel(g, 140, 82, 176, 32, "VRAM");
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "%.1f / %.0fG", hw.vu, hw.vt);
+  g.setFont(&F_VALUE);
+  snprintf(v, sizeof(v), "%.1f/%.0fG", hw.vu, hw.vt);
   textAt(g, 148, 92, v, TEXT);
-  hBar(g, 230, 90, 78, 10, hw.gv, pctColor(hw.gv));
+  hBar(g, 236, 90, 72, 12, hw.gv, pctColor(hw.gv));
 
-  panel(g, 4, 120, 312, 30, "ЧАСТОТЫ / ПИТАНИЕ");
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "ядро %dMHz", hw.gclock);
-  textAt(g, 12, 132, v, DIM);
-  snprintf(v, sizeof(v), "vram %dMHz", hw.vclock);
-  textAt(g, 110, 132, v, DIM);
-  snprintf(v, sizeof(v), "%dW", hw.gtdp);
-  textAt(g, 210, 132, v, TEXT);
+  panel(g, 4, 120, 312, 30, "ЧАСТОТА / ПИТАНИЕ / ФАН");
+  g.setFont(&F_VALUE);
+  snprintf(v, sizeof(v), "%d MHz", hw.gclock);
+  textAt(g, 14, 130, v, TEXT);
+  snprintf(v, sizeof(v), "%d W", hw.gtdp);
+  textCenter(g, 168, 130, v, TEXT);
   snprintf(v, sizeof(v), "%d RPM", hw.gf);
-  textRight(g, 308, 132, v, DIM);
+  textRight(g, 306, 130, v, DIM);
 }
 
 void drawRam(UiCtx &ui) {
@@ -162,15 +164,16 @@ void drawDisks(UiCtx &ui) {
     textRight(g, 314, y + 4, v, tempColor(d.temp, 45, 55));
   }
 
-  panel(g, 4, 130, 312, 20);
   g.setFont(&F_TEXT);
+  g.setTextSize(2);
   char r1[12], r2[12];
   fmtRate(r1, sizeof(r1), hw.dr);
   fmtRate(r2, sizeof(r2), hw.dw);
-  snprintf(v, sizeof(v), "чтение %s/s", r1);
-  textAt(g, 14, 135, v, INFO);
-  snprintf(v, sizeof(v), "запись %s/s", r2);
-  textRight(g, 306, 135, v, WARN);
+  snprintf(v, sizeof(v), "чтение %s", r1);
+  textAt(g, 8, 132, v, INFO);
+  snprintf(v, sizeof(v), "запись %s", r2);
+  textRight(g, 312, 132, v, WARN);
+  g.setTextSize(1);
 }
 
 void drawFans(UiCtx &ui) {
@@ -254,19 +257,22 @@ void drawNet(UiCtx &ui) {
   panel(g, 4, 94, 156, 56, "ПИНГ");
   g.setFont(&F_VALUE);
   snprintf(v, sizeof(v), "%d ms", hw.pg);
-  textAt(g, 14, 110, v, hw.pg > 80 ? WARN : GOOD);
-  g.setFont(&F_SMALL);
-  textAt(g, 14, 134, "google:443", DIM);
+  textAt(g, 14, 108, v, hw.pg > 80 ? WARN : GOOD);
+  g.setFont(&F_TEXT);
+  textAt(g, 14, 132, "google:443", DIM);
 
   panel(g, 164, 94, 152, 56, "УСТРОЙСТВО");
   g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "%s", ui.st.link.ssid);
-  textAt(g, 174, 104, v, TEXT);
+  g.setTextSize(2);
+  snprintf(v, sizeof(v), "%.9s", ui.st.link.ssid);
+  textAt(g, 172, 100, v, TEXT);
+  g.setTextSize(1);
   snprintf(v, sizeof(v), "RSSI %d dBm", ui.st.link.rssi);
-  textAt(g, 174, 118, v, DIM);
-  textAt(g, 174, 132,
-         ui.st.link.tcpConnected ? "сервер: онлайн" : "сервер: нет",
+  textAt(g, 172, 120, v, DIM);
+  g.setTextSize(2);
+  textAt(g, 172, 132, ui.st.link.tcpConnected ? "сервер: ок" : "сервер: нет",
          ui.st.link.tcpConnected ? GOOD : CRIT);
+  g.setTextSize(1);
 }
 
 } // namespace scenes

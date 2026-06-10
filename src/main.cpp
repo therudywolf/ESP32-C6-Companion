@@ -70,10 +70,10 @@ void setup() {
   Serial.println("[BOOT] sd phase done");
 
   /* Framebuffer — the largest single allocation (110 KB). */
-  if (!display.begin(state.settings.brightness)) {
+  if (!display.begin(state.settings.brightness, state.settings.flipped)) {
     for (;;) { /* keep shouting so a late-attached monitor sees it */
       Serial.println("[BOOT] FATAL: framebuffer alloc failed");
-      rgbLedWrite(NOCT_PIN_RGB, 80, 0, 0);
+      rgbLedWrite(NOCT_PIN_RGB, 0, 80, 0); /* red (RGB-ordered LED) */
       delay(500);
       rgbLedWrite(NOCT_PIN_RGB, 0, 0, 0);
       delay(500);

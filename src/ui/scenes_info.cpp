@@ -68,8 +68,11 @@ void drawMedia(UiCtx &ui) {
     x = 8 - (int)((ui.now / 40) % span);
   }
   textAt(g, x, 116, t.c_str(), TEXT);
+  String a = m.artist;
+  int aw = g.textWidth(a.c_str());
+  if (aw > NOCT_W - 8) a = a.substring(0, 24);
+  textCenter(g, NOCT_W / 2, 136, a.c_str(), ORANGE);
   g.setTextSize(1);
-  textCenter(g, NOCT_W / 2, 138, m.artist.c_str(), ORANGE);
 }
 
 /* ── WEATHER ─────────────────────────────────────────────────────────── */
@@ -92,8 +95,9 @@ void drawWeather(UiCtx &ui) {
   g.setFont(&F_TEXT);
   g.setTextSize(2);
   textAt(g, 100 + vw, 52, "C", DIM);
+  g.setTextSize(2);
+  textAt(g, 98, 74, w.desc.c_str(), ORANGE);
   g.setTextSize(1);
-  textAt(g, 98, 78, w.desc.c_str(), ORANGE);
 
   /* 5-day forecast */
   static const char *dayNames[] = {"сег", "+1", "+2", "+3", "+4"};
@@ -129,7 +133,7 @@ void drawClaude(UiCtx &ui) {
   snprintf(v, sizeof(v), c.windowPct < 0 ? "n/a" : "%d%%", win);
   textAt(g, 14, 42, v, pctColor(win));
   hBar(g, 70, 44, 124, 14, win, pctColor(win));
-  g.setFont(&F_SMALL);
+  g.setFont(&F_TEXT);
   if (c.resetsInMin >= 0) {
     snprintf(v, sizeof(v), "сброс через %dч %02dм", c.resetsInMin / 60,
              c.resetsInMin % 60);
@@ -143,7 +147,7 @@ void drawClaude(UiCtx &ui) {
   snprintf(v, sizeof(v), c.weeklyPct < 0 ? "n/a" : "%d%%", wk);
   textAt(g, 14, 106, v, pctColor(wk));
   hBar(g, 70, 108, 124, 14, wk, pctColor(wk));
-  g.setFont(&F_SMALL);
+  g.setFont(&F_TEXT);
   if (c.weeklyResetMin >= 0) {
     snprintf(v, sizeof(v), "сброс через %dд %dч", c.weeklyResetMin / 1440,
              (c.weeklyResetMin % 1440) / 60);

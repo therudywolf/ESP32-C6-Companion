@@ -17,11 +17,11 @@ public:
   /* 0..1 rev range for FORZA mode coloring. */
   void setForzaPct(float p) { forzaPct_ = p; }
 
-  void begin() { rgbLedWrite(pin_, 0, 0, 0); }
+  void begin() { px(0, 0, 0); }
 
   void setEnabled(bool en) {
     enabled_ = en;
-    if (!en) rgbLedWrite(pin_, 0, 0, 0);
+    if (!en) px(0, 0, 0);
   }
 
   void setMode(Mode m) {
@@ -37,33 +37,33 @@ public:
     lastMs_ = now;
     switch (mode_) {
     case OFF:
-      rgbLedWrite(pin_, 0, 0, 0);
+      px(0, 0, 0);
       break;
     case BREATHE: { /* slow orange breathing, period ~4s */
       phase_ = (phase_ + 1) % 120;
       int tri = phase_ < 60 ? phase_ : 120 - phase_;
       uint8_t v = 2 + tri * 28 / 60; /* 2..30 */
-      rgbLedWrite(pin_, v, v / 2, 0);
+      px(v, v / 2, 0);
       break;
     }
     case ALERT: { /* hard red strobe ~4Hz */
       phase_ = (phase_ + 1) % 8;
       uint8_t v = phase_ < 4 ? 120 : 0;
-      rgbLedWrite(pin_, v, 0, 0);
+      px(v, 0, 0);
       break;
     }
     case LLM: { /* cyan thinking pulse, fast */
       phase_ = (phase_ + 1) % 30;
       int tri = phase_ < 15 ? phase_ : 30 - phase_;
       uint8_t v = 4 + tri * 50 / 15;
-      rgbLedWrite(pin_, 0, v / 2, v);
+      px(0, v / 2, v);
       break;
     }
     case BLIP_OK: { /* short green flash then back to breathing */
       if (millis() - blipStart_ > 350) {
         mode_ = BREATHE;
       } else {
-        rgbLedWrite(pin_, 0, 60, 10);
+        px(0, 60, 10);
       }
       break;
     }
@@ -71,14 +71,14 @@ public:
       if (forzaPct_ >= 0.95f) {
         phase_ = (phase_ + 1) % 4;
         uint8_t v = phase_ < 2 ? 160 : 0;
-        rgbLedWrite(pin_, v, 0, 0);
+        px(v, 0, 0);
       } else if (forzaPct_ >= 0.80f) {
-        rgbLedWrite(pin_, 120, 8, 0);
+        px(120, 8, 0);
       } else if (forzaPct_ >= 0.60f) {
-        rgbLedWrite(pin_, 90, 60, 0);
+        px(90, 60, 0);
       } else {
         uint8_t v = 20 + (uint8_t)(forzaPct_ * 80);
-        rgbLedWrite(pin_, 0, v, 0);
+        px(0, v, 0);
       }
       break;
     }
@@ -86,6 +86,12 @@ public:
   }
 
 private:
+  /* This board's WS2812B-0807 is RGB-ordered; the core's rgbLedWrite targets
+   * GRB parts. Swap R/G on the way out so colors mean what they say. */
+  static void px(uint8_t r, uint8_t g, uint8_t b) {
+    rgbLedWrite(pin_, g, r, b);
+  }
+
   static const int pin_ = 8;
   Mode mode_ = BREATHE;
   bool enabled_ = true;

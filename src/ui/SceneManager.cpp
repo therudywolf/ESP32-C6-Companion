@@ -59,7 +59,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 7;
+    const int kMenuItems = 8;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -165,11 +165,15 @@ void SceneManager::menuAction(UiCtx &ui) {
     if (s.netSel >= d_.wifiCount) s.netSel = -1;
     d_.wifi->setForced(s.netSel);
     break;
-  case 5: /* sysinfo */
+  case 5: /* flip display 180 */
+    s.flipped = !s.flipped;
+    d_.disp->setFlipped(s.flipped);
+    break;
+  case 6: /* sysinfo */
     sysInfo_ = true;
     menuOpen_ = false;
     break;
-  case 6: /* close */
+  case 7: /* close */
     menuOpen_ = false;
     break;
   }
@@ -179,11 +183,11 @@ void SceneManager::menuAction(UiCtx &ui) {
 void SceneManager::drawMenu(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
-  const int mx = 60, my = 24, mw = 200, mh = 126;
-  g.fillRect(mx, my, mw, mh, BG);
-  panel(g, mx, my, mw, mh, "МЕНЮ", ORANGE, ORANGE);
+  /* full content band — no overlaying scene leftovers */
+  g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
+  g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[6][20];
+  char val[7][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -194,23 +198,23 @@ void SceneManager::drawMenu(UiCtx &ui) {
   if (s.netSel < 0)
     snprintf(val[4], 20, "авто");
   else
-    snprintf(val[4], 20, "%.8s", d_.wifiNames[s.netSel]);
-  val[5][0] = '\0';
+    snprintf(val[4], 20, "%.10s", d_.wifiNames[s.netSel]);
+  snprintf(val[5], 20, "%s", s.flipped ? "180" : "0");
+  val[6][0] = '\0';
 
-  static const char *names[] = {"Карусель",  "Яркость",  "LED",
-                                "Волк LLM",  "WiFi",     "Инфо системы",
-                                "Закрыть"};
+  static const char *names[] = {"Карусель",     "Яркость",
+                                "LED",          "Волк LLM",
+                                "WiFi",         "Переворот",
+                                "Инфо системы", "Закрыть"};
   g.setFont(&F_TEXT);
   g.setTextSize(2);
-  for (int i = 0; i < 7; i++) {
-    int y = my + 10 + i * 16;
+  for (int i = 0; i < 8; i++) {
+    int y = NOCT_CONTENT_TOP + 4 + i * 17;
     bool sel = i == menuSel_;
-    if (sel) {
-      g.fillRect(mx + 4, y - 1, mw - 8, 16, ORANGE);
-    }
-    textAt(g, mx + 10, y, names[i], sel ? BG : TEXT);
-    if (i < 6 && val[i][0])
-      textRight(g, mx + mw - 10, y, val[i], sel ? BG : DIM);
+    if (sel) g.fillRect(2, y - 1, NOCT_W - 4, 17, ORANGE);
+    textAt(g, 12, y, names[i], sel ? BG : TEXT);
+    if (i < 7 && val[i][0])
+      textRight(g, NOCT_W - 12, y, val[i], sel ? BG : DIM);
   }
   g.setTextSize(1);
 }

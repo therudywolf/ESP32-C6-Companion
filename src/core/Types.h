@@ -124,6 +124,7 @@ struct Settings {
   int pinnedScene = -1;          /* "pinScene" home scene; -1 = DEN */
   int netSel = -1;               /* "netSel"   WiFi lock; -1 = auto */
   bool petLlm = true;            /* "petLlm"   wolf speaks via LLM */
+  bool flipped = false;          /* "flip"     rotate display 180 */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
