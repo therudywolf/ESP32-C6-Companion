@@ -6,6 +6,7 @@ namespace theme {
 
 const lgfx::U8g2font F_SMALL(u8g2_font_5x8_t_cyrillic);
 const lgfx::U8g2font F_TEXT(u8g2_font_haxrcorp4089_t_cyrillic);
+const lgfx::U8g2font F_MED(u8g2_font_10x20_t_cyrillic);
 const lgfx::U8g2font F_VALUE(u8g2_font_helvB10_tr);
 const lgfx::U8g2font F_BIG(u8g2_font_logisoso24_tr);
 const lgfx::U8g2font F_HUGE(u8g2_font_logisoso32_tr);

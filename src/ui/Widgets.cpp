@@ -18,21 +18,18 @@ void statusBar(UiCtx &ui, const char *title) {
   g.fillRect(0, 0, NOCT_W, NOCT_STATUS_H, BG);
   g.drawFastHLine(0, NOCT_STATUS_H - 1, NOCT_W, ORANGE_DIM);
 
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
-  textAt(g, 4, 2, title, ORANGE);
+  g.setFont(&F_MED);
   g.setTextSize(1);
+  textAt(g, 4, 0, title, ORANGE);
 
   int x = NOCT_W - 4;
 
   /* clock from server payload */
   if (ui.st.pcClock[0]) {
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
     int w = g.textWidth(ui.st.pcClock);
-    textAt(g, x - w, 2, ui.st.pcClock, TEXT);
+    textAt(g, x - w, 0, ui.st.pcClock, TEXT);
     x -= w + 8;
-    g.setTextSize(1);
   }
 
   /* WiFi RSSI bars */
@@ -140,8 +137,8 @@ void valueTile(LGFX_Sprite &g, int x, int y, int w, int h, const char *label,
   int vw = g.textWidth(value);
   textAt(g, x + 8, y + (h - 24) / 2 + 2, value, accent);
   if (unit && unit[0]) {
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     textAt(g, x + 10 + vw, y + h / 2 + 2, unit, DIM);
     g.setTextSize(1);
   }
@@ -149,8 +146,8 @@ void valueTile(LGFX_Sprite &g, int x, int y, int w, int h, const char *label,
 
 void labelBar(LGFX_Sprite &g, int x, int y, int w, const char *label, int pct,
               const char *valueText, uint16_t color) {
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   textAt(g, x, y, label, DIM);
   g.setTextSize(1);
   g.setFont(&F_VALUE);
@@ -167,8 +164,8 @@ void speechBubble(UiCtx &ui, int x, int y, int w, int h) {
   g.drawLine(x + 2, y + h - 8, x - 8, y + h + 4, ORANGE);
   g.drawLine(x - 8, y + h + 4, x + 14, y + h - 2, ORANGE);
 
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   if (ui.brain.thinking()) {
     int dots = 1 + (int)((ui.now / 350) % 3);
     char buf[8] = {0};
@@ -182,9 +179,9 @@ void speechBubble(UiCtx &ui, int x, int y, int w, int h) {
   const String &p = ui.brain.phrase();
   int reveal = ui.brain.revealChars(ui.now);
   int shown = 0;
-  int lineY = y + 7;
+  int lineY = y + 6;
   int cx = x + 9;
-  const int lineH = 19;
+  const int lineH = 21;
   String word;
   for (size_t i = 0; i <= (size_t)p.length() && lineY < y + h - 10;) {
     bool end = i == (size_t)p.length();
