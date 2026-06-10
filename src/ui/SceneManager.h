@@ -38,6 +38,7 @@ public:
 private:
   void gotoScene(int s, UiCtx &ui);
   void drawMenu(UiCtx &ui);
+  void drawScreensaver(UiCtx &ui);
   void menuAction(UiCtx &ui);
   int denActionSel(UiCtx &ui) const;
   bool alertActive(UiCtx &ui) const;
