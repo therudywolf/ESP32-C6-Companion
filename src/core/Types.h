@@ -125,6 +125,7 @@ struct Settings {
   int netSel = -1;               /* "netSel"   WiFi lock; -1 = auto */
   bool petLlm = true;            /* "petLlm"   wolf speaks via LLM */
   bool flipped = false;          /* "flip"     rotate display 180 */
+  int themePreset = 0;           /* "theme"    palette preset index */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
@@ -159,6 +160,16 @@ struct AppState {
   int alertMetric = -1; /* 0=ct 1=gt 2=cl 3=gl 4=gv 5=ram; -1=none */
   int pcIdleSec = -1;
   char pcClock[6] = {0}; /* "HH:MM" from server */
+
+  /* Remote control (server "rc" block — companion web app). Acted on once
+   * per seq change; rcNew is set by the parser, cleared by the consumer. */
+  long rcSeq = -1;
+  bool rcNew = false;
+  int rcScreen = -1;             /* jump to scene, -1 = none */
+  String rcSay;                  /* make the wolf say this, "" = none */
+  int rcTheme = -1;              /* theme preset, -1 = none */
+  int rcChromeR = -1, rcChromeG = -1, rcChromeB = -1; /* custom chrome */
+  int rcBright = -1;             /* backlight 10..255, -1 = none */
 };
 
 #endif

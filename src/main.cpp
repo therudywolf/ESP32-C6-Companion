@@ -56,6 +56,7 @@ void setup() {
   Serial.printf("\n[BOOT] Nocturne C6 v%s\n", NOCT_VERSION);
 
   settings::load(state.settings);
+  theme::applyPreset(state.settings.themePreset);
   Serial.println("[BOOT] settings loaded");
 
   /* Shared SPI2: claim it through the Arduino driver FIRST so both
@@ -88,7 +89,7 @@ void setup() {
 
   pet.begin();
   phrases.begin(&sd);
-  llm.begin(kLlmEndpoints, kLlmCount, LLM_API_KEY, LLM_MODEL);
+  llm.begin(kLlmEndpoints, kLlmCount, LLM_API_KEY, LLM_MODEL, LLM_MODEL_BIG);
   brain.begin(&pet, &llm, &phrases, &sd);
 
   wifi.begin(kWifiNets, kWifiCount, state.settings.netSel);
@@ -122,6 +123,29 @@ void loop() {
   tcp.tick(now, wifi.connected(), state, graphs);
   if (tcp.connected() && !prevTcpConnected) led.setMode(StatusLed::BLIP_OK);
   prevTcpConnected = tcp.connected();
+
+  /* remote control from the companion app (acted on once per seq change) */
+  if (state.rcNew) {
+    state.rcNew = false;
+    bool persist = false;
+    if (state.rcTheme >= 0) {
+      theme::applyPreset(state.rcTheme);
+      state.settings.themePreset = state.rcTheme;
+      persist = true;
+    }
+    if (state.rcChromeR >= 0)
+      theme::setChrome(state.rcChromeR, state.rcChromeG, state.rcChromeB);
+    if (state.rcBright >= 10) {
+      state.settings.brightness = state.rcBright;
+      display.setBrightness(state.rcBright);
+      persist = true;
+    }
+    if (state.rcScreen >= 0) sceneMgr.requestScene(state.rcScreen);
+    if (state.rcSay.length()) brain.sayNow(state.rcSay);
+    if (persist) settings::save(state.settings);
+    Serial.printf("[RC] seq=%ld screen=%d theme=%d say='%s'\n", state.rcSeq,
+                  state.rcScreen, state.rcTheme, state.rcSay.c_str());
+  }
 
   forza.tick(now, wifi.connected());
   bool forzaLive = forza.connected(now);

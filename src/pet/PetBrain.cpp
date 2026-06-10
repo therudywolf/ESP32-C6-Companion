@@ -27,63 +27,68 @@ void PetBrain::diary(const char *ev) {
 }
 
 String PetBrain::buildContext(const char *eventRu, AppState &st) {
+  /* Natural prose grounds the small model far better than "состояние=N". */
   String c;
   c.reserve(420);
-  c += "событие: ";
+  c += "Сейчас происходит вот что: ";
   c += eventRu;
-  c += "\nтвоё состояние: настроение=";
+  c += ". Ты чувствуешь себя ";
   c += moodRu(pet_->mood());
-  c += pet_->isSleeping() ? " (спал)" : "";
-  c += " сытость=";
-  c += pet_->hunger();
-  c += " радость=";
-  c += pet_->happy();
-  c += " энергия=";
-  c += pet_->energy();
-  c += " возраст=";
-  c += (int)pet_->ageDays();
-  c += "д";
+  if (pet_->isSleeping()) c += ", тебя только что разбудили";
+  else if (pet_->hunger() < 30) c += " и немного голоден";
+  else if (pet_->energy() < 30) c += " и устал";
+  c += ". ";
+
   if (st.link.tcpConnected && !st.link.signalLost) {
-    c += "\nпк хозяина: cpu=";
-    c += st.hw.ct;
-    c += "C/";
-    c += st.hw.cl;
-    c += "% gpu=";
-    c += st.hw.gt;
-    c += "C/";
-    c += st.hw.gl;
-    c += "%";
-    if (st.alertActive) c += " ТРЕВОГА-ПЕРЕГРЕВ";
-    if (st.media.isPlaying && st.media.track.length()) {
-      c += " играет:";
+    if (st.alertActive) {
+      c += "У хозяина перегревается железо — это тревожно. ";
+    } else if (st.pcIdleSec >= 60) {
+      c += "Хозяина нет за компьютером, всё тихо. ";
+    } else if (st.media.isPlaying && st.media.track.length()) {
+      c += "У хозяина играет музыка: ";
       c += st.media.artist;
-      c += "-";
+      c += " — ";
       c += st.media.track;
+      c += ". ";
+    } else {
+      c += "Компьютер хозяина работает спокойно, нагрузки умеренные. ";
     }
     if (st.events.count > 0) {
-      c += " событие-сервера:";
+      c += "На серверах хозяина есть предупреждение: ";
       c += st.events.top;
+      c += ". ";
     }
   } else {
-    c += "\nпк хозяина: не на связи";
+    c += "Связи с компьютером хозяина сейчас нет. ";
   }
   if (st.weatherReceived) {
-    c += "\nпогода: ";
-    c += st.weather.desc;
-    c += " ";
+    c += "За окном ";
     c += st.weather.temp;
-    c += "C";
+    c += " градусов. ";
   }
   /* diary tail → continuity ("ты кормил меня недавно, опять?") */
   if (sd_ && sd_->ok()) {
     String mem;
-    if (sd_->readLastLines("/wolf/memory.jsonl", 4, mem) && mem.length()) {
+    if (sd_->readLastLines("/wolf/memory.jsonl", 3, mem) && mem.length()) {
       mem.replace("\n", " ");
-      c += "\nтвой дневник (последнее): ";
+      c += "Недавно в твоём дневнике: ";
       c += mem;
+      c += ". ";
     }
   }
+  c += "Скажи свою короткую реплику.";
   return c;
+}
+
+/* PC counts as idle when the owner is away and the GPU is free — only then
+ * may the wolf spend GPU time thinking (user request: LLM only when idle). */
+bool PetBrain::pcIdle(const AppState &st) const {
+  if (st.forzaLive) return false;
+  if (!st.link.tcpConnected || st.link.signalLost) return false;
+  if (st.alertActive) return false;
+  bool away = st.pcIdleSec >= 0 && st.pcIdleSec >= 60;
+  bool light = st.hw.gl < 25 && st.hw.cl < 40;
+  return away && light;
 }
 
 void PetBrain::show(const String &p, unsigned long now) {
@@ -96,16 +101,18 @@ void PetBrain::show(const String &p, unsigned long now) {
 }
 
 void PetBrain::trigger(const char *bucket, const char *eventRu,
-                       unsigned long now, AppState &st, bool urgent) {
+                       unsigned long now, AppState &st, bool urgent,
+                       bool forceLlm) {
   if (!urgent && now - lastSpeech_ < NOCT_LLM_COOLDOWN_MS) return;
   if (thinking_) return; /* one request in flight, latest-wins not needed */
 
-  /* The LLM runs on the owner's GPU: never steal frames from a game or a
-   * heavy job — fall back to cached phrases while the PC is busy. */
-  bool pcBusy = st.forzaLive || st.hw.gl >= 40 || st.hw.cl >= 85;
+  /* The LLM runs on the owner's GPU. Only think when the PC is idle (the
+   * owner stepped away, GPU free) — otherwise instant cached phrase. An
+   * explicit TALK press / remote say forces it regardless. */
+  bool allowLlm = forceLlm || pcIdle(st);
   bool canLlm = st.settings.petLlm && llm_ && !llm_->busy() &&
-                st.link.wifiConnected && !pcBusy;
-  if (canLlm && llm_->request(buildContext(eventRu, st))) {
+                st.link.wifiConnected && allowLlm;
+  if (canLlm && llm_->request(buildContext(eventRu, st), /*big=*/false)) {
     strncpy(pendingBucket_, bucket, sizeof(pendingBucket_) - 1);
     pendingBucket_[sizeof(pendingBucket_) - 1] = '\0';
     thinking_ = true;
@@ -177,7 +184,9 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     } else if (a == WolfPet::ACT_PLAY) {
       trigger("played", "хозяин только что поиграл с тобой", now, st, true);
     } else {
-      trigger("talk", "хозяин просит тебя что-нибудь сказать", now, st, true);
+      /* explicit TALK: the owner asked the AI directly — force the LLM */
+      trigger("talk", "хозяин просит тебя что-нибудь сказать", now, st, true,
+              true);
     }
   } else {
     actionPending_ = -1;

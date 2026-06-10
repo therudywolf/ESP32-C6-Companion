@@ -4,31 +4,37 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 
-/* gemma-4-e2b is a reasoning model: let it think (separateReasoningContentInAPI
- * routes thoughts to reasoning_content; content arrives clean), give it
- * enough budget to finish thinking (~300-450 tokens typical), and ask it to
- * keep the thinking short. reasoning_effort:"none" looked tempting but leaks
- * meta-analysis into content — verified against the live model. */
+/* Natural-language persona — verified on the live model to produce coherent,
+ * in-character one-liners (the old cryptic "состояние=N" context made the
+ * small model ramble). gemma-4-e2b is a reasoning model: thoughts route to
+ * reasoning_content (separateReasoningContentInAPI), content arrives clean;
+ * budget ~800 tokens covers the thinking. NOTE: gemma-4-12b was tested and
+ * REJECTED — it reasons 6000+ chars and takes 40-54s for one line. */
 static const char *kSystemPrompt =
-    "Ты Ноктюрн — саркастичный киберпанк-волк, живущий в карманном "
-    "устройстве, которое следит за компьютером хозяина. Ответь ОДНОЙ короткой "
-    "репликой от первого лица, максимум 90 символов. Без кавычек, без эмодзи. "
-    "Только русский. Думай кратко.";
+    "Ты — Ноктюрн, домашний волк-компаньон. Ты живёшь в маленьком экране на "
+    "столе хозяина и приглядываешь за его компьютером и его жизнью. Характер: "
+    "умный, с лёгкой иронией, преданный, иногда ворчливый — как старый друг. "
+    "Говоришь живым разговорным русским от первого лица. Отвечай РОВНО одной "
+    "репликой длиной 4-12 слов. Без кавычек, без эмодзи, без описания "
+    "действий — только сама фраза.";
 
 void LlmClient::begin(const char *const *endpoints, int endpointCount,
-                      const char *apiKey, const char *model) {
+                      const char *apiKey, const char *model,
+                      const char *modelBig) {
   endpoints_ = endpoints;
   endpointCount_ = endpointCount;
   apiKey_ = apiKey;
   model_ = model;
+  modelBig_ = modelBig;
   mux_ = xSemaphoreCreateMutex();
   xTaskCreate(taskEntry, "llm", 8192, this, 1, &task_);
 }
 
-bool LlmClient::request(const String &context) {
+bool LlmClient::request(const String &context, bool big) {
   if (!task_ || busy_) return false;
   xSemaphoreTake(mux_, portMAX_DELAY);
   pendingCtx_ = context;
+  pendingBig_ = big;
   hasPending_ = true;
   xSemaphoreGive(mux_);
   busy_ = true;
@@ -52,10 +58,12 @@ void LlmClient::taskEntry(void *self) {
 void LlmClient::taskLoop() {
   for (;;) {
     String ctx;
+    bool big = false;
     bool work = false;
     xSemaphoreTake(mux_, portMAX_DELAY);
     if (hasPending_) {
       ctx = pendingCtx_;
+      big = pendingBig_;
       hasPending_ = false;
       work = true;
     }
@@ -66,13 +74,14 @@ void LlmClient::taskLoop() {
       continue;
     }
 
+    const char *model = (big && modelBig_ && modelBig_[0]) ? modelBig_ : model_;
     String phrase;
     bool ok = false;
     if (WiFi.status() == WL_CONNECTED) {
       /* sticky endpoint first, then the rest */
       for (int i = 0; i < endpointCount_ && !ok; i++) {
         int idx = (stickyEndpoint_ + i) % endpointCount_;
-        ok = callOnce(endpoints_[idx], ctx, phrase);
+        ok = callOnce(endpoints_[idx], ctx, model, phrase);
         if (ok) stickyEndpoint_ = idx;
       }
     }
@@ -88,7 +97,7 @@ void LlmClient::taskLoop() {
 }
 
 bool LlmClient::callOnce(const char *base, const String &context,
-                         String &out) {
+                         const char *model, String &out) {
   HTTPClient http;
   String url = String(base) + "/v1/chat/completions";
   if (!http.begin(url)) return false;
@@ -98,7 +107,7 @@ bool LlmClient::callOnce(const char *base, const String &context,
   http.addHeader("Authorization", String("Bearer ") + apiKey_);
 
   JsonDocument req;
-  req["model"] = model_;
+  req["model"] = model;
   req["max_tokens"] = NOCT_LLM_MAX_TOKENS;
   req["temperature"] = 0.9;
   req["stream"] = false;
@@ -130,7 +139,8 @@ bool LlmClient::callOnce(const char *base, const String &context,
   }
   const char *content = resp["choices"][0]["message"]["content"] | "";
   out = sanitize(String(content));
-  Serial.printf("[LLM] ok in %lums: %s\n", millis() - t0, out.c_str());
+  Serial.printf("[LLM] %s ok in %lums: %s\n", model, millis() - t0,
+                out.c_str());
   return out.length() > 0;
 }
 
