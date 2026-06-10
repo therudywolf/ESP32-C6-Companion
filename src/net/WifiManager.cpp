@@ -113,10 +113,18 @@ void WifiManager::tick(unsigned long now) {
     }
     break;
   case IDLE:
-    if (wasConnected_) { /* just dropped */
+    if (wasConnected_) { /* just dropped: fast path — skip the 3-5s scan,
+                            reconnect straight to the AP we were on */
       wasConnected_ = false;
-      Serial.println("[WIFI] disconnected, rescanning");
-      startScan(now);
+      if (curIdx_ >= 0) {
+        Serial.println("[WIFI] dropped — fast reconnect");
+        rankLen_ = 1;
+        rank_[0] = curIdx_;
+        rankPos_ = 0;
+        connectTo(curIdx_, now);
+      } else {
+        startScan(now);
+      }
     } else if (now - lastAttempt_ > NOCT_WIFI_RETRY_INTERVAL_MS) {
       lastAttempt_ = now;
       startScan(now);

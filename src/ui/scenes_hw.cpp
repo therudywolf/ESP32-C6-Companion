@@ -26,8 +26,8 @@ static void heroTemp(LGFX_Sprite &g, int x, int y, int t, uint16_t c) {
   int vw = g.textWidth(v);
   textAt(g, x, y, v, c);
   g.setTextSize(1);
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   textAt(g, x + vw + 4, y + 44, "C", DIM);
   g.setTextSize(1);
 }
@@ -73,8 +73,8 @@ void drawCpu(UiCtx &ui) {
 
   panel(g, 4, 120, 312, 30, "ТОП ПРОЦЕСС / ТАКТ");
   if (ui.st.process.cpuNames[0].length()) {
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[0].c_str(),
              ui.st.process.cpuPercent[0]);
     textAt(g, 12, 128, v, TEXT);
@@ -102,8 +102,8 @@ void drawGpu(UiCtx &ui) {
   sparkline(g, 232, 34, 76, 34, ui.gr.gpuLoad, GOOD);
 
   panel(g, 140, 82, 176, 32, "VRAM");
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   snprintf(v, sizeof(v), "%.1f/%.0fG", hw.vu, hw.vt);
   textAt(g, 148, 90, v, TEXT);
   g.setTextSize(1);
@@ -132,8 +132,8 @@ void drawRam(UiCtx &ui) {
   int vw = g.textWidth(v);
   textAt(g, 14, 32, v, pctColor(rpct));
   g.setTextSize(1);
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   snprintf(v, sizeof(v), "/%.0fГБ", hw.ra);
   textAt(g, 22 + vw, 76, v, DIM);
   g.setTextSize(1);
@@ -145,17 +145,15 @@ void drawRam(UiCtx &ui) {
   hBar(g, 230, 70, 76, 18, rpct, pctColor(rpct));
 
   panel(g, 4, 108, 312, 42, "ТОП ПО ПАМЯТИ");
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
   for (int i = 0; i < 2; i++) {
     if (ui.st.process.ramNames[i].length() == 0) continue;
-    int y = 114 + i * 17;
+    int y = 110 + i * 20;
     snprintf(v, sizeof(v), "%.14s", ui.st.process.ramNames[i].c_str());
     textAt(g, 12, y, v, i == 0 ? TEXT : DIM);
     snprintf(v, sizeof(v), "%d МБ", ui.st.process.ramMb[i]);
     textRight(g, 306, y, v, INFO);
   }
-  g.setTextSize(1);
 }
 
 void drawDisks(UiCtx &ui) {
@@ -169,14 +167,14 @@ void drawDisks(UiCtx &ui) {
     int y = 25 + i * 26;
     if (d.total_gb < 0.1f) continue;
     int pct = (int)(d.used_gb * 100 / d.total_gb);
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     snprintf(v, sizeof(v), "%s", d.name);
     textAt(g, 8, y + 3, v, ORANGE);
     g.setTextSize(1);
     hBar(g, 30, y + 4, 130, 15, pct, pctColor(pct));
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     if (d.total_gb >= 1000)
       snprintf(v, sizeof(v), "%.1f/%.0fT", d.used_gb / 1000,
                d.total_gb / 1000);
@@ -188,16 +186,15 @@ void drawDisks(UiCtx &ui) {
     g.setTextSize(1);
   }
 
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   char r1[12], r2[12];
   fmtRate(r1, sizeof(r1), hw.dr);
   fmtRate(r2, sizeof(r2), hw.dw);
   snprintf(v, sizeof(v), "чтение %s", r1);
-  textAt(g, 8, 132, v, INFO);
+  textAt(g, 8, 130, v, INFO);
   snprintf(v, sizeof(v), "запись %s", r2);
-  textRight(g, 312, 132, v, WARN);
-  g.setTextSize(1);
+  textRight(g, 312, 130, v, WARN);
 }
 
 void drawFans(UiCtx &ui) {
@@ -219,8 +216,8 @@ void drawFans(UiCtx &ui) {
     g.setFont(&F_BIG);
     snprintf(v, sizeof(v), "%d", rpm);
     textCenter(g, x + 31, 112, v, TEXT);
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     snprintf(v, sizeof(v), "%d%%", pct);
     textCenter(g, x + 31, 136, v, ORANGE);
     g.setTextSize(1);
@@ -280,17 +277,16 @@ void drawNet(UiCtx &ui) {
   textAt(g, 14, 134, "google:443", DIM);
 
   panel(g, 164, 94, 152, 56, "УСТРОЙСТВО");
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   snprintf(v, sizeof(v), "%.9s", ui.st.link.ssid);
   textAt(g, 172, 100, v, TEXT);
-  g.setTextSize(1);
+  g.setFont(&F_TEXT);
   snprintf(v, sizeof(v), "RSSI %d dBm", ui.st.link.rssi);
-  textAt(g, 172, 120, v, DIM);
-  g.setTextSize(2);
-  textAt(g, 172, 132, ui.st.link.tcpConnected ? "сервер: ок" : "сервер: нет",
+  textAt(g, 172, 121, v, DIM);
+  g.setFont(&F_MED);
+  textAt(g, 172, 129, ui.st.link.tcpConnected ? "сервер: ок" : "сервер: нет",
          ui.st.link.tcpConnected ? GOOD : CRIT);
-  g.setTextSize(1);
 }
 
 } // namespace scenes

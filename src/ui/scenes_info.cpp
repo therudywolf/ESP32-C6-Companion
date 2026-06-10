@@ -57,8 +57,8 @@ void drawMedia(UiCtx &ui) {
   textAt(g, 52, 32, stTxt, stc);
 
   /* artist — track */
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   String t = m.track.length() ? m.track : String("---");
   /* marquee when long */
   int tw = g.textWidth(t.c_str());
@@ -67,12 +67,11 @@ void drawMedia(UiCtx &ui) {
     int span = tw + 60;
     x = 8 - (int)((ui.now / 40) % span);
   }
-  textAt(g, x, 116, t.c_str(), TEXT);
+  textAt(g, x, 110, t.c_str(), TEXT);
   String a = m.artist;
   int aw = g.textWidth(a.c_str());
   if (aw > NOCT_W - 8) a = a.substring(0, 24);
-  textCenter(g, NOCT_W / 2, 136, a.c_str(), ORANGE);
-  g.setTextSize(1);
+  textCenter(g, NOCT_W / 2, 131, a.c_str(), ORANGE);
 }
 
 /* ── WEATHER ─────────────────────────────────────────────────────────── */
@@ -92,12 +91,10 @@ void drawWeather(UiCtx &ui) {
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
   textAt(g, 96, 38, v, TEXT);
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
-  textAt(g, 100 + vw, 52, "C", DIM);
-  g.setTextSize(2);
-  textAt(g, 98, 74, w.desc.c_str(), ORANGE);
+  g.setFont(&F_MED);
   g.setTextSize(1);
+  textAt(g, 100 + vw, 52, "C", DIM);
+  textAt(g, 98, 72, w.desc.c_str(), ORANGE);
 
   /* 5-day forecast */
   static const char *dayNames[] = {"сег", "+1", "+2", "+3", "+4"};
@@ -156,8 +153,8 @@ void drawClaude(UiCtx &ui) {
 
   /* right column: plan + today numbers */
   panel(g, 212, 30, 104, 118, "СЕГОДНЯ");
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   if (c.plan.length()) {
     String p = c.plan;
     p.toUpperCase();
@@ -168,15 +165,15 @@ void drawClaude(UiCtx &ui) {
     snprintf(v, sizeof(v), "%.1fM", c.todayTokens / 1e6);
   else
     snprintf(v, sizeof(v), "%ldK", c.todayTokens / 1000);
-  textAt(g, 222, 62, v, TEXT);
-  g.setTextSize(1);
-  textAt(g, 222, 80, "токенов", DIM);
-  g.setTextSize(2);
+  textAt(g, 222, 60, v, TEXT);
+  g.setFont(&F_TEXT);
+  textAt(g, 222, 82, "токенов", DIM);
+  g.setFont(&F_MED);
   snprintf(v, sizeof(v), "%d", c.todayMsgs);
-  textAt(g, 222, 92, v, TEXT);
-  g.setTextSize(1);
-  textAt(g, 222, 110, "сообщений", DIM);
-  if (c.stale) textAt(g, 222, 126, "устарело", WARN);
+  textAt(g, 222, 96, v, TEXT);
+  g.setFont(&F_TEXT);
+  textAt(g, 222, 118, "сообщений", DIM);
+  if (c.stale) textAt(g, 222, 132, "устарело", WARN);
 }
 
 /* ── FOREST ──────────────────────────────────────────────────────────── */
@@ -204,8 +201,8 @@ void drawForest(UiCtx &ui) {
     uint16_t c = stColor(n.status);
     bool down = strcmp(n.status, "down") == 0;
     if (!down || ((ui.now / 400) & 1)) g.fillCircle(x + 11, y + 11, 5, c);
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     char nm[16];
     snprintf(nm, sizeof(nm), "%.12s", n.name);
     textAt(g, x + 22, y + 4, nm, TEXT);
@@ -252,8 +249,8 @@ void drawServices(UiCtx &ui) {
     int y = 27 + i * 20;
     uint16_t c = stColor(e.status);
     g.fillCircle(13, y + 7, 4, c);
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     snprintf(v, sizeof(v), "%.11s", e.name);
     textAt(g, 24, y, v, TEXT);
     if (e.ms >= 0) {
@@ -290,8 +287,8 @@ void drawEvents(UiCtx &ui) {
   char v[32];
 
   if (e.count == 0) {
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     textCenter(g, NOCT_W / 2, 70, "ТИШИНА В ЛЕСУ", GOOD);
     g.setTextSize(1);
     textCenter(g, NOCT_W / 2, 100, "активных алертов нет", DIM);
@@ -304,13 +301,13 @@ void drawEvents(UiCtx &ui) {
   g.fillRect(4, 26, 312, 34, PANEL);
   g.drawRect(4, 26, 312, 34, sc);
   if ((ui.now / 400) & 1) g.fillTriangle(16, 52, 28, 52, 22, 32, sc);
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   textAt(g, 38, 32, e.top, sc);
   snprintf(v, sizeof(v), "%s · %d", e.severity, e.count);
   textAt(g, 8, 64, v, DIM);
 
-  /* human text, wrapped big (up to 3 lines) */
+  /* human text, wrapped big (up to 2 lines) */
   String txt = e.text;
   int y = 86, x = 8;
   String word;
@@ -320,8 +317,8 @@ void drawEvents(UiCtx &ui) {
       int ww = g.textWidth(word.c_str());
       if (x + ww > 312) {
         x = 8;
-        y += 19;
-        if (y > 124) break;
+        y += 21;
+        if (y > 108) break;
       }
       textAt(g, x, y, word.c_str(), TEXT);
       x += ww + 7;
@@ -330,13 +327,11 @@ void drawEvents(UiCtx &ui) {
       word += ch;
     }
   }
-  g.setTextSize(1);
 
   /* other firing alerts, one line */
   if (e.count > 1 && e.list[1][0]) {
-    g.setFont(&F_TEXT);
     snprintf(v, sizeof(v), "+ %s", e.list[1]);
-    textAt(g, 8, 138, v, DIM);
+    textAt(g, 8, 130, v, DIM);
   }
 }
 

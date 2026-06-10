@@ -31,8 +31,8 @@ void drawForza(UiCtx &ui) {
 
   if (!ui.forzaLive || !fz) {
     /* waiting screen: where to point the game */
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     bool blink = (ui.now / 700) & 1;
     textCenter(g, NOCT_W / 2, 48, "ЖДУ ТЕЛЕМЕТРИЮ", blink ? ORANGE : DIM);
     g.setTextSize(1);

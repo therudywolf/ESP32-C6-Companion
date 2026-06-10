@@ -214,8 +214,8 @@ void SceneManager::drawMenu(UiCtx &ui) {
   const int kRows = 8, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   for (int i = scroll; i < kRows && i < scroll + kVisible; i++) {
     int y = NOCT_CONTENT_TOP + 6 + (i - scroll) * rowH;
     bool sel = i == menuSel_;
@@ -331,8 +331,8 @@ void SceneManager::draw(UiCtx &ui) {
                         ? metrics[ui.st.alertMetric]
                         : "ALERT";
     g.fillRect(60, 0, 200, 18, on ? CRIT : BG);
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     char buf[40];
     snprintf(buf, sizeof(buf), "!! %s !!", m);
     textCenter(g, NOCT_W / 2, 1, buf, on ? BG : CRIT);
@@ -415,8 +415,8 @@ void SceneManager::bootAnimation(UiCtx &ui) {
     d_.disp->push();
     delay(30);
   }
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   textCenter(g, NOCT_W / 2, 134, "N O C T U R N E", TEXT);
   g.setTextSize(1);
   d_.disp->push();

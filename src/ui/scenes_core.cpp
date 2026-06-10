@@ -45,8 +45,8 @@ const char *actionHint(int scene, UiCtx &ui) {
 
 void noSignal(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   bool blink = (ui.now / 600) & 1;
   textCenter(g, NOCT_W / 2, 70, "НЕТ СИГНАЛА", blink ? CRIT : ORANGE_DIM);
   g.setTextSize(1);
@@ -110,85 +110,77 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   }
 
   /* right column: stat bars with the label INSIDE (no stacking overlaps) */
-  int sx = 222, sw = 92;
+  int sx = 222, sw = 94;
   auto statBar = [&](int y, const char *label, int val, uint16_t c) {
-    g.drawRect(sx, y, sw, 20, ORANGE_DIM);
+    g.drawRect(sx, y, sw, 22, ORANGE_DIM);
     int fill = (sw - 4) * val / 100;
-    if (fill > 0) theme::ditherRect(g, sx + 2, y + 2, fill, 16, c);
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
-    textAt(g, sx + 5, y + 3, label, BG); /* shadow for contrast */
-    textAt(g, sx + 4, y + 2, label, TEXT);
-    g.setTextSize(1);
+    if (fill > 0) theme::ditherRect(g, sx + 2, y + 2, fill, 18, c);
+    g.setFont(&F_MED);
+    textAt(g, sx + 6, y + 2, label, BG); /* shadow for contrast */
+    textAt(g, sx + 5, y + 1, label, TEXT);
   };
-  statBar(26, "СЫТОСТЬ", ui.pet.hunger(),
+  statBar(24, "СЫТОСТЬ", ui.pet.hunger(),
           ui.pet.hunger() < 25 ? CRIT : GOOD);
-  statBar(50, "РАДОСТЬ", ui.pet.happy(),
+  statBar(48, "РАДОСТЬ", ui.pet.happy(),
           ui.pet.happy() < 25 ? WARN : GOOD);
-  statBar(74, "ЭНЕРГИЯ", ui.pet.energy(),
+  statBar(72, "ЭНЕРГИЯ", ui.pet.energy(),
           ui.pet.energy() < 25 ? INFO : GOOD);
 
   /* deterministic status, big */
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
-  textAt(g, sx, 102, ui.pet.statusText(), ORANGE);
-  g.setTextSize(1);
+  g.setFont(&F_MED);
+  textAt(g, sx, 98, ui.pet.statusText(), ORANGE);
 
   /* speech bubble (covers the stats while talking) or ambient PC status */
   if (ui.brain.bubbleVisible(now)) {
     speechBubble(ui, 100, 26, 214, 94);
   } else if (ui.st.link.tcpConnected && !ui.st.link.signalLost) {
-    int px = 104, py = 30;
+    int px = 104, py = 28;
     char t[16];
     g.setFont(&F_TEXT);
-    textAt(g, px, py + 4, "CPU", DIM);
-    g.setTextSize(2);
+    textAt(g, px, py + 6, "CPU", DIM);
+    g.setFont(&F_MED);
     snprintf(t, sizeof(t), "%dC %d%%", ui.st.hw.ct, ui.st.hw.cl);
-    textAt(g, px + 28, py, t, tempColor(ui.st.hw.ct, 75, 85));
-    g.setTextSize(1);
-    textAt(g, px, py + 24, "GPU", DIM);
-    g.setTextSize(2);
+    textAt(g, px + 30, py, t, tempColor(ui.st.hw.ct, 75, 85));
+    g.setFont(&F_TEXT);
+    textAt(g, px, py + 28, "GPU", DIM);
+    g.setFont(&F_MED);
     snprintf(t, sizeof(t), "%dC %d%%", ui.st.hw.gt, ui.st.hw.gl);
-    textAt(g, px + 28, py + 20, t, tempColor(ui.st.hw.gt, 70, 80));
-    g.setTextSize(1);
+    textAt(g, px + 30, py + 22, t, tempColor(ui.st.hw.gt, 70, 80));
     /* server clock, huge */
     if (ui.st.pcClock[0]) {
       g.setFont(&F_HUGE);
-      textAt(g, px, py + 44, ui.st.pcClock, ORANGE_DIM);
+      textAt(g, px, py + 48, ui.st.pcClock, ORANGE_DIM);
     }
   }
 
   /* action mode: dim the scene so the chips become THE focus */
   if (actionMode) {
-    theme::ditherRect(g, 0, 20, NOCT_W, 102, BG);
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
-    textAt(g, 10, 102, "ВЫБЕРИ ДЕЙСТВИЕ:", ORANGE);
+    theme::ditherRect(g, 0, 20, NOCT_W, 100, BG);
+    g.setFont(&F_MED);
+    textAt(g, 10, 100, "ВЫБЕРИ ДЕЙСТВИЕ:", ORANGE);
   }
 
   /* action chips — big and obvious; selector frame blinks in action mode */
   static const char *names[] = {"КОРМИТЬ", "ИГРАТЬ", "ГОВОРИТЬ"};
   int cx = 10;
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
   for (int i = 0; i < 3; i++) {
     int cw = g.textWidth(names[i]) + 14;
     bool sel = (i == actionSel);
     if (sel && actionMode) {
-      g.fillRoundRect(cx, 126, cw, 22, 4, ORANGE);
-      textAt(g, cx + 7, 129, names[i], BG);
+      g.fillRoundRect(cx, 124, cw, 24, 4, ORANGE);
+      textAt(g, cx + 7, 127, names[i], BG);
       if ((now / 300) & 1)
-        g.drawRoundRect(cx - 2, 124, cw + 4, 26, 5, TEXT);
+        g.drawRoundRect(cx - 2, 122, cw + 4, 28, 5, TEXT);
     } else if (sel) {
-      g.drawRoundRect(cx, 126, cw, 22, 4, ORANGE);
-      textAt(g, cx + 7, 129, names[i], ORANGE);
+      g.drawRoundRect(cx, 124, cw, 24, 4, ORANGE);
+      textAt(g, cx + 7, 127, names[i], ORANGE);
     } else {
-      g.drawRoundRect(cx, 126, cw, 22, 4, ORANGE_DIM);
-      textAt(g, cx + 7, 129, names[i], DIM);
+      g.drawRoundRect(cx, 124, cw, 24, 4, ORANGE_DIM);
+      textAt(g, cx + 7, 127, names[i], DIM);
     }
     cx += cw + 7;
   }
-  g.setTextSize(1);
 }
 
 /* ── DASH — 2x2 overview ─────────────────────────────────────────────── */
@@ -219,8 +211,8 @@ void drawDash(UiCtx &ui) {
     int vw = g.textWidth(v);
     textAt(g, t[k].x + 8, t[k].y + 8, v,
            tempColor(temp, cpu ? 75 : 70, cpu ? 85 : 80));
-    g.setFont(&F_TEXT);
-    g.setTextSize(2);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     textAt(g, t[k].x + 11 + vw, t[k].y + 24, "C", DIM);
     g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%d%%", load);
@@ -236,8 +228,8 @@ void drawDash(UiCtx &ui) {
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw2 = g.textWidth(v);
   textAt(g, t[2].x + 8, t[2].y + 8, v, pctColor(rpct));
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   snprintf(v, sizeof(v), "/%.0fG", hw.ra);
   textAt(g, t[2].x + 11 + vw2, t[2].y + 24, v, DIM);
   g.setTextSize(1);
@@ -255,8 +247,8 @@ void drawDash(UiCtx &ui) {
   g.fillTriangle(t[3].x + 10, t[3].y + 46, t[3].x + 20, t[3].y + 46,
                  t[3].x + 15, t[3].y + 38, GOOD); /* up */
   textAt(g, t[3].x + 26, t[3].y + 32, r2, GOOD);
-  g.setFont(&F_TEXT);
-  g.setTextSize(2);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
   snprintf(v, sizeof(v), "%dms", hw.pg);
   textRight(g, t[3].x + t[3].w - 8, t[3].y + 8, v, DIM);
   g.setTextSize(1);
