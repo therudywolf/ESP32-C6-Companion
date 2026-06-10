@@ -1,7 +1,8 @@
-/* Nocturne C6 — FORZA HUD: a fullscreen racing dash (no status bar, no
- * footer — SceneManager skips the chrome for this scene). Untouchable:
- * alerts, carousel and dimming never hijack it. Auto-enters on telemetry;
- * also reachable from the menu. SHORT press leaves to the den. */
+/* Nocturne C6 — FORZA HUD, RPM-first fullscreen dash.
+ * Hierarchy: shift lamp (24px strip) > 64px RPM > animated gear > pedals,
+ * slip, fuel > info row (speed / boost / hp / lap·pos).
+ * Untouchable: no chrome, no alert takeover (corner triangle only).
+ * Gear changes play a 220ms slide animation with a border flash. */
 #include <WiFi.h>
 
 #include "core/config.h"
@@ -26,18 +27,25 @@ static uint16_t slipColor(float s) {
   return GOOD;
 }
 
+/* one cell of the bottom info row: small caption, 20px value */
+static void infoCell(LGFX_Sprite &g, int x, int w, const char *cap,
+                     const char *val, uint16_t c) {
+  g.setFont(&F_TEXT);
+  textCenter(g, x + w / 2, 132, cap, DIM);
+  g.setFont(&F_MED);
+  textCenter(g, x + w / 2, 144, val, c);
+}
+
 void drawForza(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   const ForzaState *fz = ui.forza;
   char v[48];
 
   if (!ui.forzaLive || !fz) {
-    /* waiting screen: where to point the game */
     g.setFont(&F_MED);
     bool blink = (ui.now / 700) & 1;
     textCenter(g, NOCT_W / 2, 36, "FORZA HUD", ORANGE);
     textCenter(g, NOCT_W / 2, 62, "ЖДУ ТЕЛЕМЕТРИЮ", blink ? TEXT : DIM);
-    /* little bouncing car */
     int cx = NOCT_W / 2 - 20 + (int)(sinf(ui.now / 300.0f) * 30);
     g.fillRoundRect(cx, 96, 40, 10, 3, ORANGE_DIM);
     g.fillRoundRect(cx + 8, 89, 22, 9, 3, ORANGE_DIM);
@@ -58,9 +66,9 @@ void drawForza(UiCtx &ui) {
   bool shiftNow = pct >= NOCT_FORZA_SHIFT_PCT;
   bool flash = (ui.now / 80) & 1;
 
-  /* ── shift light strip across the very top, 18 px tall ── */
+  /* ── THE shift lamp: 12 fat segments, 24px, edge to edge ── */
   const int segs = 12, sx = 4, sw = (NOCT_W - 8) / segs;
-  float lo = 0.45f;
+  float lo = 0.40f;
   int lit =
       pct <= lo ? 0 : (int)((pct - lo) / (NOCT_FORZA_SHIFT_PCT - lo) * segs);
   if (lit > segs) lit = segs;
@@ -68,73 +76,75 @@ void drawForza(UiCtx &ui) {
     uint16_t c = i < 5 ? GOOD : (i < 9 ? WARN : CRIT);
     bool on = shiftNow ? flash : (i < lit);
     int x = sx + i * sw;
-    if (on)
-      g.fillRect(x + 1, 2, sw - 2, 18, c);
-    else
-      g.drawRect(x + 1, 2, sw - 2, 18, PANEL);
+    if (on) {
+      g.fillRect(x + 1, 2, sw - 2, 24, c);
+    } else {
+      g.drawRect(x + 1, 2, sw - 2, 24, ORANGE_DIM);
+      g.drawFastHLine(x + 2, 24, sw - 4, i < 5 ? GOOD : (i < 9 ? WARN : CRIT));
+    }
   }
 
-  /* ── data line: RPM | BOOST | live HP ── */
-  g.setFont(&F_MED);
-  snprintf(v, sizeof(v), "%d", (int)f.rpm);
-  int rw = g.textWidth(v);
-  textAt(g, 6, 26, v, shiftNow && flash ? CRIT : TEXT);
-  g.setFont(&F_TEXT);
-  textAt(g, 10 + rw, 32, "RPM", DIM);
-  if (f.boostPsi > 0.3f) {
-    g.setFont(&F_MED);
-    snprintf(v, sizeof(v), "%.1fbar", f.boostPsi * 0.0689f);
-    textCenter(g, NOCT_W / 2 + 4, 26, v, INFO);
-  }
-  int hp = (int)(f.powerW / 745.7f);
-  if (hp > 0) {
-    g.setFont(&F_MED);
-    snprintf(v, sizeof(v), "%d ЛС", hp);
-    textRight(g, NOCT_W - 6, 26, v, ACCENT);
-  }
-
-  /* ── gear box (left, big) ── */
-  uint16_t gc = shiftNow ? (flash ? CRIT : TEXT) : ORANGE;
-  g.drawRoundRect(6, 52, 88, 92, 8, shiftNow && flash ? CRIT : ORANGE_DIM);
-  g.drawRoundRect(7, 53, 86, 90, 8, shiftNow && flash ? CRIT : PANEL);
+  /* ── hero RPM: 64px digits right of the gear box ── */
+  int rpm = (int)f.rpm;
+  if (rpm > 99999) rpm = 99999;
+  snprintf(v, sizeof(v), "%d", rpm);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
-  textCenter(g, 50, 66, gearStr(f.gear), gc);
+  uint16_t rc = shiftNow ? (flash ? CRIT : TEXT)
+                         : (pct >= 0.80f ? WARN : TEXT);
+  textCenter(g, 168, 34, v, rc);
   g.setTextSize(1);
   g.setFont(&F_TEXT);
-  textCenter(g, 50, 148, "ПЕРЕДАЧА", DIM);
+  snprintf(v, sizeof(v), "ОБОРОТЫ  /  MAX %d", (int)f.maxRpm);
+  textCenter(g, 168, 102, v, DIM);
 
-  /* ── speed (center, 64px) + units ── */
-  int kmh = (int)(f.speedKmh + 0.5f);
-  if (kmh < 0) kmh = 0;
-  snprintf(v, sizeof(v), "%d", kmh);
+  /* ── gear box with a shift animation (slide + border flash) ── */
+  static int curGear = -1, prevGear = -1;
+  static unsigned long gearAt = 0;
+  if (f.gear != curGear) {
+    prevGear = curGear;
+    curGear = f.gear;
+    if (prevGear != -1) gearAt = ui.now;
+  }
+  float gt = gearAt ? (ui.now - gearAt) / 220.0f : 1.0f;
+  if (gt > 1.0f) gt = 1.0f;
+  bool animating = gt < 1.0f && prevGear != -1;
+  uint16_t frame = animating ? ACCENT
+                   : (shiftNow && flash ? CRIT : ORANGE_DIM);
+  g.drawRoundRect(6, 32, 88, 80, 8, frame);
+  g.drawRoundRect(7, 33, 86, 78, 8, animating ? ACCENT : PANEL);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
-  textCenter(g, 168, 56, v, TEXT);
-  g.setTextSize(1);
-  g.setFont(&F_MED);
-  textCenter(g, 168, 124, "КМ/Ч", ORANGE);
-
-  /* lap / position */
-  if (f.lap > 0 || f.racePos > 0) {
-    g.setFont(&F_MED);
-    snprintf(v, sizeof(v), "КРУГ %d  МЕСТО %d", f.lap + 1, f.racePos);
-    textCenter(g, 168, 150, v, DIM);
+  if (animating) {
+    /* upshift: digit rolls up; downshift: rolls down */
+    int dir = (curGear > prevGear && prevGear != 0) ? 1 : -1;
+    int off = (int)(gt * 76);
+    g.setClipRect(10, 36, 80, 72);
+    textCenter(g, 50, 40 - dir * off, gearStr(prevGear),
+               DIM);
+    textCenter(g, 50, 40 + dir * (76 - off), gearStr(curGear), ORANGE);
+    g.clearClipRect();
+  } else {
+    textCenter(g, 50, 40, gearStr(curGear),
+               shiftNow ? (flash ? CRIT : TEXT) : ORANGE);
   }
-
-  /* ── throttle / brake (tall) ── */
-  vBar(g, 246, 52, 18, 92, f.throttle * 100 / 255, GOOD);
-  vBar(g, 270, 52, 18, 92, f.brake * 100 / 255, CRIT);
+  g.setTextSize(1);
   g.setFont(&F_TEXT);
-  textCenter(g, 255, 148, "ГАЗ", GOOD);
-  textCenter(g, 279, 148, "ТРМ", CRIT);
+  textCenter(g, 50, 116, "ПЕРЕДАЧА", DIM);
 
-  /* ── tire slip 2x2 + fuel (far right) ── */
+  /* ── pedals ── */
+  vBar(g, 248, 32, 16, 80, f.throttle * 100 / 255, GOOD);
+  vBar(g, 272, 32, 16, 80, f.brake * 100 / 255, CRIT);
+  g.setFont(&F_TEXT);
+  textCenter(g, 257, 116, "ГАЗ", GOOD);
+  textCenter(g, 281, 116, "ТРМ", CRIT);
+
+  /* ── slip 2x2 + fuel, far right ── */
   static const int tix[4] = {296, 310, 296, 310};
-  static const int tiy[4] = {52, 52, 76, 76};
+  static const int tiy[4] = {32, 32, 56, 56};
   for (int i = 0; i < 4; i++) {
     uint16_t c = slipColor(f.slip[i]);
-    bool severe = f.slip[i] >= 1.0f; /* severe slip blinks */
+    bool severe = f.slip[i] >= 1.0f;
     bool filled = severe ? flash : f.slip[i] >= 0.5f;
     if (filled)
       g.fillRoundRect(tix[i], tiy[i], 11, 21, 2, c);
@@ -142,22 +152,39 @@ void drawForza(UiCtx &ui) {
       g.drawRoundRect(tix[i], tiy[i], 11, 21, 2, c);
   }
   g.setFont(&F_TEXT);
-  textCenter(g, 304, 100, "SLIP", DIM);
-
+  textCenter(g, 304, 80, "SLIP", DIM);
   int fuelPct = (int)(f.fuel * 100);
-  vBar(g, 298, 112, 16, 32, fuelPct, fuelPct < 15 ? CRIT : ACCENT);
-  textCenter(g, 306, 148, "FUEL", DIM);
+  vBar(g, 298, 90, 16, 22, fuelPct, fuelPct < 15 ? CRIT : ACCENT);
+  textCenter(g, 306, 116, "FUEL", DIM);
+
+  /* ── info row: speed | boost | power | race — one aligned grid ── */
+  g.drawFastHLine(4, 127, NOCT_W - 8, PANEL);
+  snprintf(v, sizeof(v), "%d", (int)(f.speedKmh + 0.5f));
+  infoCell(g, 4, 80, "КМ/Ч", v, TEXT);
+  if (f.boostPsi > 0.3f)
+    snprintf(v, sizeof(v), "%.1f", f.boostPsi * 0.0689f);
+  else
+    snprintf(v, sizeof(v), "-");
+  infoCell(g, 84, 80, "БУСТ BAR", v, INFO);
+  int hp = (int)(f.powerW / 745.7f);
+  snprintf(v, sizeof(v), "%d", hp > 0 ? hp : 0);
+  infoCell(g, 164, 80, "Л.С.", v, ACCENT);
+  if (f.lap > 0 || f.racePos > 0)
+    snprintf(v, sizeof(v), "%d/%d", f.lap + 1, f.racePos);
+  else
+    snprintf(v, sizeof(v), "-");
+  infoCell(g, 244, 72, "КРУГ/МЕСТО", v, TEXT);
 
   /* ── overlays ── */
-  if (!f.raceOn) { /* game menu / replay: data frozen */
+  if (!f.raceOn) {
     g.setFont(&F_MED);
-    g.fillRoundRect(118, 64, 100, 26, 4, PANEL);
-    g.drawRoundRect(118, 64, 100, 26, 4, ACCENT);
-    textCenter(g, 168, 67, "ПАУЗА", ACCENT);
+    g.fillRoundRect(118, 52, 100, 26, 4, PANEL);
+    g.drawRoundRect(118, 52, 100, 26, 4, ACCENT);
+    textCenter(g, 168, 55, "ПАУЗА", ACCENT);
   }
   if (ui.st.alertActive && ((ui.now / 300) & 1)) {
-    /* PC overheating while racing: small corner triangle, never a takeover */
-    g.fillTriangle(306, 16, 318, 16, 312, 4, CRIT);
+    /* free spot between the rpm caption and the info divider */
+    g.fillTriangle(160, 124, 176, 124, 168, 112, CRIT);
   }
 }
 
