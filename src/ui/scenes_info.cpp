@@ -76,10 +76,11 @@ void drawMedia(UiCtx &ui) {
 
 /* ── WEATHER ─────────────────────────────────────────────────────────── */
 
-/* WMO -> Russian, short enough for the right column */
+/* WMO -> Russian. Multi-word where long so it wraps on a WORD boundary
+ * (the right column is narrow) instead of clipping or breaking mid-word. */
 static const char *wmoRu(int wmo) {
   if (wmo == 0) return "ясно";
-  if (wmo <= 2) return "малооблачно";
+  if (wmo <= 2) return "малая облачность";
   if (wmo == 3) return "пасмурно";
   if (wmo >= 95) return "гроза";
   if (wmo >= 85) return "снег";
@@ -103,25 +104,27 @@ void drawWeather(UiCtx &ui) {
   }
   char v[32];
 
-  /* Layout: animated icon (left) | 64px temperature (center) | description
-   * in a FIXED right box that word-wraps — no more clipped "малооблач". */
-  weatherIcon(g, 36, 58, 22, w.wmoCode, ui.now);
+  /* Layout: animated icon (left) | 64px temperature | description in the
+   * right column, positioned AFTER the measured temp width (so wide values
+   * like "+26" never slide under it) and word-wrapped to 2 lines. */
+  weatherIcon(g, 32, 58, 20, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  textAt(g, 70, 28 - (g.fontHeight() - 64) / 2, v, TEXT);
+  textAt(g, 60, 28 - (g.fontHeight() - 64) / 2, v, TEXT);
   g.setTextSize(1);
   g.setFont(&F_MED);
-  textAt(g, 74 + vw, 66, "C", DIM);
+  textAt(g, 64 + vw, 66, "C", DIM); /* unit ends ~ 64+vw+12 */
   {
-    /* fixed box x186..314 (128px) — fits "малооблачно"; longer wrap to 2 */
-    const int bx = 186, bw = NOCT_W - bx - 6;
+    int dx = 64 + vw + 26;
+    if (dx > 196) dx = 196; /* keep a usable column even for wide temps */
+    int bw = NOCT_W - dx - 6;
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
-    int lineW = g.textWidth(d.c_str());
-    int y0 = (lineW <= bw) ? 50 : 36; /* 1 line centered, else 2 lines */
-    textWrap(g, d.c_str(), bx, y0, bw, 22, 2, ORANGE);
+    bool oneLine = g.textWidth(d.c_str()) <= bw;
+    int y0 = oneLine ? 50 : 32; /* 1 line vertically centered, else 2 lines */
+    textWrap(g, d.c_str(), dx, y0, bw, 22, 2, ORANGE);
   }
 
   /* 5-day forecast */
