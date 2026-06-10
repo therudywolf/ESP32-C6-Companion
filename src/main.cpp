@@ -12,6 +12,7 @@
 #include "secrets.h"
 
 #include "core/Graphs.h"
+#include "core/HourHistory.h"
 #include "core/SettingsStore.h"
 #include "core/Types.h"
 #include "core/config.h"
@@ -44,6 +45,7 @@ static WolfPet pet;
 static PetBrain brain;
 static StatusLed led;
 static Graphs graphs;
+static Histories histories;
 static AppState state;
 static SceneManager sceneMgr;
 static InputSystem *input = nullptr;
@@ -205,6 +207,10 @@ void loop() {
     WiFi.setSleep(!wifiFast);
   }
 
+  /* long-window hour history (accumulate live data, commit one sample/min) */
+  if (tcp.connected() && !state.link.signalLost) histories.accumulate(state.hw);
+  histories.tick(now);
+
   pet.tick(now);
   brain.tick(now, state);
 
@@ -241,15 +247,15 @@ void loop() {
   /* input */
   ButtonEvent ev = input->update();
   if (ev != EV_NONE) {
-    UiCtx ui{display.fb, state, graphs, pet, brain, now,
-             &forza.state(), forzaLive};
+    UiCtx ui{display.fb, state, graphs, pet,        brain,
+             now,        &forza.state(), forzaLive, &histories};
     sceneMgr.handleInput(ev, ui);
   }
 
   /* frame */
   if (frameTimer.check(now)) {
-    UiCtx ui{display.fb, state, graphs, pet, brain, now,
-             &forza.state(), forzaLive};
+    UiCtx ui{display.fb, state, graphs, pet,        brain,
+             now,        &forza.state(), forzaLive, &histories};
     sceneMgr.draw(ui);
     display.push();
     sd.flush(); /* queued SD writes ride the same task, after the push */
