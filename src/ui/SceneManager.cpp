@@ -226,9 +226,9 @@ void SceneManager::drawMenu(UiCtx &ui) {
   for (int i = scroll; i < kRows && i < scroll + kVisible; i++) {
     int y = NOCT_CONTENT_TOP + 6 + (i - scroll) * rowH;
     bool sel = i == menuSel_;
-    if (sel) g.fillRect(2, y - 2, NOCT_W - 12, rowH - 2, ORANGE);
+    if (sel) g.fillRect(6, y - 2, NOCT_W - 18, rowH - 2, ORANGE);
     textAt(g, 14, y, names[i], sel ? BG : TEXT);
-    if (val[i][0]) textRight(g, NOCT_W - 18, y, val[i], sel ? BG : DIM);
+    if (val[i][0]) textRight(g, NOCT_W - 20, y, val[i], sel ? BG : DIM);
   }
   g.setTextSize(1);
   /* scrollbar */

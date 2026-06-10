@@ -209,7 +209,7 @@ void drawDash(UiCtx &ui) {
     g.setFont(&F_HUGE);
     snprintf(v, sizeof(v), "%d", temp);
     int vw = g.textWidth(v);
-    textAt(g, t[k].x + 8, t[k].y + 8 - (g.fontHeight() - 32), v,
+    textAt(g, t[k].x + 8, t[k].y + 8 - (g.fontHeight() - 32) / 2, v,
            tempColor(temp, cpu ? 75 : 70, cpu ? 85 : 80));
     g.setFont(&F_MED);
     g.setTextSize(1);
@@ -227,7 +227,7 @@ void drawDash(UiCtx &ui) {
   g.setFont(&F_HUGE);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw2 = g.textWidth(v);
-  textAt(g, t[2].x + 8, t[2].y + 8 - (g.fontHeight() - 32), v,
+  textAt(g, t[2].x + 8, t[2].y + 8 - (g.fontHeight() - 32) / 2, v,
          pctColor(rpct));
   g.setFont(&F_MED);
   g.setTextSize(1);
