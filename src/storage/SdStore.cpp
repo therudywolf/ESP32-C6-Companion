@@ -6,12 +6,13 @@
 #include "core/config.h"
 
 bool SdStore::begin() {
-  /* Shared bus with the LCD: some cards need a slower clock and a second
-   * try after the panel init traffic. Walk down the frequencies. */
-  static const uint32_t freqs[] = {NOCT_SD_SPI_HZ, 10000000, 4000000};
+  /* Flaky cards prefer a slow clock; a "mounted" card reporting 0 bytes is
+   * NOT mounted (CSD read failed) — treat as failure and keep walking. */
+  static const uint32_t freqs[] = {4000000, 10000000, NOCT_SD_SPI_HZ};
   ok_ = false;
   for (uint32_t f : freqs) {
-    if (SD.begin(NOCT_PIN_SD_CS, SPI, f)) {
+    if (SD.begin(NOCT_PIN_SD_CS, SPI, f) && SD.totalBytes() > 0) {
+      Serial.printf("[SD] mounted at %lu Hz\n", (unsigned long)f);
       ok_ = true;
       break;
     }

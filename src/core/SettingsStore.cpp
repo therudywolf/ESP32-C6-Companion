@@ -15,6 +15,7 @@ void load(Settings &s) {
   s.pinnedScene = p.getInt("pinScene", -1);
   s.netSel = p.getInt("netSel", -1);
   s.petLlm = p.getBool("petLlm", true);
+  s.flipped = p.getBool("flip", false);
   p.end();
   if (s.brightness < 10) s.brightness = 10;
   if (s.brightness > 255) s.brightness = 255;
@@ -31,6 +32,7 @@ void save(const Settings &s) {
   p.putInt("pinScene", s.pinnedScene);
   p.putInt("netSel", s.netSel);
   p.putBool("petLlm", s.petLlm);
+  p.putBool("flip", s.flipped);
   p.end();
 }
 
