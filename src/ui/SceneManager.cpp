@@ -441,28 +441,30 @@ void SceneManager::draw(UiCtx &ui) {
       !sysInfo_ && !ui.brain.thinking()) {
     const String &p = ui.brain.phrase();
     if (p.length()) {
-      const int oh = 46, mx = 6;
+      /* taller card resting in the lower-CENTRE (was jammed at the bottom
+       * edge: oh=46 rest y=122). 14 px of breathing room below it. */
+      const int oh = 58, mx = 6, restGap = 14;
       float env = ui.brain.speechEnvelope(ui.now);
       if (env > 0.001f) {
         /* ease-out cubic on the slide */
         float e = 1.0f - powf(1.0f - env, 3.0f);
-        int oy = NOCT_H - (int)(e * (oh + 4));
+        int oy = NOCT_H - (int)(e * (oh + restGap));
         /* drop shadow + body */
         g.fillRoundRect(mx + 2, oy + 2, NOCT_W - 2 * mx, oh, 8, BG);
         g.fillRoundRect(mx, oy, NOCT_W - 2 * mx, oh, 8, PANEL);
         g.drawRoundRect(mx, oy, NOCT_W - 2 * mx, oh, 8, ORANGE);
         g.drawRoundRect(mx + 1, oy + 1, NOCT_W - 2 * mx - 2, oh - 2, 7,
                         lerp565(PANEL, ORANGE, 90));
-        /* little speaking wolf, framed */
-        g.fillRoundRect(mx + 4, oy + 4, 38, oh - 8, 6, BG);
+        /* speaking wolf, framed and vertically centred in the taller card */
+        g.fillRoundRect(mx + 4, oy + 4, 42, oh - 8, 6, BG);
         const unsigned char *fr = ((ui.now / 150) & 1) ? wolf_funny : wolf_idle;
-        xbmScaled(g, mx + 6, oy + 6, fr, 32, 32, 1, ORANGE);
+        xbmScaled(g, mx + 9, oy + (oh - 32) / 2, fr, 32, 32, 1, ORANGE);
         /* name tag + text */
         g.setFont(&theme::F_TEXT);
-        textAt(g, mx + 48, oy + 4, "НОКТЮРН", ACCENT);
+        textAt(g, mx + 52, oy + 6, "НОКТЮРН", ACCENT);
         g.setFont(&theme::F_MED);
-        widgets::textWrap(g, p.c_str(), mx + 48, oy + 14,
-                          NOCT_W - 2 * mx - 54, 16, 2, TEXT);
+        widgets::textWrap(g, p.c_str(), mx + 52, oy + 20,
+                          NOCT_W - 2 * mx - 58, 18, 2, TEXT);
       }
     }
   }

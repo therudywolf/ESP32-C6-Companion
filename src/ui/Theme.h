@@ -113,6 +113,13 @@ void textRight(LGFX_Sprite &g, int xRight, int y, const char *s,
 void textCenter(LGFX_Sprite &g, int xCenter, int y, const char *s,
                 uint16_t color);
 
+/* Copy whole UTF-8 codepoints from s into out while the rendered width at the
+ * current font stays <= maxW (so multi-byte Cyrillic is never cut mid-glyph,
+ * and the text never overruns its column). out is always NUL-terminated.
+ * Returns out for chaining. */
+const char *clipW(LGFX_Sprite &g, const char *s, char *out, size_t cap,
+                  int maxW);
+
 } // namespace theme
 
 #endif
