@@ -121,6 +121,20 @@ const char *presetName(int idx) {
   return kPresets[idx].name;
 }
 
+void backdrop(LGFX_Sprite &g, int y0, int y1) {
+  /* faint horizontal scanlines (CRT texture) */
+  uint16_t sl = lerp565(BG, INFO, 8);
+  for (int y = y0; y < y1; y += 4) g.drawFastHLine(0, y, 320, sl);
+  /* a soft vertical sheen sweeping left→right */
+  int sx = (int)((nowMs / 11) % (320 + 90)) - 45;
+  for (int dx = -7; dx <= 7; dx++) {
+    int xx = sx + dx;
+    if (xx < 0 || xx >= 320) continue;
+    int a = 22 - (dx < 0 ? -dx : dx) * 3;
+    if (a > 0) g.drawFastVLine(xx, y0, y1 - y0, lerp565(BG, TEXT, a));
+  }
+}
+
 void ditherRect(LGFX_Sprite &g, int x, int y, int w, int h, uint16_t color) {
   for (int yy = y; yy < y + h; yy++) {
     for (int xx = x + ((yy ^ x) & 1); xx < x + w; xx += 2) {

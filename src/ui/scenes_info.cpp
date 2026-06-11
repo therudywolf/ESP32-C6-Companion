@@ -127,17 +127,20 @@ void drawWeather(UiCtx &ui) {
     textWrap(g, d.c_str(), dx, y0, bw, 22, 2, ORANGE);
   }
 
-  /* 5-day forecast */
+  /* 5-day forecast — taller now the footer is gone (y92..170) */
   static const char *dayNames[] = {"сег", "+1", "+2", "+3", "+4"};
   for (int i = 0; i < w.wfDays && i < 5; i++) {
     int x = 8 + i * 62;
-    panel(g, x, 96, 56, 52);
+    panel(g, x, 94, 56, 76);
+    g.setFont(&F_MED);
+    textCenter(g, x + 28, 98, dayNames[i], DIM);
+    weatherIcon(g, x + 28, 126, 13, w.wfCode[i], ui.now);
+    g.setFont(&F_MED);
+    snprintf(v, sizeof(v), "%d", w.wfMax[i]);
+    textCenter(g, x + 28, 150, v, WARN);
     g.setFont(&F_TEXT);
-    textCenter(g, x + 28, 100, dayNames[i], DIM);
-    weatherIcon(g, x + 28, 118, 9, w.wfCode[i], ui.now);
-    g.setFont(&F_TEXT);
-    snprintf(v, sizeof(v), "%d..%d", w.wfMin[i], w.wfMax[i]);
-    textCenter(g, x + 28, 134, v, TEXT);
+    snprintf(v, sizeof(v), "%d", w.wfMin[i]);
+    textCenter(g, x + 28, 162, v, INFO);
   }
 }
 

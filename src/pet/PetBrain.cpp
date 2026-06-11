@@ -361,6 +361,18 @@ bool PetBrain::bubbleVisible(unsigned long now) const {
   return phrase_.length() > 0 && (now - speechStart_) < speechHold_;
 }
 
+float PetBrain::speechEnvelope(unsigned long now) const {
+  if (thinking_) return 1.0f;
+  if (!phrase_.length()) return 0.0f;
+  unsigned long e = now - speechStart_;
+  if (e >= speechHold_) return 0.0f;
+  const unsigned long T = 260; /* slide duration */
+  if (e < T) return (float)e / T;
+  if (speechHold_ > T && e > speechHold_ - T)
+    return (float)(speechHold_ - e) / T;
+  return 1.0f;
+}
+
 int PetBrain::revealChars(unsigned long now) const {
   if (thinking_) return 0;
   unsigned long dt = now - speechStart_;
