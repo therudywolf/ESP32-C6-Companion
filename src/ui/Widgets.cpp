@@ -72,10 +72,16 @@ int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
   return y;
 }
 
-void statusBar(UiCtx &ui, const char *title) {
+void statusBar(UiCtx &ui, const char *title, int scene, int sceneCount) {
   LGFX_Sprite &g = ui.g;
   g.fillRect(0, 0, NOCT_W, NOCT_STATUS_H, BG);
+  /* the separator line doubles as a scene-position ticker (replaces the old
+   * footer): dim full width + a bright segment for the current scene */
   g.drawFastHLine(0, NOCT_STATUS_H - 1, NOCT_W, ORANGE_DIM);
+  if (scene >= 0 && sceneCount > 0) {
+    int seg = NOCT_W / sceneCount;
+    g.fillRect(scene * seg, NOCT_STATUS_H - 2, seg, 2, ORANGE);
+  }
 
   g.setFont(&F_MED);
   g.setTextSize(1);

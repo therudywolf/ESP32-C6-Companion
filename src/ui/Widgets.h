@@ -27,12 +27,10 @@ struct UiCtx {
 
 namespace widgets {
 
-/* Top status bar: scene title + wifi/tcp/sd/llm/clock. */
-void statusBar(UiCtx &ui, const char *title);
-
-/* Footer hint line: one-button grammar + contextual action + ring ticker. */
-void footer(UiCtx &ui, const char *action = nullptr, int scene = -1,
-            int sceneCount = 0);
+/* Top status bar: scene title + wifi/tcp/sd/llm/clock + scene-position ticker
+ * built into the separator line. */
+void statusBar(UiCtx &ui, const char *title, int scene = -1,
+               int sceneCount = 0);
 
 /* Sparkline from a rolling graph (line + tip dot). */
 void sparkline(LGFX_Sprite &g, int x, int y, int w, int h,

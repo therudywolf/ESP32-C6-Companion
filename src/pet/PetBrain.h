@@ -26,6 +26,8 @@ public:
 
   /* Rendering state */
   bool bubbleVisible(unsigned long now) const;
+  /* 0..1 slide envelope for the speech overlay (ease in / hold / ease out). */
+  float speechEnvelope(unsigned long now) const;
   bool thinking() const { return thinking_; }
   const String &phrase() const { return phrase_; }
   int revealChars(unsigned long now) const; /* typewriter, UTF-8 aware */

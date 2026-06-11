@@ -46,6 +46,10 @@ extern unsigned long nowMs;
 /* Linear-interpolate two RGB565 colors (t = 0..255). */
 uint16_t lerp565(uint16_t a, uint16_t b, int t);
 
+/* Subtle animated cyber backdrop (faint scanlines + a sweeping sheen) drawn
+ * behind scene content in the band y0..y1. Cheap; reads through empty areas. */
+void backdrop(LGFX_Sprite &g, int y0, int y1);
+
 /* Fonts (lgfx wrappers over U8g2 font data — Cyrillic capable where needed;
  * defined in Theme.cpp). Chunky 2x integer scaling = the Flipper aesthetic. */
 extern const lgfx::U8g2font F_SMALL;  /* 5x8 cyrillic: labels, hints */

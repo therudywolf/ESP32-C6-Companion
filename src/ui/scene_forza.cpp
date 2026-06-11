@@ -186,10 +186,12 @@ void drawForza(UiCtx &ui) {
 
   /* ── overlays ── */
   if (!f.raceOn) {
+    /* sits in the free band under the RPM caption — clear of the hero digits */
     g.setFont(&F_MED);
-    g.fillRoundRect(116, 50, 104, 26, 4, PANEL);
-    g.drawRoundRect(116, 50, 104, 26, 4, ACCENT);
-    textCenter(g, 168, 53, "ПАУЗА", ACCENT);
+    bool blink = (ui.now / 400) & 1;
+    g.fillRoundRect(118, 108, 100, 22, 4, PANEL);
+    g.drawRoundRect(118, 108, 100, 22, 4, blink ? ACCENT : ORANGE_DIM);
+    textCenter(g, 168, 110, "ПАУЗА", blink ? ACCENT : DIM);
   }
   if (ui.st.alertActive && ((ui.now / 300) & 1)) {
     g.fillTriangle(160, 124, 176, 124, 168, 112, CRIT);

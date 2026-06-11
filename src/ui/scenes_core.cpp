@@ -109,9 +109,13 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
     int ph = (now / 700) % 3;
-    textAt(g, wx + 62, wy - 2 - ph * 4, "z", INFO);
+    int zy = wy - 2 - ph * 4;
+    if (zy < 21) zy = 21;
+    textAt(g, wx + 62, zy, "z", INFO);
     g.setTextSize(2);
-    if (ph > 0) textAt(g, wx + 70, wy - 14 - ph * 3, "Z", INFO);
+    int zy2 = wy - 12 - ph * 3;
+    if (zy2 < 21) zy2 = 21;
+    if (ph > 0) textAt(g, wx + 70, zy2, "Z", INFO);
     g.setTextSize(1);
   }
 

@@ -365,6 +365,10 @@ void SceneManager::draw(UiCtx &ui) {
   /* DEN submenu timeout */
   if (denActionMode_ && ui.now - denModeAt_ > 7000) denActionMode_ = false;
 
+  /* animated cyber backdrop behind content (Forza HUD stays clean) */
+  if (effScene != SCENE_FORZA)
+    theme::backdrop(g, NOCT_STATUS_H, NOCT_H);
+
   /* content */
   switch (effScene) {
   case SCENE_DEN:
@@ -389,15 +393,10 @@ void SceneManager::draw(UiCtx &ui) {
   case SCENE_FORZA: scenes::drawForza(ui); break;
   }
 
-  /* chrome — the Forza HUD owns the whole screen, no bars */
-  if (effScene != SCENE_FORZA) {
-    widgets::statusBar(ui, scenes::title(effScene));
-    if (denActionMode_ && effScene == SCENE_DEN)
-      widgets::footer(ui, "долгое=да", effScene, SCENE_FORZA);
-    else
-      widgets::footer(ui, scenes::actionHint(effScene, ui), effScene,
-                      SCENE_FORZA);
-  }
+  /* chrome — the Forza HUD owns the whole screen, no bars. Footer hint line
+   * removed (wasted space); scene position lives in the status bar now. */
+  if (effScene != SCENE_FORZA)
+    widgets::statusBar(ui, scenes::title(effScene), effScene, SCENE_FORZA);
 
   /* alert frame on top */
   if (alertActive(ui) && effScene != SCENE_FORZA) {
@@ -420,20 +419,36 @@ void SceneManager::draw(UiCtx &ui) {
     xbmScaled(g, 4, NOCT_H - 38, wolf_aggressive, 32, 32, 1, on ? CRIT : DIM);
   }
 
-  /* wolf speech overlay — the wolf "lives in the background": its comments
-   * pop up over ANY scene (DEN already shows speech inline). */
+  /* wolf speech overlay — the wolf "lives in the background": its comment
+   * SLIDES UP from the bottom over ANY scene, sits, then slides away. DEN
+   * shows speech inline so it's skipped there. */
   if (ui.brain.bubbleVisible(ui.now) && effScene != SCENE_DEN && !menuOpen_ &&
-      !sysInfo_) {
+      !sysInfo_ && !ui.brain.thinking()) {
     const String &p = ui.brain.phrase();
-    if (p.length() && !ui.brain.thinking()) {
-      int oy = NOCT_STATUS_H + 2, oh = 40;
-      g.fillRoundRect(4, oy, NOCT_W - 8, oh, 6, PANEL);
-      g.drawRoundRect(4, oy, NOCT_W - 8, oh, 6, ORANGE);
-      xbmScaled(g, 8, oy + 4, wolf_idle, 32, 32, 1, ORANGE);
-      g.setFont(&theme::F_TEXT);
-      g.setTextSize(2);
-      widgets::textWrap(g, p.c_str(), 44, oy + 6, NOCT_W - 54, 15, 2, TEXT);
-      g.setTextSize(1);
+    if (p.length()) {
+      const int oh = 46, mx = 6;
+      float env = ui.brain.speechEnvelope(ui.now);
+      if (env > 0.001f) {
+        /* ease-out cubic on the slide */
+        float e = 1.0f - powf(1.0f - env, 3.0f);
+        int oy = NOCT_H - (int)(e * (oh + 4));
+        /* drop shadow + body */
+        g.fillRoundRect(mx + 2, oy + 2, NOCT_W - 2 * mx, oh, 8, BG);
+        g.fillRoundRect(mx, oy, NOCT_W - 2 * mx, oh, 8, PANEL);
+        g.drawRoundRect(mx, oy, NOCT_W - 2 * mx, oh, 8, ORANGE);
+        g.drawRoundRect(mx + 1, oy + 1, NOCT_W - 2 * mx - 2, oh - 2, 7,
+                        lerp565(PANEL, ORANGE, 90));
+        /* little speaking wolf, framed */
+        g.fillRoundRect(mx + 4, oy + 4, 38, oh - 8, 6, BG);
+        const unsigned char *fr = ((ui.now / 150) & 1) ? wolf_funny : wolf_idle;
+        xbmScaled(g, mx + 6, oy + 6, fr, 32, 32, 1, ORANGE);
+        /* name tag + text */
+        g.setFont(&theme::F_TEXT);
+        textAt(g, mx + 48, oy + 4, "НОКТЮРН", ACCENT);
+        g.setFont(&theme::F_MED);
+        widgets::textWrap(g, p.c_str(), mx + 48, oy + 14,
+                          NOCT_W - 2 * mx - 54, 16, 2, TEXT);
+      }
     }
   }
 
