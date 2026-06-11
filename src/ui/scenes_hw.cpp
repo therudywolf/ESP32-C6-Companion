@@ -168,39 +168,39 @@ void drawDisks(UiCtx &ui) {
   HardwareData &hw = ui.st.hw;
   char v[40];
 
+  /* 4 fixed rows at 30px pitch (y26,56,86,116): label+stats line + a bar
+   * just under it. Everything stays inside its row; I/O panel sits below. */
+  static const int rowY[NOCT_HDD_COUNT] = {26, 56, 86, 116};
   for (int i = 0; i < NOCT_HDD_COUNT; i++) {
     HddEntry &d = hw.hdd[i];
-    int y = 25 + i * 26;
     if (d.total_gb < 0.1f) continue;
+    int y = rowY[i];
     int pct = (int)(d.used_gb * 100 / d.total_gb);
     g.setFont(&F_MED);
-    g.setTextSize(1);
     snprintf(v, sizeof(v), "%s", d.name);
-    textAt(g, 8, y + 3, v, ORANGE);
-    g.setTextSize(1);
-    hBar(g, 30, y + 4, 130, 15, pct, pctColor(pct));
-    g.setFont(&F_MED);
-    g.setTextSize(1);
+    textAt(g, 8, y, v, ORANGE);
     if (d.total_gb >= 1000)
-      snprintf(v, sizeof(v), "%.1f/%.0fT", d.used_gb / 1000,
-               d.total_gb / 1000);
+      snprintf(v, sizeof(v), "%.2f/%.2fT", d.used_gb / 1000, d.total_gb / 1000);
     else
       snprintf(v, sizeof(v), "%.0f/%.0fG", d.used_gb, d.total_gb);
-    textAt(g, 168, y + 3, v, TEXT);
+    textAt(g, 150, y, v, TEXT);
     snprintf(v, sizeof(v), "%dC", d.temp);
-    textRight(g, 314, y + 3, v, tempColor(d.temp, 45, 55));
-    g.setTextSize(1);
+    textRight(g, 314, y, v, tempColor(d.temp, 45, 55));
+    hBar(g, 30, y + 18, 284, 10, pct, pctColor(pct)); /* y+18..y+28 */
   }
 
+  /* disk I/O across the freed bottom band (y148..170) */
+  panel(g, 4, 148, 312, 22, "ДИСКОВЫЙ ОБМЕН");
   g.setFont(&F_MED);
-  g.setTextSize(1);
   char r1[12], r2[12];
   fmtRate(r1, sizeof(r1), hw.dr);
   fmtRate(r2, sizeof(r2), hw.dw);
-  snprintf(v, sizeof(v), "чтение %s", r1);
-  textAt(g, 8, 130, v, INFO);
-  snprintf(v, sizeof(v), "запись %s", r2);
-  textRight(g, 312, 130, v, WARN);
+  g.fillTriangle(12, 154, 22, 154, 17, 163, INFO);
+  snprintf(v, sizeof(v), "%s/s", r1);
+  textAt(g, 26, 152, v, INFO);
+  g.fillTriangle(172, 163, 182, 163, 177, 154, WARN);
+  snprintf(v, sizeof(v), "%s/s", r2);
+  textAt(g, 186, 152, v, WARN);
 }
 
 void drawFans(UiCtx &ui) {

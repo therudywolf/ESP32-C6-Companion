@@ -126,6 +126,8 @@ struct Settings {
   bool petLlm = true;            /* "petLlm"   wolf speaks via LLM */
   bool flipped = false;          /* "flip"     rotate display 180 */
   int themePreset = 0;           /* "theme"    palette preset index */
+  int bgStyle = 1;               /* "bgStyle"  0 solid/1 anim/2 grid */
+  bool bgLight = false;          /* "bgLight"  light/white background */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
@@ -177,6 +179,8 @@ struct AppState {
   int rcPetLlm = -1;             /* 0/1, -1 = none */
   int rcFlip = -1;               /* 0/1, -1 = none */
   int rcTimeout = -1;            /* 0/30/60 dim sec, -1 = none */
+  int rcBgStyle = -1;            /* 0/1/2, -1 = none */
+  int rcBgLight = -1;            /* 0/1, -1 = none */
 };
 
 #endif

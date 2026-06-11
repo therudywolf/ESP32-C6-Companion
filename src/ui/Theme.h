@@ -40,6 +40,16 @@ void setAccent(uint8_t r, uint8_t g, uint8_t b);
 const char *presetName(int idx);
 extern int currentPreset;
 
+/* Background controls, independent of the colour preset.
+ *  bgStyle: 0 = solid (clean), 1 = scanlines + sheen, 2 = dot grid.
+ *  bgLight: false = dark theme bg, true = light/white background. */
+extern int bgStyle;
+extern bool bgLight;
+void setBgStyle(int s);     /* 0..2 */
+void setBgLight(bool light);/* re-applies the active preset in light/dark */
+static const int BG_STYLES = 3;
+const char *bgStyleName(int s);
+
 /* Frame clock for animations — set once per frame in SceneManager::draw, read
  * by draw helpers so they animate without threading `now` through every call. */
 extern unsigned long nowMs;

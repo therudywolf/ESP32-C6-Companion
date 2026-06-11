@@ -58,6 +58,8 @@ void setup() {
   Serial.printf("\n[BOOT] Nocturne C6 v%s\n", NOCT_VERSION);
 
   settings::load(state.settings);
+  theme::bgStyle = state.settings.bgStyle;
+  theme::bgLight = state.settings.bgLight;
   theme::applyPreset(state.settings.themePreset);
   Serial.println("[BOOT] settings loaded");
 
@@ -170,6 +172,16 @@ void loop() {
     }
     if (state.rcTimeout >= 0) {
       cfg.displayTimeoutSec = state.rcTimeout;
+      persist = true;
+    }
+    if (state.rcBgStyle >= 0) {
+      cfg.bgStyle = state.rcBgStyle;
+      theme::setBgStyle(state.rcBgStyle);
+      persist = true;
+    }
+    if (state.rcBgLight >= 0) {
+      cfg.bgLight = state.rcBgLight != 0;
+      theme::setBgLight(cfg.bgLight);
       persist = true;
     }
     if (state.rcAction.length()) {

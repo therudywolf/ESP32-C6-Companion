@@ -73,6 +73,6 @@
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 #define NOCT_SD_SPI_HZ 25000000
 #define NOCT_SCREENSAVER_DEFAULT_SEC 0 /* 0 = off */
-#define NOCT_VERSION "0.5.4"
+#define NOCT_VERSION "0.6.0"
 
 #endif
