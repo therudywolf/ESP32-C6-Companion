@@ -309,6 +309,8 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcPetLlm = rc["petllm"] | -1;
       state.rcFlip = rc["flip"] | -1;
       state.rcTimeout = rc["timeout"] | -1;
+      state.rcBgStyle = rc["bgstyle"] | -1;
+      state.rcBgLight = rc["bglight"] | -1;
       state.rcChromeR = state.rcChromeG = state.rcChromeB = -1;
       if (rc["chrome"].is<JsonArray>() && rc["chrome"].size() == 3) {
         state.rcChromeR = rc["chrome"][0] | -1;

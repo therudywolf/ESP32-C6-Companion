@@ -56,22 +56,35 @@ void drawMedia(UiCtx &ui) {
   g.setFont(&F_TEXT);
   textAt(g, 52, 32, stTxt, stc);
 
-  /* artist — track */
+  /* track (marquee) + artist */
   g.setFont(&F_MED);
   g.setTextSize(1);
-  String t = m.track.length() ? m.track : String("---");
-  /* marquee when long */
+  String t = m.track.length() ? m.track : String("--- нет трека ---");
   int tw = g.textWidth(t.c_str());
   int x = 8;
   if (tw > NOCT_W - 16) {
     int span = tw + 60;
     x = 8 - (int)((ui.now / 40) % span);
   }
-  textAt(g, x, 110, t.c_str(), TEXT);
+  textAt(g, x, 118, t.c_str(), TEXT);
   String a = m.artist;
   int aw = g.textWidth(a.c_str());
   if (aw > NOCT_W - 8) a = a.substring(0, 24);
-  textCenter(g, NOCT_W / 2, 131, a.c_str(), ORANGE);
+  textCenter(g, NOCT_W / 2, 138, a.c_str(), ORANGE);
+
+  /* animated equaliser across the freed bottom band (y156..170) */
+  const int bars = 28, bw = (NOCT_W - 12) / bars;
+  for (int i = 0; i < bars; i++) {
+    float ph = ui.now / (playing ? 130.0f : 700.0f);
+    /* pseudo-spectrum: layered sines per bar */
+    float s = sinf(ph + i * 0.6f) * 0.5f + sinf(ph * 1.7f + i * 0.9f) * 0.3f +
+              sinf(ph * 0.5f + i) * 0.2f;
+    int hgt = playing ? (int)(3 + (s * 0.5f + 0.5f) * 13) : 2;
+    int bx = 6 + i * bw;
+    uint16_t c = hgt > 11 ? CRIT : (hgt > 7 ? WARN : GOOD);
+    g.fillRect(bx, 170 - hgt, bw - 1, hgt, c);
+    g.drawPixel(bx, 170 - hgt - 1, lerp565(c, TEXT, 120));
+  }
 }
 
 /* ── WEATHER ─────────────────────────────────────────────────────────── */
@@ -127,20 +140,18 @@ void drawWeather(UiCtx &ui) {
     textWrap(g, d.c_str(), dx, y0, bw, 22, 2, ORANGE);
   }
 
-  /* 5-day forecast — taller now the footer is gone (y92..170) */
+  /* 5-day forecast — taller, every element inside panel y92..164 (screen 171) */
   static const char *dayNames[] = {"сег", "+1", "+2", "+3", "+4"};
   for (int i = 0; i < w.wfDays && i < 5; i++) {
     int x = 8 + i * 62;
-    panel(g, x, 94, 56, 76);
-    g.setFont(&F_MED);
-    textCenter(g, x + 28, 98, dayNames[i], DIM);
-    weatherIcon(g, x + 28, 126, 13, w.wfCode[i], ui.now);
+    panel(g, x, 92, 56, 72, dayNames[i]); /* day name in the panel tab */
+    weatherIcon(g, x + 28, 116, 12, w.wfCode[i], ui.now);
     g.setFont(&F_MED);
     snprintf(v, sizeof(v), "%d", w.wfMax[i]);
-    textCenter(g, x + 28, 150, v, WARN);
+    textCenter(g, x + 28, 132, v, WARN); /* hi: y132..152 */
     g.setFont(&F_TEXT);
     snprintf(v, sizeof(v), "%d", w.wfMin[i]);
-    textCenter(g, x + 28, 162, v, INFO);
+    textCenter(g, x + 28, 152, v, INFO); /* lo: y152..163, inside 164 */
   }
 }
 

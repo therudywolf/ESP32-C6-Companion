@@ -15,6 +15,8 @@ const lgfx::U8g2font F_HUGE(u8g2_font_logisoso32_tr);
 uint16_t BG, ORANGE, ORANGE_DIM, TEXT, DIM, PANEL, GOOD, WARN, CRIT, INFO,
     ACCENT;
 int currentPreset = 0;
+int bgStyle = 1;
+bool bgLight = false;
 unsigned long nowMs = 0;
 
 uint16_t lerp565(uint16_t a, uint16_t b, int t) {
@@ -92,6 +94,34 @@ static uint16_t dimmer(uint16_t c) {
   return (uint16_t)(((r * 5 / 8) << 11) | ((g * 5 / 8) << 5) | (b * 5 / 8));
 }
 
+/* scale a colour's luminance by num/den (clamped) */
+static uint16_t scale565(uint16_t c, int num, int den) {
+  int r = ((c >> 11) & 0x1F) * num / den;
+  int g = ((c >> 5) & 0x3F) * num / den;
+  int b = (c & 0x1F) * num / den;
+  if (r > 31) r = 31;
+  if (g > 63) g = 63;
+  if (b > 31) b = 31;
+  return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
+/* Recompute BG/PANEL/TEXT family + darken accents for light mode. */
+static void applyBgLight() {
+  if (!bgLight) return;
+  BG = rgb(234, 238, 244);
+  PANEL = rgb(206, 213, 224);
+  TEXT = rgb(16, 18, 26);
+  DIM = rgb(96, 106, 120);
+  /* chrome + state colours need darkening to stay legible on white */
+  ORANGE = scale565(ORANGE, 70, 100);
+  ORANGE_DIM = lerp565(ORANGE, PANEL, 120);
+  GOOD = scale565(GOOD, 62, 100);
+  WARN = scale565(WARN, 72, 100);
+  CRIT = scale565(CRIT, 78, 100);
+  INFO = scale565(INFO, 60, 100);
+  ACCENT = scale565(ACCENT, 70, 100);
+}
+
 void applyPreset(int idx) {
   if (idx < 0 || idx >= THEME_PRESETS) idx = 0;
   currentPreset = idx;
@@ -107,6 +137,19 @@ void applyPreset(int idx) {
   CRIT = p.crit;
   INFO = p.info;
   ACCENT = p.accent;
+  applyBgLight();
+}
+
+void setBgStyle(int s) { bgStyle = (s < 0 || s >= BG_STYLES) ? 0 : s; }
+
+void setBgLight(bool light) {
+  bgLight = light;
+  applyPreset(currentPreset); /* re-derive palette in the new mode */
+}
+
+const char *bgStyleName(int s) {
+  static const char *n[BG_STYLES] = {"выкл", "анимация", "сетка"};
+  return n[(s < 0 || s >= BG_STYLES) ? 0 : s];
 }
 
 void setChrome(uint8_t r, uint8_t g, uint8_t b) {
@@ -122,16 +165,27 @@ const char *presetName(int idx) {
 }
 
 void backdrop(LGFX_Sprite &g, int y0, int y1) {
-  /* faint horizontal scanlines (CRT texture) */
-  uint16_t sl = lerp565(BG, INFO, 8);
-  for (int y = y0; y < y1; y += 4) g.drawFastHLine(0, y, 320, sl);
-  /* a soft vertical sheen sweeping left→right */
-  int sx = (int)((nowMs / 11) % (320 + 90)) - 45;
-  for (int dx = -7; dx <= 7; dx++) {
-    int xx = sx + dx;
-    if (xx < 0 || xx >= 320) continue;
-    int a = 22 - (dx < 0 ? -dx : dx) * 3;
-    if (a > 0) g.drawFastVLine(xx, y0, y1 - y0, lerp565(BG, TEXT, a));
+  if (bgStyle == 0) return; /* solid background, no texture */
+  uint16_t tint = bgLight ? DIM : INFO;
+  if (bgStyle == 1) {
+    /* faint horizontal scanlines + a soft sweeping sheen */
+    uint16_t sl = lerp565(BG, tint, bgLight ? 22 : 8);
+    for (int y = y0; y < y1; y += 4) g.drawFastHLine(0, y, 320, sl);
+    int sx = (int)((nowMs / 11) % (320 + 90)) - 45;
+    for (int dx = -7; dx <= 7; dx++) {
+      int xx = sx + dx;
+      if (xx < 0 || xx >= 320) continue;
+      int a = 22 - (dx < 0 ? -dx : dx) * 3;
+      if (a > 0)
+        g.drawFastVLine(xx, y0, y1 - y0,
+                        lerp565(BG, bgLight ? rgb(0, 0, 0) : TEXT, a));
+    }
+  } else {
+    /* drifting dot grid */
+    uint16_t dot = lerp565(BG, tint, bgLight ? 40 : 18);
+    int ox = (int)((nowMs / 90) % 18), oy = (int)((nowMs / 130) % 18);
+    for (int y = y0 + oy; y < y1; y += 18)
+      for (int x = ox; x < 320; x += 18) g.drawPixel(x, y, dot);
   }
 }
 
@@ -145,29 +199,20 @@ void ditherRect(LGFX_Sprite &g, int x, int y, int w, int h, uint16_t color) {
 
 void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
            uint16_t color, uint16_t titleColor) {
-  const int cut = 4; /* cut corner, bottom-right */
-  g.drawFastHLine(x, y, w - 1, color);
-  g.drawFastVLine(x, y, h - 1, color);
-  g.drawFastVLine(x + w - 1, y, h - cut, color);
-  g.drawFastHLine(x, y + h - 1, w - cut, color);
-  g.drawLine(x + w - 1, y + h - 1 - cut, x + w - 1 - cut, y + h - 1, color);
-  /* animated glint travelling clockwise along the top + right edges */
-  int peri = 2 * (w + h);
-  int p = (int)((nowMs / 16 + (x * 7 + y * 13)) % peri); /* phase per panel */
-  int gx, gy;
-  if (p < w) { gx = x + p; gy = y; }
-  else if (p < w + h) { gx = x + w - 1; gy = y + (p - w); }
-  else if (p < 2 * w + h) { gx = x + w - 1 - (p - w - h); gy = y + h - 1; }
-  else { gx = x; gy = y + h - 1 - (p - 2 * w - h); }
-  uint16_t glint = lerp565(color, titleColor, 200);
-  g.fillRect(gx - 1, gy - 1, 3, 3, glint);
+  /* clean full rectangle frame + brighter L-accents at two corners (static,
+   * HUD feel, no moving glint that reads as a glitch) */
+  g.drawRect(x, y, w, h, color);
+  g.drawFastHLine(x, y, 10, titleColor);
+  g.drawFastVLine(x, y, 8, titleColor);
+  g.drawFastHLine(x + w - 10, y + h - 1, 10, titleColor);
+  g.drawFastVLine(x + w - 1, y + h - 8, 8, titleColor);
   if (title && title[0]) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
     int tw = g.textWidth(title);
-    g.fillRect(x + 5, y - 5, tw + 8, 11, BG);
+    g.fillRect(x + 6, y - 5, tw + 8, 11, BG); /* tab punches the frame */
     g.setTextColor(titleColor);
-    g.setCursor(x + 9, y - 4);
+    g.setCursor(x + 10, y - 4);
     g.print(title);
   }
 }
