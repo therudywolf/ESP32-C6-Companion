@@ -159,6 +159,32 @@ void setChrome(uint8_t r, uint8_t g, uint8_t b) {
 
 void setAccent(uint8_t r, uint8_t g, uint8_t b) { ACCENT = rgb(r, g, b); }
 
+/* Role table — order MUST match COLOR_ROLES / the web editor. */
+static uint16_t *const kRoleVar[COLOR_ROLES] = {
+    &BG, &ORANGE, &TEXT, &DIM, &PANEL, &GOOD, &WARN, &CRIT, &INFO, &ACCENT};
+static const char *const kRoleName[COLOR_ROLES] = {
+    "Фон", "Рамки", "Текст", "Втор.текст", "Панель",
+    "OK",  "Предупр", "Тревога", "Данные", "Акцент"};
+
+const char *roleName(int role) {
+  return (role < 0 || role >= COLOR_ROLES) ? "" : kRoleName[role];
+}
+
+void setColorRole(int role, uint8_t r, uint8_t g, uint8_t b) {
+  if (role < 0 || role >= COLOR_ROLES) return;
+  *kRoleVar[role] = rgb(r, g, b);
+  if (role == 1) ORANGE_DIM = dimmer(ORANGE); /* chrome → derive inactive */
+}
+
+void getPalette(uint16_t out[COLOR_ROLES]) {
+  for (int i = 0; i < COLOR_ROLES; i++) out[i] = *kRoleVar[i];
+}
+
+void applyPalette(const uint16_t pal[COLOR_ROLES]) {
+  for (int i = 0; i < COLOR_ROLES; i++) *kRoleVar[i] = pal[i];
+  ORANGE_DIM = dimmer(ORANGE);
+}
+
 const char *presetName(int idx) {
   if (idx < 0 || idx >= THEME_PRESETS) idx = 0;
   return kPresets[idx].name;

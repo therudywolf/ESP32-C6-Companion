@@ -61,6 +61,7 @@ void setup() {
   theme::bgStyle = state.settings.bgStyle;
   theme::bgLight = state.settings.bgLight;
   theme::applyPreset(state.settings.themePreset);
+  if (state.settings.customActive) theme::applyPalette(state.settings.custom);
   Serial.println("[BOOT] settings loaded");
 
   /* Shared SPI2: claim it through the Arduino driver FIRST so both
@@ -182,6 +183,29 @@ void loop() {
     if (state.rcBgLight >= 0) {
       cfg.bgLight = state.rcBgLight != 0;
       theme::setBgLight(cfg.bgLight);
+      persist = true;
+    }
+    /* custom colour edits — snapshot the resulting palette as the saved
+     * custom theme so it survives reboot */
+    bool colorEdited = false;
+    if (state.rcPresetReset == 1) {
+      cfg.customActive = false;
+      theme::applyPreset(cfg.themePreset);
+      theme::setBgLight(cfg.bgLight);
+      persist = true;
+    }
+    if (state.rcColorRole >= 0) {
+      theme::setColorRole(state.rcColorRole, state.rcColorR, state.rcColorG,
+                          state.rcColorB);
+      colorEdited = true;
+    }
+    if (state.rcHasPalette) {
+      theme::applyPalette(state.rcPalette);
+      colorEdited = true;
+    }
+    if (colorEdited) {
+      theme::getPalette(cfg.custom);
+      cfg.customActive = true;
       persist = true;
     }
     if (state.rcAction.length()) {

@@ -113,10 +113,10 @@ int WolfPet::mood() const {
 }
 
 const char *WolfPet::statusText() const {
-  if (!alive_) return "без сил! покорми";
-  if (sleeping_) return "Zzz... спит";
-  if (hunger_ < 25) return "голодный!";
-  if (energy_ < 25) return "сонный...";
-  if (happy_ < 25) return "скучает...";
-  return mood() == 2 ? "доволен!" : "норм";
+  if (!alive_) return "без сил";
+  if (sleeping_) return "спит";
+  if (hunger_ < 25) return "голод";
+  if (energy_ < 25) return "сонный";
+  if (happy_ < 25) return "скука";
+  return mood() == 2 ? "доволен" : "норм";
 }

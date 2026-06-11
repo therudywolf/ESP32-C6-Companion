@@ -128,6 +128,8 @@ struct Settings {
   int themePreset = 0;           /* "theme"    palette preset index */
   int bgStyle = 1;               /* "bgStyle"  0 solid/1 anim/2 grid */
   bool bgLight = false;          /* "bgLight"  light/white background */
+  uint16_t custom[10] = {0};     /* "custom"   hand-tuned palette (RGB565) */
+  bool customActive = false;     /* "customOn" use custom palette, not preset */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
@@ -181,6 +183,11 @@ struct AppState {
   int rcTimeout = -1;            /* 0/30/60 dim sec, -1 = none */
   int rcBgStyle = -1;            /* 0/1/2, -1 = none */
   int rcBgLight = -1;            /* 0/1, -1 = none */
+  int rcColorRole = -1;         /* single-role edit: role 0..9, -1 = none */
+  int rcColorR = 0, rcColorG = 0, rcColorB = 0;
+  bool rcHasPalette = false;    /* full 10-role palette in rcPalette */
+  uint16_t rcPalette[10] = {0};
+  int rcPresetReset = -1;       /* 1 = drop custom, back to preset */
 };
 
 #endif

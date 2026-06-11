@@ -124,15 +124,21 @@ void drawForza(UiCtx &ui) {
   }
   g.setTextSize(1);
 
-  /* ── hero RPM: 64px ink at 32..96, caption under ── */
+  /* ── hero RPM: scale to fit the 96..236 zone so wide 5-digit values never
+   * slide onto the pedals (x240) ── */
   int rpm = (int)f.rpm;
   if (rpm > 99999) rpm = 99999;
   snprintf(v, sizeof(v), "%d", rpm);
-  g.setFont(&F_HUGE);
-  g.setTextSize(2);
   uint16_t rc = shiftNow ? (flash ? CRIT : TEXT)
                          : (pct >= 0.80f ? WARN : TEXT);
-  textCenter(g, 166, inkTop(g, 34, 64), v, rc);
+  g.setFont(&F_HUGE);
+  g.setTextSize(2);
+  if (g.textWidth(v) > 138) { /* 5-digit: drop to 32px so it fits */
+    g.setTextSize(1);
+    textCenter(g, 166, inkTop(g, 50, 32), v, rc);
+  } else {
+    textCenter(g, 166, inkTop(g, 34, 64), v, rc);
+  }
   g.setTextSize(1);
   g.setFont(&F_TEXT);
   if (f.maxRpm > 1000) /* game menus send no engine data */

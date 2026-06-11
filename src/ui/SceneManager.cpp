@@ -173,9 +173,11 @@ void SceneManager::menuAction(UiCtx &ui) {
     s.flipped = !s.flipped;
     d_.disp->setFlipped(s.flipped);
     break;
-  case 6: /* theme preset */
+  case 6: /* theme preset (cycling drops any custom palette) */
     s.themePreset = (s.themePreset + 1) % theme::THEME_PRESETS;
+    s.customActive = false;
     theme::applyPreset(s.themePreset);
+    theme::setBgLight(s.bgLight);
     toast(theme::presetName(s.themePreset));
     break;
   case 7: /* background style */

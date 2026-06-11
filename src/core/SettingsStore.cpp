@@ -19,6 +19,8 @@ void load(Settings &s) {
   s.themePreset = p.getInt("theme", 0);
   s.bgStyle = p.getInt("bgStyle", 1);
   s.bgLight = p.getBool("bgLight", false);
+  s.customActive = p.getBool("customOn", false);
+  p.getBytes("custom", s.custom, sizeof(s.custom));
   p.end();
   if (s.brightness < 10) s.brightness = 10;
   if (s.brightness > 255) s.brightness = 255;
@@ -39,6 +41,8 @@ void save(const Settings &s) {
   p.putInt("theme", s.themePreset);
   p.putInt("bgStyle", s.bgStyle);
   p.putBool("bgLight", s.bgLight);
+  p.putBool("customOn", s.customActive);
+  p.putBytes("custom", s.custom, sizeof(s.custom));
   p.end();
 }
 

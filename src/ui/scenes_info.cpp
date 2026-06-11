@@ -363,7 +363,7 @@ void drawEvents(UiCtx &ui) {
   g.setFont(&F_MED);
   g.setTextSize(1);
   textAt(g, 38, 32, e.top, sc);
-  snprintf(v, sizeof(v), "%s · %d", e.severity, e.count);
+  snprintf(v, sizeof(v), "%s  x%d", e.severity, e.count);
   textAt(g, 8, 64, v, DIM);
 
   /* human text — robust word+char wrap (long CVE ids etc.), up to 2 lines */
