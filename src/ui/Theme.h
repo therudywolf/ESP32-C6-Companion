@@ -40,6 +40,16 @@ void setAccent(uint8_t r, uint8_t g, uint8_t b);
 const char *presetName(int idx);
 extern int currentPreset;
 
+/* Full hand-tuned palette. Roles 0..9: BG, chrome, text, dim, panel, good,
+ * warn, crit, info, accent. setColorRole sets one; getPalette reads all 10
+ * (for persistence). A custom palette overrides the preset until a preset is
+ * re-selected. */
+static const int COLOR_ROLES = 10;
+extern const char *roleName(int role);
+void setColorRole(int role, uint8_t r, uint8_t g, uint8_t b);
+void getPalette(uint16_t out[COLOR_ROLES]);
+void applyPalette(const uint16_t pal[COLOR_ROLES]);
+
 /* Background controls, independent of the colour preset.
  *  bgStyle: 0 = solid (clean), 1 = scanlines + sheen, 2 = dot grid.
  *  bgLight: false = dark theme bg, true = light/white background. */

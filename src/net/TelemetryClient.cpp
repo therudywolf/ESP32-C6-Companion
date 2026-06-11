@@ -311,6 +311,24 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcTimeout = rc["timeout"] | -1;
       state.rcBgStyle = rc["bgstyle"] | -1;
       state.rcBgLight = rc["bglight"] | -1;
+      state.rcPresetReset = rc["resetcustom"] | -1;
+      state.rcColorRole = -1;
+      if (rc["color"].is<JsonArray>() && rc["color"].size() == 4) {
+        state.rcColorRole = rc["color"][0] | -1;
+        state.rcColorR = rc["color"][1] | 0;
+        state.rcColorG = rc["color"][2] | 0;
+        state.rcColorB = rc["color"][3] | 0;
+      }
+      state.rcHasPalette = false;
+      if (rc["palette"].is<JsonArray>() && rc["palette"].size() == 10) {
+        for (int i = 0; i < 10; i++) {
+          int r = rc["palette"][i][0] | 0, gg = rc["palette"][i][1] | 0,
+              b = rc["palette"][i][2] | 0;
+          state.rcPalette[i] =
+              (uint16_t)(((r & 0xF8) << 8) | ((gg & 0xFC) << 3) | (b >> 3));
+        }
+        state.rcHasPalette = true;
+      }
       state.rcChromeR = state.rcChromeG = state.rcChromeB = -1;
       if (rc["chrome"].is<JsonArray>() && rc["chrome"].size() == 3) {
         state.rcChromeR = rc["chrome"][0] | -1;
