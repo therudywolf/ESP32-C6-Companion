@@ -258,8 +258,8 @@ void drawForest(UiCtx &ui) {
     if (!down || ((ui.now / 400) & 1)) g.fillCircle(x + 11, y + 11, 5, c);
     g.setFont(&F_MED);
     g.setTextSize(1);
-    char nm[16];
-    snprintf(nm, sizeof(nm), "%.12s", n.name);
+    char nm[24];
+    clipW(g, n.name, nm, sizeof(nm), cw - 28);
     textAt(g, x + 22, y + 4, nm, TEXT);
     if (down) {
       textAt(g, x + 22, y + 22, "OFFLINE", CRIT);
@@ -307,14 +307,23 @@ void drawServices(UiCtx &ui) {
     int y = 28 + i * pitch;
     uint16_t c = stColor(e.status);
     g.fillCircle(13, y + 8, 5, c);
+    /* latency in a slim font, right-aligned — frees width for the name */
+    int nameRight = 206;
+    if (e.ms >= 0) {
+      g.setFont(&F_TEXT);
+      g.setTextSize(1);
+      snprintf(v, sizeof(v), "%dms", e.ms);
+      int mw = g.textWidth(v);
+      textAt(g, 206 - mw, y + 5, v, e.ms > 500 ? WARN : DIM);
+      nameRight = 206 - mw - 8;
+    }
+    /* name clipped by display width so multi-byte Cyrillic never cuts mid-glyph
+     * (was "%.11s" → "Игровой сервер" became broken "Игров") */
+    char nm[40];
     g.setFont(&F_MED);
     g.setTextSize(1);
-    snprintf(v, sizeof(v), "%.11s", e.name);
-    textAt(g, 26, y, v, TEXT);
-    if (e.ms >= 0) {
-      snprintf(v, sizeof(v), "%dms", e.ms);
-      textRight(g, 206, y, v, e.ms > 500 ? WARN : DIM);
-    }
+    clipW(g, e.name, nm, sizeof(nm), nameRight - 26);
+    textAt(g, 26, y, nm, TEXT);
     g.drawFastHLine(8, y + pitch - 2, 200, lerp565(BG, ORANGE_DIM, 120));
   }
 
@@ -432,7 +441,7 @@ void drawHistory(UiCtx &ui) {
   hourGraph(g, 4, 90, 154, 58, "CPU %", h.cl, "", WARN, 100);
   hourGraph(g, 162, 90, 154, 58, "RAM %", h.ram, "", ACCENT, 100);
   g.setFont(&F_TEXT);
-  char buf[24];
+  char buf[40]; /* Cyrillic is 2 B/char: "история за 60 мин" is ~31 B */
   snprintf(buf, sizeof(buf), "история за %d мин", span < 60 ? span : 60);
   textCenter(g, NOCT_W / 2, 156, buf, DIM); /* y156..169 inside */
 }

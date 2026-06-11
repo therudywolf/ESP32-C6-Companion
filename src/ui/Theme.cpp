@@ -292,4 +292,26 @@ void textCenter(LGFX_Sprite &g, int xCenter, int y, const char *s,
   textAt(g, xCenter - w / 2, y, s, color);
 }
 
+const char *clipW(LGFX_Sprite &g, const char *s, char *out, size_t cap,
+                  int maxW) {
+  if (!cap) return out;
+  size_t n = 0;            /* bytes committed (excl. NUL) */
+  out[0] = '\0';
+  while (*s && n + 1 < cap) {
+    /* codepoint length from the UTF-8 lead byte */
+    unsigned char c = (unsigned char)*s;
+    int len = (c < 0x80) ? 1 : (c < 0xE0) ? 2 : (c < 0xF0) ? 3 : 4;
+    if (n + (size_t)len + 1 > cap) break;       /* would overflow buffer */
+    for (int i = 0; i < len; i++) out[n + i] = s[i];
+    out[n + len] = '\0';
+    if (g.textWidth(out) > maxW) {              /* this glyph overran — drop it */
+      out[n] = '\0';
+      break;
+    }
+    n += len;
+    s += len;
+  }
+  return out;
+}
+
 } // namespace theme
