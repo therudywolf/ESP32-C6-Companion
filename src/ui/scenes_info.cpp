@@ -56,17 +56,21 @@ void drawMedia(UiCtx &ui) {
   g.setFont(&F_TEXT);
   textAt(g, 52, 32, stTxt, stc);
 
-  /* track (marquee) + artist */
+  /* track (seamless scrolling marquee) + artist */
   g.setFont(&F_MED);
   g.setTextSize(1);
   String t = m.track.length() ? m.track : String("--- нет трека ---");
   int tw = g.textWidth(t.c_str());
-  int x = 8;
   if (tw > NOCT_W - 16) {
-    int span = tw + 60;
-    x = 8 - (int)((ui.now / 40) % span);
+    int span = tw + 50; /* gap between loop copies */
+    int off = (int)((ui.now / 35) % span);
+    g.setClipRect(4, 108, NOCT_W - 8, 18); /* keep it on its own line */
+    textAt(g, 8 - off, 118, t.c_str(), TEXT);
+    textAt(g, 8 - off + span, 118, t.c_str(), TEXT); /* second copy = seamless */
+    g.clearClipRect();
+  } else {
+    textCenter(g, NOCT_W / 2, 118, t.c_str(), TEXT);
   }
-  textAt(g, x, 118, t.c_str(), TEXT);
   String a = m.artist;
   int aw = g.textWidth(a.c_str());
   if (aw > NOCT_W - 8) a = a.substring(0, 24);
@@ -120,23 +124,26 @@ void drawWeather(UiCtx &ui) {
   /* Layout: animated icon (left) | 64px temperature | description in the
    * right column, positioned AFTER the measured temp width (so wide values
    * like "+26" never slide under it) and word-wrapped to 2 lines. */
+  /* icon | big temperature with a small degree ring (no "C" letter — it just
+   * crowded the text) | russian description in the right column */
   weatherIcon(g, 32, 58, 20, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  textAt(g, 60, 28 - (g.fontHeight() - 64) / 2, v, TEXT);
+  int ty = 28 - (g.fontHeight() - 64) / 2;
+  textAt(g, 58, ty, v, TEXT);
+  g.drawCircle(58 + vw + 7, ty + 8, 4, DIM); /* ° degree mark */
+  g.drawCircle(58 + vw + 7, ty + 8, 3, DIM);
   g.setTextSize(1);
-  g.setFont(&F_MED);
-  textAt(g, 64 + vw, 66, "C", DIM); /* unit ends ~ 64+vw+12 */
   {
-    int dx = 64 + vw + 26;
-    if (dx > 196) dx = 196; /* keep a usable column even for wide temps */
+    int dx = 58 + vw + 22;
+    if (dx > 188) dx = 188;
     int bw = NOCT_W - dx - 6;
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
     bool oneLine = g.textWidth(d.c_str()) <= bw;
-    int y0 = oneLine ? 50 : 32; /* 1 line vertically centered, else 2 lines */
+    int y0 = oneLine ? 50 : 32; /* 1 line centered, else 2 lines */
     textWrap(g, d.c_str(), dx, y0, bw, 22, 2, ORANGE);
   }
 
@@ -168,36 +175,36 @@ void drawClaude(UiCtx &ui) {
     return;
   }
 
-  /* 5h window gauge */
-  panel(g, 4, 30, 200, 54, "ОКНО 5Ч");
+  /* 5h window gauge (grown to fill height) */
+  panel(g, 4, 28, 200, 64, "ОКНО 5Ч");
   int win = c.windowPct < 0 ? 0 : c.windowPct;
   g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.windowPct < 0 ? "n/a" : "%d%%", win);
   textAt(g, 14, 38, v, pctColor(win));
-  hBar(g, 96, 42, 98, 18, win, pctColor(win));
+  hBar(g, 96, 44, 98, 20, win, pctColor(win));
   g.setFont(&F_TEXT);
   if (c.resetsInMin >= 0) {
     snprintf(v, sizeof(v), "сброс через %dч %02dм", c.resetsInMin / 60,
              c.resetsInMin % 60);
-    textAt(g, 14, 68, v, DIM);
+    textAt(g, 14, 74, v, DIM);
   }
 
   /* weekly gauge */
-  panel(g, 4, 94, 200, 54, "НЕДЕЛЯ");
+  panel(g, 4, 100, 200, 64, "НЕДЕЛЯ");
   int wk = c.weeklyPct < 0 ? 0 : c.weeklyPct;
   g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.weeklyPct < 0 ? "n/a" : "%d%%", wk);
-  textAt(g, 14, 102, v, pctColor(wk));
-  hBar(g, 96, 106, 98, 18, wk, pctColor(wk));
+  textAt(g, 14, 110, v, pctColor(wk));
+  hBar(g, 96, 116, 98, 20, wk, pctColor(wk));
   g.setFont(&F_TEXT);
   if (c.weeklyResetMin >= 0) {
     snprintf(v, sizeof(v), "сброс через %dд %dч", c.weeklyResetMin / 1440,
              (c.weeklyResetMin % 1440) / 60);
-    textAt(g, 14, 132, v, DIM);
+    textAt(g, 14, 146, v, DIM);
   }
 
   /* right column: plan + today numbers */
-  panel(g, 212, 30, 104, 118, "СЕГОДНЯ");
+  panel(g, 212, 28, 104, 136, "СЕГОДНЯ");
   g.setFont(&F_MED);
   g.setTextSize(1);
   if (c.plan.length()) {
@@ -237,11 +244,14 @@ void drawForest(UiCtx &ui) {
   int cols = shown > 3 ? 2 : 1;
   int rows = (shown + cols - 1) / cols;
   int cw = cols == 1 ? 312 : 154;
-  int chh = rows > 2 ? 40 : (rows == 2 ? 60 : 120);
+  /* fill the band y26..170 (144 px) across `rows`, capped for legibility */
+  int chh = (144 - (rows - 1) * 4) / rows;
+  if (chh > 122) chh = 122;
   for (int i = 0; i < shown; i++) {
     ForestNode &n = f.nodes[i];
     int x = 4 + (i % cols) * (cw + 4);
-    int y = 28 + (i / cols) * (chh + 2);
+    int y = 26 + (i / cols) * (chh + 4);
+    if (y + chh > 171) break; /* safety: never draw past the screen */
     panel(g, x, y, cw, chh);
     uint16_t c = stColor(n.status);
     bool down = strcmp(n.status, "down") == 0;
@@ -288,40 +298,44 @@ void drawServices(UiCtx &ui) {
     textCenter(g, NOCT_W / 2, 80, "нет данных о сервисах", DIM);
     return;
   }
+  /* service list spread over the full height (rows of 23px, up to 6) */
   int shown = s.count > 6 ? 6 : s.count;
+  int pitch = shown > 0 ? (142 / (shown < 6 ? 6 : shown)) : 23;
+  if (pitch > 24) pitch = 24;
   for (int i = 0; i < shown; i++) {
     ServiceEntry &e = s.list[i];
-    int y = 27 + i * 20;
+    int y = 28 + i * pitch;
     uint16_t c = stColor(e.status);
-    g.fillCircle(13, y + 7, 4, c);
+    g.fillCircle(13, y + 8, 5, c);
     g.setFont(&F_MED);
     g.setTextSize(1);
     snprintf(v, sizeof(v), "%.11s", e.name);
-    textAt(g, 24, y, v, TEXT);
+    textAt(g, 26, y, v, TEXT);
     if (e.ms >= 0) {
       snprintf(v, sizeof(v), "%dms", e.ms);
-      textRight(g, 208, y, v, e.ms > 500 ? WARN : DIM);
+      textRight(g, 206, y, v, e.ms > 500 ? WARN : DIM);
     }
-    g.setTextSize(1);
+    g.drawFastHLine(8, y + pitch - 2, 200, lerp565(BG, ORANGE_DIM, 120));
   }
 
-  /* docker summary */
-  panel(g, 216, 28, 100, 60, "DOCKER");
-  g.setFont(&F_VALUE);
+  /* docker + totals on the right, grown to fill the height */
+  panel(g, 216, 28, 100, 66, "DOCKER");
+  g.setFont(&F_BIG);
   if (s.dockUp >= 0) {
     snprintf(v, sizeof(v), "%d/%d", s.dockUp, s.dockTotal);
-    textAt(g, 226, 42, v,
-           s.dockUp == s.dockTotal ? GOOD : WARN);
+    textCenter(g, 266, 44, v, s.dockUp == s.dockTotal ? GOOD : WARN);
   } else {
-    textAt(g, 226, 42, "n/a", DIM);
+    textCenter(g, 266, 44, "n/a", DIM);
   }
   g.setFont(&F_TEXT);
-  textAt(g, 226, 66, "контейнеры", DIM);
+  textCenter(g, 266, 80, "контейнеры", DIM);
 
-  panel(g, 216, 94, 100, 40, "ИТОГО");
-  g.setFont(&F_VALUE);
+  panel(g, 216, 100, 100, 64, "СЕРВИСЫ");
+  g.setFont(&F_BIG);
   snprintf(v, sizeof(v), "%d/%d", s.up, s.count);
-  textAt(g, 226, 104, v, s.up == s.count ? GOOD : CRIT);
+  textCenter(g, 266, 118, v, s.up == s.count ? GOOD : CRIT);
+  g.setFont(&F_TEXT);
+  textCenter(g, 266, 150, "онлайн", DIM);
 }
 
 /* ── EVENTS ──────────────────────────────────────────────────────────── */
@@ -412,14 +426,15 @@ void drawHistory(UiCtx &ui) {
   if (!ui.hist) return;
   const Histories &h = *ui.hist;
   int span = h.ct.count;
-  hourGraph(g, 4, 26, 154, 58, "CPU C", h.ct, "", INFO, 60);
-  hourGraph(g, 162, 26, 154, 58, "GPU C", h.gt, "", GOOD, 60);
-  hourGraph(g, 4, 88, 154, 58, "CPU %", h.cl, "", WARN, 100);
-  hourGraph(g, 162, 88, 154, 58, "RAM %", h.ram, "", ACCENT, 100);
+  /* graphs fill the freed band; footer label stays inside the screen */
+  hourGraph(g, 4, 26, 154, 60, "CPU C", h.ct, "", INFO, 60);
+  hourGraph(g, 162, 26, 154, 60, "GPU C", h.gt, "", GOOD, 60);
+  hourGraph(g, 4, 90, 154, 58, "CPU %", h.cl, "", WARN, 100);
+  hourGraph(g, 162, 90, 154, 58, "RAM %", h.ram, "", ACCENT, 100);
   g.setFont(&F_TEXT);
   char buf[24];
-  snprintf(buf, sizeof(buf), "окно: %d мин", span < 60 ? span : 60);
-  textCenter(g, NOCT_W / 2, NOCT_H - 8, buf, DIM);
+  snprintf(buf, sizeof(buf), "история за %d мин", span < 60 ? span : 60);
+  textCenter(g, NOCT_W / 2, 156, buf, DIM); /* y156..169 inside */
 }
 
 /* ── SYSINFO (overlay from menu) ─────────────────────────────────────── */
