@@ -136,7 +136,7 @@ void drawRam(UiCtx &ui) {
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw = g.textWidth(v);
-  textAt(g, 14, inkTop(g, 31, 64), v, pctColor(rpct));
+  textAt(g, 14, inkTop(g, 34, 64), v, pctColor(rpct));
   g.setTextSize(1);
   g.setFont(&F_MED);
   g.setTextSize(1);
@@ -245,31 +245,29 @@ void drawMb(UiCtx &ui) {
       {"VRM", hw.mb_vrm, 70, 90},      {"ЧИПСЕТ", hw.mb_chipset, 60, 75},
       {"КОРПУС", hw.ch, 45, 55},       {"PCH", hw.ch, 45, 55},
   };
-  /* 5 real sensors; if chipset==case skip the duplicate 6th */
-  int count = (hw.ch == hw.mb_chipset) ? 5 : 5;
-  (void)count;
+  /* 6 cells in a 3x2 grid filling y26..164 (taller than before) */
   char v[12];
   for (int i = 0; i < 5; i++) {
     int x = 6 + (i % 3) * 104;
-    int y = 28 + (i / 3) * 62;
-    int w = (i % 3 == 2) ? 100 : 100;
-    panel(g, x, y, w, 54, tiles[i].n);
+    int y = 26 + (i / 3) * 70; /* rows y26..92, y96..162 */
+    panel(g, x, y, 100, 66, tiles[i].n);
     snprintf(v, sizeof(v), "%d", tiles[i].t);
     g.setFont(&F_HUGE);
     uint16_t c = tempColor(tiles[i].t, tiles[i].warn, tiles[i].crit);
     int vw = g.textWidth(v);
-    textAt(g, x + 10, y + 8 - (g.fontHeight() - 32) / 2, v, c);
+    textAt(g, x + 12, y + 14 - (g.fontHeight() - 32) / 2, v, c);
     g.setFont(&F_MED);
-    textAt(g, x + 14 + vw, y + 28, "C", DIM);
+    g.drawCircle(x + 18 + vw, y + 22, 4, DIM); /* ° */
+    g.drawCircle(x + 18 + vw, y + 22, 3, DIM);
   }
   /* 6th cell: chipset-area fan, correctly labelled as RPM */
-  int x = 6 + 2 * 104, y = 90;
-  panel(g, x, y, 100, 54, "ЧИПСЕТ ФАН");
+  int x = 6 + 2 * 104, y = 96;
+  panel(g, x, y, 100, 66, "ЧИПСЕТ ФАН");
   snprintf(v, sizeof(v), "%d", hw.cf);
   g.setFont(&F_BIG);
-  textAt(g, x + 10, y + 14, v, INFO);
+  textAt(g, x + 12, y + 20, v, INFO);
   g.setFont(&F_MED);
-  textRight(g, x + 94, y + 30, "RPM", DIM);
+  textRight(g, x + 92, y + 40, "RPM", DIM);
 }
 
 void drawNet(UiCtx &ui) {
@@ -288,23 +286,25 @@ void drawNet(UiCtx &ui) {
   bigVal(g, 174, 36, r, "Б/с", GOOD);
   sparkline(g, 174, 64, 132, 18, ui.gr.netUp, GOOD, 200);
 
-  panel(g, 4, 94, 156, 56, "ПИНГ");
+  /* bottom panels grown into the freed band (y94..168), spacing fixed so the
+   * RSSI line and the server line no longer overlap */
+  panel(g, 4, 94, 156, 74, "ПИНГ");
   snprintf(v, sizeof(v), "%d", hw.pg);
-  bigVal(g, 14, 104, v, "ms", hw.pg > 80 ? WARN : GOOD);
-  g.setFont(&F_TEXT);
-  textAt(g, 14, 134, "google:443", DIM);
+  bigVal(g, 14, 106, v, "ms", hw.pg > 80 ? WARN : GOOD);
+  g.setFont(&F_MED);
+  textAt(g, 14, 142, "google:443", DIM);
 
-  panel(g, 164, 94, 152, 56, "УСТРОЙСТВО");
+  panel(g, 164, 94, 152, 74, "УСТРОЙСТВО");
   g.setFont(&F_MED);
   g.setTextSize(1);
-  snprintf(v, sizeof(v), "%.9s", ui.st.link.ssid);
-  textAt(g, 172, 100, v, TEXT);
+  snprintf(v, sizeof(v), "%.10s", ui.st.link.ssid);
+  textAt(g, 172, 102, v, TEXT);          /* y102..122 */
   g.setFont(&F_TEXT);
   snprintf(v, sizeof(v), "RSSI %d dBm", ui.st.link.rssi);
-  textAt(g, 172, 121, v, DIM);
+  textAt(g, 172, 126, v, DIM);           /* y126..139 */
   g.setFont(&F_MED);
-  textAt(g, 172, 129, ui.st.link.tcpConnected ? "сервер: ок" : "сервер: нет",
-         ui.st.link.tcpConnected ? GOOD : CRIT);
+  textAt(g, 172, 146, ui.st.link.tcpConnected ? "сервер: ок" : "сервер: нет",
+         ui.st.link.tcpConnected ? GOOD : CRIT); /* y146..166 */
 }
 
 } // namespace scenes
