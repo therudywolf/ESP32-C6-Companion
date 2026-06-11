@@ -51,7 +51,7 @@ void noSignal(UiCtx &ui) {
   bool blink = (ui.now / 600) & 1;
   textCenter(g, NOCT_W / 2, 70, "НЕТ СИГНАЛА", blink ? CRIT : ORANGE_DIM);
   g.setTextSize(1);
-  g.setFont(&F_SMALL);
+  g.setFont(&F_TEXT);
   if (!ui.st.link.wifiConnected) {
     textCenter(g, NOCT_W / 2, 95, "ищу WiFi...", DIM);
   } else {

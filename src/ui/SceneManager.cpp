@@ -420,6 +420,23 @@ void SceneManager::draw(UiCtx &ui) {
     xbmScaled(g, 4, NOCT_H - 38, wolf_aggressive, 32, 32, 1, on ? CRIT : DIM);
   }
 
+  /* wolf speech overlay — the wolf "lives in the background": its comments
+   * pop up over ANY scene (DEN already shows speech inline). */
+  if (ui.brain.bubbleVisible(ui.now) && effScene != SCENE_DEN && !menuOpen_ &&
+      !sysInfo_) {
+    const String &p = ui.brain.phrase();
+    if (p.length() && !ui.brain.thinking()) {
+      int oy = NOCT_STATUS_H + 2, oh = 40;
+      g.fillRoundRect(4, oy, NOCT_W - 8, oh, 6, PANEL);
+      g.drawRoundRect(4, oy, NOCT_W - 8, oh, 6, ORANGE);
+      xbmScaled(g, 8, oy + 4, wolf_idle, 32, 32, 1, ORANGE);
+      g.setFont(&theme::F_TEXT);
+      g.setTextSize(2);
+      widgets::textWrap(g, p.c_str(), 44, oy + 6, NOCT_W - 54, 15, 2, TEXT);
+      g.setTextSize(1);
+    }
+  }
+
   /* menu / sysinfo overlays */
   if (menuOpen_) drawMenu(ui);
   if (sysInfo_) {

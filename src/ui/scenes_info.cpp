@@ -53,7 +53,7 @@ void drawMedia(UiCtx &ui) {
                                          : "PAUSED";
   uint16_t stc = playing ? GOOD : WARN;
   if (playing && ((ui.now / 500) & 1)) g.fillCircle(44, 36, 3, stc);
-  g.setFont(&F_SMALL);
+  g.setFont(&F_TEXT);
   textAt(g, 52, 32, stTxt, stc);
 
   /* artist — track */
@@ -301,7 +301,7 @@ void drawServices(UiCtx &ui) {
   } else {
     textAt(g, 226, 42, "n/a", DIM);
   }
-  g.setFont(&F_SMALL);
+  g.setFont(&F_TEXT);
   textAt(g, 226, 66, "контейнеры", DIM);
 
   panel(g, 216, 94, 100, 40, "ИТОГО");
@@ -374,7 +374,7 @@ static void hourGraph(LGFX_Sprite &g, int x, int y, int w, int h,
   int mx = hg.maxVal(floorMax), mn = hg.minVal();
   if (mx <= mn) mx = mn + 1;
   /* min/max ticks */
-  g.setFont(&F_SMALL);
+  g.setFont(&F_TEXT);
   char t[8];
   snprintf(t, sizeof(t), "%d", mx);
   textAt(g, gx + 2, gy + 1, t, DIM);
@@ -402,7 +402,7 @@ void drawHistory(UiCtx &ui) {
   hourGraph(g, 162, 26, 154, 58, "GPU C", h.gt, "", GOOD, 60);
   hourGraph(g, 4, 88, 154, 58, "CPU %", h.cl, "", WARN, 100);
   hourGraph(g, 162, 88, 154, 58, "RAM %", h.ram, "", ACCENT, 100);
-  g.setFont(&F_SMALL);
+  g.setFont(&F_TEXT);
   char buf[24];
   snprintf(buf, sizeof(buf), "окно: %d мин", span < 60 ? span : 60);
   textCenter(g, NOCT_W / 2, NOCT_H - 8, buf, DIM);

@@ -67,6 +67,8 @@ private:
   String lastTrack_;
   int lastWmo_ = -999;
   bool seenFirstPayload_ = false;
+  String lastApp_;          /* foreground app (top CPU process) */
+  unsigned long lastAppAt_ = 0;
 
   /* PC activity watchers */
   unsigned long gpuHighSince_ = 0;

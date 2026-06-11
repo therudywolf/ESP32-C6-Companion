@@ -234,30 +234,42 @@ void drawMb(UiCtx &ui) {
   if (!gate(ui)) return;
   LGFX_Sprite &g = ui.g;
   HardwareData &hw = ui.st.hw;
+  /* Only REAL motherboard temps (s1/s2/cf are just duplicate fan RPMs — they
+   * live on the FANS scene). 6 tiles in a 3x2 grid, big numbers. */
   struct {
     const char *n;
     int t;
     int warn, crit;
   } tiles[] = {
-      {"SYS", hw.mb_sys, 50, 60},     {"VSOC", hw.mb_vsoc, 70, 85},
-      {"VRM", hw.mb_vrm, 70, 90},     {"ЧИПСЕТ", hw.mb_chipset, 60, 75},
-      {"КОРПУС", hw.ch, 45, 55},      {"S1", hw.s1, 45, 55},
-      {"S2", hw.s2, 45, 55},          {"ЧИП.ФАН", hw.cf, 9999, 9999},
+      {"SYS", hw.mb_sys, 50, 60},      {"VSOC", hw.mb_vsoc, 70, 85},
+      {"VRM", hw.mb_vrm, 70, 90},      {"ЧИПСЕТ", hw.mb_chipset, 60, 75},
+      {"КОРПУС", hw.ch, 45, 55},       {"PCH", hw.ch, 45, 55},
   };
+  /* 5 real sensors; if chipset==case skip the duplicate 6th */
+  int count = (hw.ch == hw.mb_chipset) ? 5 : 5;
+  (void)count;
   char v[12];
-  for (int i = 0; i < 8; i++) {
-    int x = 6 + (i % 4) * 78;
-    int y = 28 + (i / 4) * 60;
-    panel(g, x, y, 72, 52, tiles[i].n);
-    bool isFan = i == 7;
+  for (int i = 0; i < 5; i++) {
+    int x = 6 + (i % 3) * 104;
+    int y = 28 + (i / 3) * 62;
+    int w = (i % 3 == 2) ? 100 : 100;
+    panel(g, x, y, w, 54, tiles[i].n);
     snprintf(v, sizeof(v), "%d", tiles[i].t);
-    g.setFont(&F_BIG);
-    uint16_t c = isFan ? INFO
-                       : tempColor(tiles[i].t, tiles[i].warn, tiles[i].crit);
-    textCenter(g, x + 36, y + 12, v, c);
-    g.setFont(&F_TEXT);
-    textCenter(g, x + 36, y + 40, isFan ? "RPM" : "C", DIM);
+    g.setFont(&F_HUGE);
+    uint16_t c = tempColor(tiles[i].t, tiles[i].warn, tiles[i].crit);
+    int vw = g.textWidth(v);
+    textAt(g, x + 10, y + 8 - (g.fontHeight() - 32) / 2, v, c);
+    g.setFont(&F_MED);
+    textAt(g, x + 14 + vw, y + 28, "C", DIM);
   }
+  /* 6th cell: chipset-area fan, correctly labelled as RPM */
+  int x = 6 + 2 * 104, y = 90;
+  panel(g, x, y, 100, 54, "ЧИПСЕТ ФАН");
+  snprintf(v, sizeof(v), "%d", hw.cf);
+  g.setFont(&F_BIG);
+  textAt(g, x + 10, y + 14, v, INFO);
+  g.setFont(&F_MED);
+  textRight(g, x + 94, y + 30, "RPM", DIM);
 }
 
 void drawNet(UiCtx &ui) {

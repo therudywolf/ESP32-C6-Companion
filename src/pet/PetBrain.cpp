@@ -108,10 +108,12 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
   if (!urgent && now - lastSpeech_ < NOCT_LLM_COOLDOWN_MS) return;
   if (thinking_) return; /* one request in flight, latest-wins not needed */
 
-  /* The LLM runs on the owner's GPU. Only think when the PC is idle (the
-   * owner stepped away, GPU free) — otherwise instant cached phrase. An
-   * explicit TALK press / remote say forces it regardless. */
-  bool allowLlm = forceLlm || pcIdle(st);
+  /* The LLM runs on the owner's GPU. The wolf comments on what the owner is
+   * doing (browsing, coding, server events…) using the LLM while the load is
+   * LIGHT, and falls back to instant cached phrases during games / heavy
+   * renders so it never steals frames. Explicit TALK / remote say forces it. */
+  bool affordable = !st.forzaLive && st.hw.gl < 55 && st.hw.cl < 80;
+  bool allowLlm = forceLlm || affordable;
   bool canLlm = st.settings.petLlm && llm_ && !llm_->busy() &&
                 st.link.wifiConnected && allowLlm;
   if (canLlm && llm_->request(buildContext(eventRu, st), /*big=*/false)) {
@@ -303,6 +305,29 @@ void PetBrain::tick(unsigned long now, AppState &st) {
                 st, false);
       }
       lastPidle_ = st.pcIdleSec;
+    }
+  }
+
+  /* app launch — the top CPU process changed to a new real program. Skip
+   * idle/system noise; debounce so a brief spike doesn't chatter. */
+  if (seenFirstPayload_ && st.process.cpuNames[0].length()) {
+    String app = st.process.cpuNames[0];
+    bool sys = app == "System Idle Process" || app == "Idle" ||
+               app.startsWith("System") || app == "pythonw3.13.exe" ||
+               app == "dwm.exe" || app == "Registry";
+    if (!sys && app != lastApp_ && now - lastAppAt_ > 20000) {
+      String ev = "хозяин запустил программу «" + app + "», прокомментируй";
+      /* games get a livelier angle */
+      String low = app;
+      low.toLowerCase();
+      if (low.indexOf("forza") >= 0 || low.indexOf("game") >= 0 ||
+          low.indexOf("steam") >= 0)
+        ev = "хозяин запустил игру «" + app + "» — пожелай удачной катки";
+      if (lastApp_.length()) trigger("app", ev.c_str(), now, st, false);
+      lastApp_ = app;
+      lastAppAt_ = now;
+    } else if (app == lastApp_) {
+      lastApp_ = app; /* keep latching */
     }
   }
 
