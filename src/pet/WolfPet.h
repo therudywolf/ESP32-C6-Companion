@@ -13,7 +13,7 @@
 
 class WolfPet {
 public:
-  enum Action { ACT_FEED = 0, ACT_PLAY, ACT_TALK, ACT_COUNT };
+  enum Action { ACT_FEED = 0, ACT_PLAY, ACT_PET, ACT_TALK, ACT_COUNT };
 
   void begin();
   void tick(unsigned long now);
