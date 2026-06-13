@@ -418,7 +418,7 @@ void SceneManager::drawColorEditor(UiCtx &ui) {
   theme::getPalette(pal);
 
   char ttl[32];
-  snprintf(ttl, sizeof(ttl), "РЕДАКТОР · СЛОТ %d", s.activeSlot + 1);
+  snprintf(ttl, sizeof(ttl), "РЕДАКТОР / СЛОТ %d", s.activeSlot + 1);
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   textAt(g, 8, 24, ttl, ORANGE);
@@ -462,10 +462,10 @@ void SceneManager::drawColorEditor(UiCtx &ui) {
 
   g.setFont(&F_TEXT);
   if (!editChan_)
-    textAt(g, 8, 156, "1x далее · долго настроить · 2x сохранить · 3x выход",
+    textAt(g, 8, 156, "1x далее / долго настроить / 2x сохранить / 3x выход",
            DIM);
   else
-    textAt(g, 8, 156, "1x +цвет · долго след.канал · 2x назад · 3x выход", DIM);
+    textAt(g, 8, 156, "1x +цвет / долго след.канал / 2x назад / 3x выход", DIM);
 }
 
 int SceneManager::nextVisibleScene(int from, uint32_t mask, bool allowDen) const {
@@ -518,7 +518,7 @@ void SceneManager::drawScenePicker(UiCtx &ui) {
   g.fillRect(NOCT_W - 6, sbY, 3, sbH, ORANGE);
 
   g.setFont(&F_TEXT);
-  textAt(g, 8, 156, "1x далее · долго вкл/выкл · 2x сохранить · 3x выход", DIM);
+  textAt(g, 8, 156, "1x далее / долго вкл-выкл / 2x сохранить / 3x выход", DIM);
 }
 
 /* Ambient screensaver: drifting starfield + wandering wolf + big clock.
