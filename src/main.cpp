@@ -144,8 +144,11 @@ void loop() {
     if (state.rcAccentR >= 0)
       theme::setAccent(state.rcAccentR, state.rcAccentG, state.rcAccentB);
     if (state.rcBright >= 10) {
-      cfg.brightness = state.rcBright;
-      display.setBrightness(state.rcBright);
+      /* clamp before persisting so NVS + menu % + step logic agree with the
+       * panel (Display::setBrightness re-clamps too, but cfg would store raw) */
+      int b = state.rcBright > NOCT_BRIGHT_MAX ? NOCT_BRIGHT_MAX : state.rcBright;
+      cfg.brightness = b;
+      display.setBrightness(b);
       persist = true;
     }
     if (state.rcLed >= 0) {

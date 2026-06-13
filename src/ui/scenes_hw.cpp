@@ -244,13 +244,13 @@ void drawFans(UiCtx &ui) {
     g.setTextSize(1);
   }
 
-  /* summary across the freed bottom band */
+  /* summary across the freed bottom band (F_TEXT stays inside y171) */
   g.drawFastHLine(8, 152, NOCT_W - 16, ORANGE_DIM);
-  g.setFont(&F_MED);
+  g.setFont(&F_TEXT);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "среднее %d%%      максимум %d%%",
            sum / NOCT_FAN_COUNT, mx);
-  textCenter(g, NOCT_W / 2, 154, v, ORANGE);
+  textCenter(g, NOCT_W / 2, 158, v, ORANGE);
 }
 
 void drawMb(UiCtx &ui) {
