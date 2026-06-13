@@ -60,7 +60,8 @@ public:
       auto cfg = light_.config();
       cfg.pin_bl = NOCT_PIN_LCD_BL;
       cfg.invert = false;
-      cfg.freq = 5000;
+      cfg.freq = 12000; /* 12 kHz: smoother than 5 kHz, mid-tones look less
+                           desaturated, no audible/visible flicker */
       cfg.pwm_channel = 0;
       light_.config(cfg);
       panel_.setLight(&light_);
@@ -81,7 +82,7 @@ public:
   bool begin(uint8_t brightness, bool flipped) {
     tft.init();
     setFlipped(flipped);
-    tft.setBrightness(brightness);
+    setBrightness(brightness);
     fb.setColorDepth(16);
     if (!fb.createSprite(NOCT_W, NOCT_H)) return false;
     fb.setTextWrap(false);
@@ -89,7 +90,12 @@ public:
   }
 
   void push() { fb.pushSprite(0, 0); }
-  void setBrightness(uint8_t b) { tft.setBrightness(b); }
+  /* single chokepoint: never let any path (menu, rc, boot) drive the backlight
+   * past the thermal cap — protects the panel from the black-blob bloom. */
+  void setBrightness(uint8_t b) {
+    if (b > NOCT_BRIGHT_MAX) b = NOCT_BRIGHT_MAX;
+    tft.setBrightness(b);
+  }
   /* landscape both ways: USB on the left (3, default) or right (1) */
   void setFlipped(bool f) { tft.setRotation(f ? 1 : 3); }
 };

@@ -39,6 +39,8 @@ private:
   void gotoScene(int s, UiCtx &ui);
   void drawMenu(UiCtx &ui);
   void drawScreensaver(UiCtx &ui);
+  void drawColorEditor(UiCtx &ui);
+  void editLoadRole(); /* pull the focused role's RGB out of the live palette */
   void menuAction(UiCtx &ui);
   int denActionSel(UiCtx &ui) const;
   bool alertActive(UiCtx &ui) const;
@@ -69,6 +71,13 @@ private:
   unsigned long lastCarousel_ = 0;
   unsigned long lastInput_ = 0;
   bool dimmed_ = false;
+
+  /* on-device colour editor (10 roles x R/G/B, saves to a theme slot) */
+  bool editMode_ = false;
+  int editRole_ = 0;       /* 0..9 colour role under the cursor */
+  bool editChan_ = false;  /* false = choosing a role, true = tuning channels */
+  int editCh_ = 0;         /* 0=R 1=G 2=B */
+  int editR_ = 0, editG_ = 0, editB_ = 0; /* focused role's working channels */
 };
 
 #endif

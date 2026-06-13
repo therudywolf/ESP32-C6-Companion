@@ -225,24 +225,46 @@ void PetBrain::tick(unsigned long now, AppState &st) {
   }
 
   /* 4) telemetry edges */
-  if (st.alertActive && !lastAlert_)
-    trigger("alert", "у хозяина перегрев железа, кричи тревогу", now, st,
-            true);
+  if (st.alertActive && !lastAlert_) {
+    /* name the hottest component so the wolf is specific, not generic */
+    String which = "железо греется";
+    if (st.hw.gt >= 80)
+      which = "видеокарта раскалилась до " + String(st.hw.gt) + " градусов";
+    else if (st.hw.ct >= 85)
+      which = "процессор раскалился до " + String(st.hw.ct) + " градусов";
+    else if (st.hw.gl >= 95)
+      which = "видеокарта пашет на " + String(st.hw.gl) + " процентов";
+    else if (st.hw.cl >= 95)
+      which = "процессор загружен на " + String(st.hw.cl) + " процентов";
+    String ev = "тревога у хозяина: " + which + " — кричи";
+    trigger("alert", ev.c_str(), now, st, true);
+  }
   lastAlert_ = st.alertActive;
 
-  if (st.events.top[0] && strncmp(st.events.top, lastEventTop_, 20) != 0) {
-    if (seenFirstPayload_)
-      trigger("event", "на серверах хозяина новое предупреждение", now, st,
-              false);
-    strncpy(lastEventTop_, st.events.top, 20);
-    lastEventTop_[20] = '\0';
+  /* server events: react ONCE per distinct alert (severity+text), never loop
+   * on a persistent one (the old 20-char string compare re-fired every
+   * cooldown — that was the "циклится на одних и тех же алертах" bug). */
+  if (st.events.count > 0 && st.events.top[0]) {
+    String sig = String(st.events.severity) + "|" + st.events.top;
+    if (sig != lastAlertSig_) {
+      if (seenFirstPayload_ && lastAlertSig_.length()) {
+        String ev = "новое событие на сервере: " + String(st.events.top) +
+                    " (" + st.events.severity + ") — отреагируй";
+        trigger("event", ev.c_str(), now, st, false);
+      }
+      lastAlertSig_ = sig;
+    }
+  } else {
+    lastAlertSig_ = ""; /* cleared → a returning alert counts as new */
   }
 
   if (st.media.track.length() && st.media.isPlaying &&
       st.media.track != lastTrack_) {
-    if (seenFirstPayload_ && lastTrack_.length())
-      trigger("media", "хозяин включил новый трек, оцени его", now, st,
-              false);
+    if (seenFirstPayload_ && lastTrack_.length()) {
+      String ev = "хозяин включил трек: " + st.media.artist + " — " +
+                  st.media.track + " — оцени";
+      trigger("media", ev.c_str(), now, st, false);
+    }
     lastTrack_ = st.media.track;
   }
 
@@ -344,14 +366,32 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     nextIdleChatter_ = now + NOCT_LLM_IDLE_CHATTER_MIN_MS +
                        random(NOCT_LLM_IDLE_CHATTER_RND_MS);
     if (pet_->isAlive() && !pet_->isSleeping()) {
-      static const char *angles[] = {
-          "просто скажи что-нибудь от скуки",
-          "прокомментируй, что сейчас творится на пк хозяина",
-          "оцени температуру и нагрузку железа по-своему",
-          "расскажи короткую волчью мудрость про технологии",
-          "пошути про то, что видишь в телеметрии",
-      };
-      trigger("idle", angles[random(5)], now, st, false);
+      /* ground the idle remark in whatever is actually happening right now, so
+       * the wolf names a real track / app / metric instead of vague chitchat */
+      String angle;
+      if (st.media.isPlaying && st.media.track.length())
+        angle = "под музыку «" + st.media.track + "» от " + st.media.artist +
+                " — скажи пару слов";
+      else if (st.events.count > 0 && st.events.top[0])
+        angle = "глянь на событие сервера: " + String(st.events.top) +
+                " — что думаешь";
+      else if (st.hw.gl >= 50)
+        angle = "видеокарта хозяина занята на " + String(st.hw.gl) +
+                " процентов — прокомментируй чем";
+      else if (st.process.cpuNames[0].length())
+        angle = "хозяин сейчас сидит в «" + st.process.cpuNames[0] +
+                "» — подколи или похвали";
+      else if (st.weatherReceived)
+        angle = "за окном " + String(st.weather.temp) +
+                " градусов — свяжи с настроением";
+      else {
+        static const char *fb[] = {
+            "скажи короткую волчью мудрость про технологии",
+            "пошути, что хозяина давно не видно за компьютером",
+        };
+        angle = fb[random(2)];
+      }
+      trigger("idle", angle.c_str(), now, st, false);
     }
   }
 }

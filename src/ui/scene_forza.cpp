@@ -62,8 +62,14 @@ void drawForza(UiCtx &ui) {
     g.setFont(&F_TEXT);
     textCenter(g, NOCT_W / 2, 122, "Forza: HUD > Data Out > IP устройства:",
                DIM);
-    snprintf(v, sizeof(v), "%s : %d", WiFi.localIP().toString().c_str(),
-             NOCT_FORZA_UDP_PORT);
+    /* cache the IP string — localIP().toString() allocates every frame */
+    static String ipCache;
+    static unsigned long ipAt = 0;
+    if (!ipCache.length() || ui.now - ipAt > 2000) {
+      ipCache = WiFi.localIP().toString();
+      ipAt = ui.now;
+    }
+    snprintf(v, sizeof(v), "%s : %d", ipCache.c_str(), NOCT_FORZA_UDP_PORT);
     g.setFont(&F_MED);
     textCenter(g, NOCT_W / 2, 140, v, INFO);
     return;

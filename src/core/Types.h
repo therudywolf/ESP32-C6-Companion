@@ -128,8 +128,13 @@ struct Settings {
   int themePreset = 0;           /* "theme"    palette preset index */
   int bgStyle = 1;               /* "bgStyle"  0 solid/1 anim/2 grid */
   bool bgLight = false;          /* "bgLight"  light/white background */
-  uint16_t custom[10] = {0};     /* "custom"   hand-tuned palette (RGB565) */
+  uint16_t custom[10] = {0};     /* "custom"   live hand-tuned palette (RGB565) */
   bool customActive = false;     /* "customOn" use custom palette, not preset */
+  /* On-device saved themes: 3 slots the colour editor writes to and the
+   * "Слот" menu item cycles between. */
+  uint16_t slot[3][10] = {{0}};  /* "slot0/1/2" saved palettes */
+  bool slotUsed[3] = {false, false, false}; /* "slotU0/1/2" */
+  int activeSlot = 0;            /* "aslot"    slot the editor saves into */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */

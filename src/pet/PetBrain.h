@@ -65,7 +65,7 @@ private:
   bool lowEnergyFired_ = false;
   bool lowHappyFired_ = false;
   bool claudeFired_ = false;
-  char lastEventTop_[21] = {0};
+  String lastAlertSig_; /* severity|top of the last commented server event */
   String lastTrack_;
   int lastWmo_ = -999;
   bool seenFirstPayload_ = false;

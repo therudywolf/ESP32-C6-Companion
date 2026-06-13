@@ -294,7 +294,13 @@ void loop() {
              now,        &forza.state(), forzaLive, &histories};
     sceneMgr.draw(ui);
     display.push();
-    sd.flush(); /* queued SD writes ride the same task, after the push */
+    /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
+     * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
+    static unsigned long lastFlush = 0;
+    if (now - lastFlush > 500) {
+      sd.flush();
+      lastFlush = now;
+    }
 
     static unsigned long lastHeapLog = 0;
     unsigned long logEvery = now < 120000 ? 10000 : 60000;
