@@ -179,13 +179,16 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     denModeAt_ = ui.now;
     switch (ev) {
     case EV_SHORT:
-      denSel_ = (denSel_ + 1) % 3;
+      denSel_ = (denSel_ + 1) % WolfPet::ACT_COUNT;
       break;
     case EV_LONG: {
       ui.pet.doAction(denSel_);
       ui.brain.onAction(denSel_);
       d_.led->setMode(StatusLed::BLIP_OK);
-      toast(denSel_ == 0 ? "ням-ням!" : denSel_ == 1 ? "поиграли!" : "...");
+      toast(denSel_ == 0   ? "ням-ням!"
+            : denSel_ == 1 ? "поиграли!"
+            : denSel_ == 2 ? "мур-р-р..."
+                           : "...");
       denActionMode_ = false;
       break;
     }

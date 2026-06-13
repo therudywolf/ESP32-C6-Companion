@@ -139,6 +139,9 @@ void PetBrain::onAction(int action) {
   case WolfPet::ACT_PLAY:
     diary("играл");
     break;
+  case WolfPet::ACT_PET:
+    diary("гладил");
+    break;
   case WolfPet::ACT_TALK:
     diary("поговорил");
     break;
@@ -189,6 +192,9 @@ void PetBrain::tick(unsigned long now, AppState &st) {
       trigger("fed", "хозяин только что покормил тебя", now, st, true);
     } else if (a == WolfPet::ACT_PLAY) {
       trigger("played", "хозяин только что поиграл с тобой", now, st, true);
+    } else if (a == WolfPet::ACT_PET) {
+      trigger("pet", "хозяин ласково тебя гладит, ответь по-волчьи", now, st,
+              true);
     } else {
       /* explicit TALK: the owner asked the AI directly — force the LLM */
       trigger("talk", "хозяин просит тебя что-нибудь сказать", now, st, true,

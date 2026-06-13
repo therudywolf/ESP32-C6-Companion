@@ -94,6 +94,9 @@ void WolfPet::doAction(int action) {
     hunger_ -= 5;
     sleeping_ = false; /* playing wakes it */
     break;
+  case ACT_PET:
+    happy_ += 12; /* a gentle stroke lifts the mood; doesn't wake or feed */
+    break;
   case ACT_TALK:
     /* no stat change — speech is PetBrain's job */
     break;

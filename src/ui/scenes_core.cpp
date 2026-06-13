@@ -104,13 +104,18 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   if (rAt && now - rAt < 1500) {
     float t = (float)(now - rAt) / 1500.0f;
     int kind = ui.brain.reactionKind();
-    uint16_t pc = kind == 0 ? CRIT : (kind == 1 ? ACCENT : INFO);
+    /* 0 feed=red heart, 1 play=spark, 2 pet=pink heart, 3 talk=note */
+    uint16_t pc = kind == 0   ? CRIT
+                  : kind == 1 ? ACCENT
+                  : kind == 2 ? rgb(255, 120, 180)
+                              : INFO;
+    bool heart = (kind == 0 || kind == 2);
     for (int i = 0; i < 7 && t <= 0.92f; i++) {
       int px = wx + 30 + (int)(sinf(i * 0.9f + t * 3.0f) * 18);
       int py = wy + 24 - (int)(t * (46 + (i % 3) * 8));
       if (py < 22) continue;
       int sz = (int)((1.0f - t) * 3) + 1;
-      if (kind == 0) { /* heart */
+      if (heart) {
         g.fillCircle(px - 1, py, sz, pc);
         g.fillCircle(px + 1, py, sz, pc);
         g.fillTriangle(px - sz - 1, py, px + sz + 1, py, px, py + sz + 2, pc);
@@ -206,11 +211,12 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
     textAt(g, 10, 100, "ВЫБЕРИ ДЕЙСТВИЕ:", ORANGE);
   }
 
-  /* action chips — big and obvious; selector frame blinks in action mode */
-  static const char *names[] = {"КОРМИТЬ", "ИГРАТЬ", "ГОВОРИТЬ"};
+  /* action chips — big and obvious; selector frame blinks in action mode.
+   * Short imperatives so all four fit one row: feed/play/pet/talk. */
+  static const char *names[] = {"КОРМИ", "ИГРАЙ", "ГЛАДЬ", "ГОВОРИ"};
   int cx = 10;
   g.setFont(&F_MED);
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < WolfPet::ACT_COUNT; i++) {
     int cw = g.textWidth(names[i]) + 14;
     bool sel = (i == actionSel);
     if (sel && actionMode) {

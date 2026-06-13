@@ -214,6 +214,7 @@ void loop() {
     if (state.rcAction.length()) {
       int a = state.rcAction == "feed"  ? WolfPet::ACT_FEED
               : state.rcAction == "play" ? WolfPet::ACT_PLAY
+              : state.rcAction == "pet"  ? WolfPet::ACT_PET
                                          : WolfPet::ACT_TALK;
       pet.doAction(a);
       brain.onAction(a);
