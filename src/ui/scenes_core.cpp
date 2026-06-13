@@ -227,6 +227,17 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
     }
     cx += cw + 7;
   }
+
+  /* freed bottom band: wolf age + device uptime (hidden in the action menu) */
+  if (!actionMode) {
+    g.setFont(&F_TEXT);
+    g.setTextSize(1);
+    char vb[48];
+    unsigned long upm = now / 60000UL;
+    snprintf(vb, sizeof(vb), "возраст %d дн   ·   в сети %luч %02luм",
+             ui.pet.ageDays(), upm / 60, upm % 60);
+    textAt(g, 10, 160, vb, DIM);
+  }
 }
 
 /* ── DASH — 2x2 overview ─────────────────────────────────────────────── */
@@ -298,6 +309,17 @@ void drawDash(UiCtx &ui) {
   g.setTextSize(1);
   snprintf(v, sizeof(v), "%dms", hw.pg);
   textRight(g, t[3].x + t[3].w - 8, t[3].y + 8, v, DIM);
+  g.setTextSize(1);
+
+  /* freed bottom band: total power draw + hottest component */
+  g.drawFastHLine(4, 154, NOCT_W - 8, ORANGE_DIM);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
+  snprintf(v, sizeof(v), "питание %d Вт", hw.pw);
+  textAt(g, 6, 155, v, INFO);
+  int peak = hw.ct > hw.gt ? hw.ct : hw.gt;
+  snprintf(v, sizeof(v), "пик %d C", peak);
+  textRight(g, NOCT_W - 6, 155, v, tempColor(peak, 75, 85));
   g.setTextSize(1);
 }
 

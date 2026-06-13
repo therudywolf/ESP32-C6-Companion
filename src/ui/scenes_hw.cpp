@@ -77,17 +77,18 @@ void drawCpu(UiCtx &ui) {
   snprintf(v, sizeof(v), "%d", hw.pw);
   bigVal(g, 308, 86, v, "W", TEXT, true);
 
-  panel(g, 4, 120, 312, 30, "ТОП ПРОЦЕСС / ТАКТ");
-  if (ui.st.process.cpuNames[0].length()) {
-    g.setFont(&F_MED);
-    g.setTextSize(1);
-    snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[0].c_str(),
-             ui.st.process.cpuPercent[0]);
-    textAt(g, 12, 128, v, TEXT);
-    g.setTextSize(1);
+  /* grown into the freed bottom band: top-2 CPU processes + clock */
+  panel(g, 4, 120, 312, 48, "ТОП ПРОЦЕССЫ / ТАКТ");
+  g.setFont(&F_MED);
+  g.setTextSize(1);
+  for (int i = 0; i < 2; i++) {
+    if (!ui.st.process.cpuNames[i].length()) continue;
+    snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[i].c_str(),
+             ui.st.process.cpuPercent[i]);
+    textAt(g, 12, 128 + i * 20, v, i == 0 ? TEXT : DIM);
   }
   snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
-  bigVal(g, 306, 124, v, "GHz", INFO, true);
+  bigVal(g, 306, 132, v, "GHz", INFO, true);
 }
 
 void drawGpu(UiCtx &ui) {
@@ -115,13 +116,18 @@ void drawGpu(UiCtx &ui) {
   g.setTextSize(1);
   hBar(g, 252, 90, 56, 14, hw.gv, pctColor(hw.gv));
 
-  panel(g, 4, 120, 312, 30, "ТАКТ / ПИТАНИЕ / ГОР.ТОЧКА");
+  /* grown into the freed bottom band: clock/power/hotspot + fan & mem clock */
+  panel(g, 4, 120, 312, 48, "ТАКТ / ПИТАНИЕ / ГОР.ТОЧКА");
   snprintf(v, sizeof(v), "%d", hw.gclock);
   bigVal(g, 14, 124, v, "MHz", TEXT);
   snprintf(v, sizeof(v), "%d", hw.gtdp);
   bigVal(g, 178, 124, v, "W", TEXT);
   snprintf(v, sizeof(v), "%d", hw.gh);
   bigVal(g, 306, 124, v, "C", tempColor(hw.gh, 85, 95), true);
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  snprintf(v, sizeof(v), "кулер %d RPM      память %d MHz", hw.gf, hw.vclock);
+  textAt(g, 14, 153, v, DIM);
 }
 
 void drawRam(UiCtx &ui) {
@@ -150,16 +156,22 @@ void drawRam(UiCtx &ui) {
   g.setTextSize(1);
   hBar(g, 230, 70, 76, 18, rpct, pctColor(rpct));
 
-  panel(g, 4, 108, 312, 42, "ТОП ПО ПАМЯТИ");
+  /* grown into the freed bottom band: top-2 processes + free memory */
+  panel(g, 4, 108, 312, 58, "ТОП ПО ПАМЯТИ / СВОБОДНО");
   g.setFont(&F_MED);
   for (int i = 0; i < 2; i++) {
     if (ui.st.process.ramNames[i].length() == 0) continue;
-    int y = 110 + i * 20;
+    int y = 112 + i * 18;
     snprintf(v, sizeof(v), "%.14s", ui.st.process.ramNames[i].c_str());
     textAt(g, 12, y, v, i == 0 ? TEXT : DIM);
     snprintf(v, sizeof(v), "%d МБ", ui.st.process.ramMb[i]);
     textRight(g, 306, y, v, INFO);
   }
+  float freeGb = hw.ra - hw.ru;
+  if (freeGb < 0) freeGb = 0;
+  g.setFont(&F_TEXT);
+  snprintf(v, sizeof(v), "свободно %.1f ГБ из %.0f", freeGb, hw.ra);
+  textAt(g, 12, 152, v, GOOD);
 }
 
 void drawDisks(UiCtx &ui) {
@@ -208,12 +220,15 @@ void drawFans(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   HardwareData &hw = ui.st.hw;
   static const char *names[] = {"CPU", "ПОМПА", "GPU", "КОРПУС"};
-  char v[16];
+  char v[40];
 
+  int sum = 0, mx = 0;
   for (int i = 0; i < NOCT_FAN_COUNT; i++) {
     int x = 10 + i * 78;
     int rpm = hw.fans[i];
     int pct = hw.fan_controls[i];
+    sum += pct;
+    if (pct > mx) mx = pct;
     int barPct = rpm * 100 / 2200;
     if (barPct > 100) barPct = 100;
     vBar(g, x + 16, 28, 30, 68, barPct, rpm > 0 ? GOOD : PANEL);
@@ -228,6 +243,14 @@ void drawFans(UiCtx &ui) {
     textCenter(g, x + 31, 136, v, ORANGE);
     g.setTextSize(1);
   }
+
+  /* summary across the freed bottom band */
+  g.drawFastHLine(8, 152, NOCT_W - 16, ORANGE_DIM);
+  g.setFont(&F_MED);
+  g.setTextSize(1);
+  snprintf(v, sizeof(v), "среднее %d%%      максимум %d%%",
+           sum / NOCT_FAN_COUNT, mx);
+  textCenter(g, NOCT_W / 2, 154, v, ORANGE);
 }
 
 void drawMb(UiCtx &ui) {
