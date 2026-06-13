@@ -234,7 +234,7 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
     g.setTextSize(1);
     char vb[48];
     unsigned long upm = now / 60000UL;
-    snprintf(vb, sizeof(vb), "возраст %d дн   ·   в сети %luч %02luм",
+    snprintf(vb, sizeof(vb), "возраст %d дн     в сети %luч %02luм",
              ui.pet.ageDays(), upm / 60, upm % 60);
     textAt(g, 10, 160, vb, DIM);
   }
