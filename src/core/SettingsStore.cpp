@@ -43,7 +43,8 @@ void save(const Settings &s) {
   p.putBool("led", s.ledEnabled);
   p.putBool("carousel", s.carouselEnabled);
   p.putInt("carouselSec", s.carouselIntervalSec);
-  p.putInt("bright", s.brightness);
+  p.putInt("bright", s.brightness > NOCT_BRIGHT_MAX ? NOCT_BRIGHT_MAX
+                                                    : s.brightness);
   p.putInt("dispTimeout", s.displayTimeoutSec);
   p.putInt("pinScene", s.pinnedScene);
   p.putInt("netSel", s.netSel);

@@ -53,7 +53,7 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
     } else {
       c += "Компьютер хозяина работает спокойно, нагрузки умеренные. ";
     }
-    if (st.events.count > 0) {
+    if (st.events.count > 0 && st.events.top[0]) {
       c += "На серверах хозяина есть предупреждение: ";
       c += st.events.top;
       c += ". ";
