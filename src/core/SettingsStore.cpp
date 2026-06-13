@@ -31,6 +31,7 @@ void load(Settings &s) {
   p.getBytes("slot0", s.slot[0], sizeof(s.slot[0]));
   p.getBytes("slot1", s.slot[1], sizeof(s.slot[1]));
   p.getBytes("slot2", s.slot[2], sizeof(s.slot[2]));
+  s.sceneMask = p.getUInt("scnMask", 0xFFFFFFFFu) | 1u; /* DEN always on */
   p.end();
   if (s.brightness < 30) s.brightness = 30;
   if (s.brightness > NOCT_BRIGHT_MAX) s.brightness = NOCT_BRIGHT_MAX;
@@ -60,6 +61,7 @@ void save(const Settings &s) {
   p.putBytes("slot0", s.slot[0], sizeof(s.slot[0]));
   p.putBytes("slot1", s.slot[1], sizeof(s.slot[1]));
   p.putBytes("slot2", s.slot[2], sizeof(s.slot[2]));
+  p.putUInt("scnMask", s.sceneMask | 1u);
   p.end();
 }
 

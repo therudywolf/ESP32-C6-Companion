@@ -130,6 +130,8 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
 
 void PetBrain::onAction(int action) {
   unsigned long now = millis();
+  reactionKind_ = action; /* drives the DEN particle burst */
+  reactionAt_ = now;
   switch (action) {
   case WolfPet::ACT_FEED:
     diary("кормил");

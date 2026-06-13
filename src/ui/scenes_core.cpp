@@ -1,4 +1,6 @@
 /* Nocturne C6 — scenes: titles, DEN (home), DASH. */
+#include <math.h>
+
 #include "core/config.h"
 #include "pet/wolf_sprites.h"
 #include "ui/Scenes.h"
@@ -79,14 +81,48 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   LGFX_Sprite &g = ui.g;
   unsigned long now = ui.now;
 
-  /* wolf, 2x chunky pixels; breathing offset when idle */
+  /* ambient embers drifting up the den — subtle life, kept to the wolf's side */
+  for (int i = 0; i < 4; i++) {
+    int ex = 16 + (i * 47 + (int)(now / 70)) % 188;
+    int ey = NOCT_H - 3 - (int)((now / 28 + i * 900) % 140);
+    g.drawPixel(ex, ey, lerp565(BG, INFO, 26 + (i % 3) * 14));
+  }
+
+  /* wolf, 2x chunky pixels; breathing offset when idle, hop on a fresh action */
+  unsigned long rAt = ui.brain.reactionAt();
   int wx = 14, wy = 38;
   if (!ui.pet.isSleeping() && ui.pet.isAlive())
     wy += ((now % 2400) < 1200) ? 0 : 1;
+  if (rAt && now - rAt < 450)
+    wy -= (int)(sinf((float)(now - rAt) / 450.0f * 3.14159f) * 6.0f);
   uint16_t wc = !ui.pet.isAlive() ? DIM
                 : ui.st.alertActive ? CRIT
                                     : ORANGE;
   xbmScaled(g, wx, wy, wolfFrame(ui), WOLF_SPR_W, WOLF_SPR_H, 2, wc);
+
+  /* reaction burst: hearts (feed) / sparks (play) / notes (talk) float up */
+  if (rAt && now - rAt < 1500) {
+    float t = (float)(now - rAt) / 1500.0f;
+    int kind = ui.brain.reactionKind();
+    uint16_t pc = kind == 0 ? CRIT : (kind == 1 ? ACCENT : INFO);
+    for (int i = 0; i < 7 && t <= 0.92f; i++) {
+      int px = wx + 30 + (int)(sinf(i * 0.9f + t * 3.0f) * 18);
+      int py = wy + 24 - (int)(t * (46 + (i % 3) * 8));
+      if (py < 22) continue;
+      int sz = (int)((1.0f - t) * 3) + 1;
+      if (kind == 0) { /* heart */
+        g.fillCircle(px - 1, py, sz, pc);
+        g.fillCircle(px + 1, py, sz, pc);
+        g.fillTriangle(px - sz - 1, py, px + sz + 1, py, px, py + sz + 2, pc);
+      } else if (kind == 1) { /* spark */
+        g.drawFastHLine(px - sz - 1, py, 2 * sz + 3, pc);
+        g.drawFastVLine(px, py - sz - 1, 2 * sz + 3, pc);
+      } else { /* music note */
+        g.fillCircle(px, py + 2, sz, pc);
+        g.drawFastVLine(px + sz, py - sz - 2, sz + 4, pc);
+      }
+    }
+  }
 
   /* tech bracket around the wolf — corners pulse in sequence (scanning HUD) */
   int bx = wx - 6, by = wy - 6, bs = 76;

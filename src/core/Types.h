@@ -135,6 +135,9 @@ struct Settings {
   uint16_t slot[3][10] = {{0}};  /* "slot0/1/2" saved palettes */
   bool slotUsed[3] = {false, false, false}; /* "slotU0/1/2" */
   int activeSlot = 0;            /* "aslot"    slot the editor saves into */
+  /* Which scenes appear in the nav ring / carousel (bit i = SceneId i). DEN
+   * (bit 0) is forced on. Default: everything visible. */
+  uint32_t sceneMask = 0xFFFFFFFFu; /* "scnMask" */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
@@ -188,6 +191,7 @@ struct AppState {
   int rcTimeout = -1;            /* 0/30/60 dim sec, -1 = none */
   int rcBgStyle = -1;            /* 0/1/2, -1 = none */
   int rcBgLight = -1;            /* 0/1, -1 = none */
+  long rcSceneMask = -1;         /* visible-scene bitmask, -1 = none */
   int rcColorRole = -1;         /* single-role edit: role 0..9, -1 = none */
   int rcColorR = 0, rcColorG = 0, rcColorB = 0;
   bool rcHasPalette = false;    /* full 10-role palette in rcPalette */
