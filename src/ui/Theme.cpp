@@ -105,6 +105,22 @@ static uint16_t scale565(uint16_t c, int num, int den) {
   return (uint16_t)((r << 11) | (g << 5) | b);
 }
 
+/* Push a colour away from its own grey (saturation boost). pct>100 = more
+ * vivid. Counteracts RGB565 mid-tone dullness without raising the backlight. */
+static uint16_t saturate(uint16_t c, int pct) {
+  int r = ((c >> 11) & 0x1F) * 255 / 31;
+  int g = ((c >> 5) & 0x3F) * 255 / 63;
+  int b = (c & 0x1F) * 255 / 31;
+  int gray = (r * 30 + g * 59 + b * 11) / 100;
+  r = gray + (r - gray) * pct / 100;
+  g = gray + (g - gray) * pct / 100;
+  b = gray + (b - gray) * pct / 100;
+  r = r < 0 ? 0 : (r > 255 ? 255 : r);
+  g = g < 0 ? 0 : (g > 255 ? 255 : g);
+  b = b < 0 ? 0 : (b > 255 ? 255 : b);
+  return rgb((uint8_t)r, (uint8_t)g, (uint8_t)b);
+}
+
 /* Recompute BG/PANEL/TEXT family + darken accents for light mode. */
 static void applyBgLight() {
   if (!bgLight) return;
@@ -137,6 +153,18 @@ void applyPreset(int idx) {
   CRIT = p.crit;
   INFO = p.info;
   ACCENT = p.accent;
+  /* dark mode: boost chroma so colours read vivid even at the safe (sub-max)
+   * backlight. Light mode darkens instead (applyBgLight). Structural roles
+   * (BG/TEXT/DIM/PANEL) are left alone. */
+  if (!bgLight) {
+    ORANGE = saturate(ORANGE, 122);
+    ORANGE_DIM = dimmer(ORANGE);
+    GOOD = saturate(GOOD, 122);
+    WARN = saturate(WARN, 122);
+    CRIT = saturate(CRIT, 122);
+    INFO = saturate(INFO, 122);
+    ACCENT = saturate(ACCENT, 122);
+  }
   applyBgLight();
 }
 
@@ -194,21 +222,22 @@ void backdrop(LGFX_Sprite &g, int y0, int y1) {
   if (bgStyle == 0) return; /* solid background, no texture */
   uint16_t tint = bgLight ? DIM : INFO;
   if (bgStyle == 1) {
-    /* faint horizontal scanlines + a soft sweeping sheen */
-    uint16_t sl = lerp565(BG, tint, bgLight ? 22 : 8);
+    /* faint horizontal scanlines + a soft sweeping sheen (kept light so the
+     * scene stays punchy, not washed) */
+    uint16_t sl = lerp565(BG, tint, bgLight ? 14 : 5);
     for (int y = y0; y < y1; y += 4) g.drawFastHLine(0, y, 320, sl);
     int sx = (int)((nowMs / 11) % (320 + 90)) - 45;
     for (int dx = -7; dx <= 7; dx++) {
       int xx = sx + dx;
       if (xx < 0 || xx >= 320) continue;
-      int a = 22 - (dx < 0 ? -dx : dx) * 3;
+      int a = 14 - (dx < 0 ? -dx : dx) * 2;
       if (a > 0)
         g.drawFastVLine(xx, y0, y1 - y0,
                         lerp565(BG, bgLight ? rgb(0, 0, 0) : TEXT, a));
     }
   } else {
     /* drifting dot grid */
-    uint16_t dot = lerp565(BG, tint, bgLight ? 40 : 18);
+    uint16_t dot = lerp565(BG, tint, bgLight ? 28 : 12);
     int ox = (int)((nowMs / 90) % 18), oy = (int)((nowMs / 130) % 18);
     for (int y = y0 + oy; y < y1; y += 18)
       for (int x = ox; x < 320; x += 18) g.drawPixel(x, y, dot);

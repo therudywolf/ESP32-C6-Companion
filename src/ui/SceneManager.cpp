@@ -58,8 +58,78 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     return;
   }
 
+  /* on-device colour editor: role list ↔ R/G/B tuning, save to the active slot */
+  if (editMode_) {
+    Settings &s = ui.st.settings;
+    if (!editChan_) {
+      switch (ev) {
+      case EV_SHORT:
+        editRole_ = (editRole_ + 1) % theme::COLOR_ROLES;
+        editLoadRole();
+        break;
+      case EV_LONG:
+        editChan_ = true;
+        editCh_ = 0;
+        break;
+      case EV_DOUBLE: /* save to slot + persist + exit */
+        theme::getPalette(s.custom);
+        memcpy(s.slot[s.activeSlot], s.custom, sizeof(s.custom));
+        s.slotUsed[s.activeSlot] = true;
+        s.customActive = true;
+        settings::save(s);
+        editMode_ = false;
+        {
+          char t[24];
+          snprintf(t, sizeof(t), "сохранено: слот %d", s.activeSlot + 1);
+          toast(t);
+        }
+        break;
+      case EV_TRIPLE: /* leave without naming a slot (live palette kept) */
+        theme::getPalette(s.custom);
+        s.customActive = true;
+        settings::save(s);
+        editMode_ = false;
+        toast("готово");
+        break;
+      default:
+        break;
+      }
+    } else {
+      switch (ev) {
+      case EV_SHORT: { /* bump the active channel in 32-steps, hit 255, wrap */
+        int *ch = editCh_ == 0 ? &editR_ : editCh_ == 1 ? &editG_ : &editB_;
+        if (*ch >= 255)
+          *ch = 0;
+        else
+          *ch = (*ch + 32 > 255) ? 255 : *ch + 32;
+        theme::setColorRole(editRole_, editR_, editG_, editB_);
+        break;
+      }
+      case EV_LONG: /* next channel; after B, back to the role list */
+        if (++editCh_ > 2) {
+          editCh_ = 0;
+          editChan_ = false;
+        }
+        break;
+      case EV_DOUBLE:
+        editChan_ = false; /* back to the role list */
+        break;
+      case EV_TRIPLE:
+        theme::getPalette(s.custom);
+        s.customActive = true;
+        settings::save(s);
+        editMode_ = false;
+        toast("готово");
+        break;
+      default:
+        break;
+      }
+    }
+    return;
+  }
+
   if (menuOpen_) {
-    const int kMenuItems = 12;
+    const int kMenuItems = 14;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -152,9 +222,9 @@ void SceneManager::menuAction(UiCtx &ui) {
     }
     break;
   }
-  case 1: /* brightness */
-    s.brightness += 51;
-    if (s.brightness > 255) s.brightness = 51;
+  case 1: /* brightness — steps 50/90/130/170/210, capped under the thermal cliff */
+    s.brightness += 40;
+    if (s.brightness > NOCT_BRIGHT_MAX) s.brightness = 50;
     d_.disp->setBrightness(s.brightness);
     break;
   case 2: /* LED */
@@ -190,15 +260,40 @@ void SceneManager::menuAction(UiCtx &ui) {
     theme::setBgLight(s.bgLight);
     toast(s.bgLight ? "светлый фон" : "тёмный фон");
     break;
-  case 9: /* Forza HUD (manual open — it also auto-enters on telemetry) */
+  case 9: { /* theme slot — cycle 1→2→3, load that saved palette if it exists */
+    s.activeSlot = (s.activeSlot + 1) % 3;
+    if (s.slotUsed[s.activeSlot]) {
+      memcpy(s.custom, s.slot[s.activeSlot], sizeof(s.custom));
+      s.customActive = true;
+      theme::applyPalette(s.custom);
+      theme::setBgLight(s.bgLight);
+      char t[24];
+      snprintf(t, sizeof(t), "слот %d", s.activeSlot + 1);
+      toast(t);
+    } else {
+      char t[24];
+      snprintf(t, sizeof(t), "слот %d (пусто)", s.activeSlot + 1);
+      toast(t);
+    }
+    break;
+  }
+  case 10: /* on-device colour editor */
+    menuOpen_ = false;
+    editMode_ = true;
+    editRole_ = 0;
+    editChan_ = false;
+    editLoadRole();
+    toast("редактор цвета");
+    break;
+  case 11: /* Forza HUD (manual open — it also auto-enters on telemetry) */
     menuOpen_ = false;
     gotoScene(SCENE_FORZA, ui);
     break;
-  case 10: /* sysinfo */
+  case 12: /* sysinfo */
     sysInfo_ = true;
     menuOpen_ = false;
     break;
-  case 11: /* close */
+  case 13: /* close */
     menuOpen_ = false;
     break;
   }
@@ -212,7 +307,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[12][20];
+  char val[14][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -225,20 +320,23 @@ void SceneManager::drawMenu(UiCtx &ui) {
   else
     snprintf(val[4], 20, "%.10s", d_.wifiNames[s.netSel]);
   snprintf(val[5], 20, "%s", s.flipped ? "180" : "0");
-  snprintf(val[6], 20, "%.10s", theme::presetName(s.themePreset));
+  snprintf(val[6], 20, "%s", s.customActive ? "своя" : theme::presetName(s.themePreset));
   snprintf(val[7], 20, "%s", theme::bgStyleName(s.bgStyle));
   snprintf(val[8], 20, "%s", s.bgLight ? "светлый" : "тёмный");
-  val[9][0] = '\0';
+  snprintf(val[9], 20, "#%d%s", s.activeSlot + 1,
+           s.slotUsed[s.activeSlot] ? "" : " нов");
   val[10][0] = '\0';
   val[11][0] = '\0';
+  val[12][0] = '\0';
+  val[13][0] = '\0';
 
-  static const char *names[] = {"Карусель",  "Яркость",      "LED",
-                                "Волк LLM",  "WiFi",         "Переворот",
-                                "Тема",      "Фон",          "Светлый фон",
-                                "Forza HUD", "Инфо системы",
-                                "Закрыть"};
+  static const char *names[] = {
+      "Карусель",   "Яркость",        "LED",        "Волк LLM",
+      "WiFi",       "Переворот",       "Тема",       "Фон",
+      "Светлый фон", "Слот темы",       "Цвета вручную", "Forza HUD",
+      "Инфо системы", "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 12, kVisible = 6, rowH = 22;
+  const int kRows = 14, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -258,6 +356,79 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(NOCT_W - 6, NOCT_CONTENT_TOP + 4, 3,
              NOCT_H - NOCT_CONTENT_TOP - 8, PANEL);
   g.fillRect(NOCT_W - 6, sbY, 3, sbH, ORANGE);
+}
+
+/* Pull the focused role's RGB (0..255) out of the live palette so the channel
+ * sliders start from the real current colour. */
+void SceneManager::editLoadRole() {
+  uint16_t pal[theme::COLOR_ROLES];
+  theme::getPalette(pal);
+  uint16_t c = pal[editRole_];
+  editR_ = ((c >> 11) & 0x1F) * 255 / 31;
+  editG_ = ((c >> 5) & 0x3F) * 255 / 63;
+  editB_ = (c & 0x1F) * 255 / 31;
+}
+
+/* On-device colour editor: 10-role swatch strip + R/G/B sliders, edits the live
+ * palette so the whole HUD recolours under your hands. Saves to a theme slot. */
+void SceneManager::drawColorEditor(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  Settings &s = ui.st.settings;
+  g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
+  g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
+
+  uint16_t pal[theme::COLOR_ROLES];
+  theme::getPalette(pal);
+
+  char ttl[32];
+  snprintf(ttl, sizeof(ttl), "РЕДАКТОР · СЛОТ %d", s.activeSlot + 1);
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  textAt(g, 8, 24, ttl, ORANGE);
+
+  /* swatch strip — all 10 roles, cursor box on the focused one */
+  for (int i = 0; i < theme::COLOR_ROLES; i++) {
+    int x = 6 + i * 31;
+    g.fillRect(x, 38, 28, 16, pal[i]);
+    g.drawRect(x, 38, 28, 16, ORANGE_DIM);
+    if (i == editRole_) {
+      g.drawRect(x - 2, 36, 32, 20, TEXT);
+      g.drawRect(x - 1, 37, 30, 18, TEXT);
+    }
+  }
+
+  /* focused role name + live colour chip */
+  g.setFont(&F_MED);
+  g.setTextSize(1);
+  char nm[24];
+  clipW(g, theme::roleName(editRole_), nm, sizeof(nm), 210);
+  textAt(g, 8, 60, nm, TEXT);
+  g.fillRect(236, 58, 76, 20, pal[editRole_]);
+  g.drawRect(236, 58, 76, 20, ORANGE_DIM);
+
+  /* three channel sliders */
+  const char *chName[3] = {"R", "G", "B"};
+  uint16_t chCol[3] = {rgb(255, 60, 60), rgb(60, 230, 90), rgb(80, 140, 255)};
+  int chVal[3] = {editR_, editG_, editB_};
+  for (int c = 0; c < 3; c++) {
+    int y = 84 + c * 22;
+    bool active = editChan_ && editCh_ == c;
+    if (active) g.fillTriangle(2, y + 1, 2, y + 13, 9, y + 7, ORANGE);
+    g.setFont(&F_MED);
+    textAt(g, 12, y - 2, chName[c], active ? ORANGE : DIM);
+    hBar(g, 30, y, 240, 14, chVal[c] * 100 / 255, chCol[c]);
+    char nv[8];
+    snprintf(nv, sizeof(nv), "%d", chVal[c]);
+    g.setFont(&F_TEXT);
+    textRight(g, 314, y + 2, nv, active ? ORANGE : DIM);
+  }
+
+  g.setFont(&F_TEXT);
+  if (!editChan_)
+    textAt(g, 8, 156, "1x далее · долго настроить · 2x сохранить · 3x выход",
+           DIM);
+  else
+    textAt(g, 8, 156, "1x +цвет · долго след.канал · 2x назад · 3x выход", DIM);
 }
 
 /* Ambient screensaver: drifting starfield + wandering wolf + big clock.
@@ -340,10 +511,11 @@ void SceneManager::draw(UiCtx &ui) {
     preForzaScene_ = -1;
   }
 
-  /* carousel — never while the Forza HUD is open */
-  if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !alertActive(ui) &&
-      scene_ != SCENE_FORZA &&
-      ui.now - lastInput_ > 5000 &&
+  /* carousel — never on the wolf's home (you're interacting there: feed/play),
+   * never inside his action submenu, never over the Forza HUD or a menu. */
+  if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !editMode_ &&
+      !alertActive(ui) && scene_ != SCENE_FORZA && scene_ != SCENE_DEN &&
+      !denActionMode_ && ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
     int next = scene_ + 1;
@@ -353,7 +525,8 @@ void SceneManager::draw(UiCtx &ui) {
 
   /* screensaver: after the dim timeout, dim a little and show the ambient
    * clock+wolf scene (not a black screen). Any input wakes it. */
-  if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive &&
+  if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive && !editMode_ &&
+      !menuOpen_ &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
     dimmed_ = true;
@@ -438,7 +611,7 @@ void SceneManager::draw(UiCtx &ui) {
    * SLIDES UP from the bottom over ANY scene, sits, then slides away. DEN
    * shows speech inline so it's skipped there. */
   if (ui.brain.bubbleVisible(ui.now) && effScene != SCENE_DEN && !menuOpen_ &&
-      !sysInfo_ && !ui.brain.thinking()) {
+      !sysInfo_ && !editMode_ && !ui.brain.thinking()) {
     const String &p = ui.brain.phrase();
     if (p.length()) {
       /* taller card resting in the lower-CENTRE (was jammed at the bottom
@@ -471,6 +644,7 @@ void SceneManager::draw(UiCtx &ui) {
 
   /* menu / sysinfo overlays */
   if (menuOpen_) drawMenu(ui);
+  if (editMode_) drawColorEditor(ui);
   if (sysInfo_) {
     g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_CONTENT_H, BG);
     scenes::drawSysInfo(ui);

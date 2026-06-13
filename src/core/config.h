@@ -55,7 +55,7 @@
 #define NOCT_LLM_TIMEOUT_MS 25000      /* JIT model load can take ~13 s cold */
 #define NOCT_LLM_COOLDOWN_MS 60000     /* min gap between speech requests */
 #define NOCT_LLM_MAX_TOKENS 800        /* reasoning (~300-450) + the reply */
-#define NOCT_LLM_REPLY_MAX 160         /* hard truncate, bytes (UTF-8) */
+#define NOCT_LLM_REPLY_MAX 200         /* hard truncate, bytes (UTF-8) */
 #define NOCT_LLM_IDLE_CHATTER_MIN_MS (20UL * 60UL * 1000UL)
 #define NOCT_LLM_IDLE_CHATTER_RND_MS (20UL * 60UL * 1000UL)
 
@@ -73,6 +73,9 @@
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 #define NOCT_SD_SPI_HZ 25000000
 #define NOCT_SCREENSAVER_DEFAULT_SEC 0 /* 0 = off */
-#define NOCT_VERSION "0.7.1"
+/* Backlight cap: at full PWM (255) this panel self-heats and the matrix blooms
+ * a black blob. 210 (~82%) is bright but stays well under the thermal cliff. */
+#define NOCT_BRIGHT_MAX 210
+#define NOCT_VERSION "0.8.0"
 
 #endif
