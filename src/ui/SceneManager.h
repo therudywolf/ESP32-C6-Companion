@@ -41,6 +41,9 @@ private:
   void drawScreensaver(UiCtx &ui);
   void drawColorEditor(UiCtx &ui);
   void editLoadRole(); /* pull the focused role's RGB out of the live palette */
+  void drawScenePicker(UiCtx &ui);
+  /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
+  int nextVisibleScene(int from, uint32_t mask, bool allowDen) const;
   void menuAction(UiCtx &ui);
   int denActionSel(UiCtx &ui) const;
   bool alertActive(UiCtx &ui) const;
@@ -78,6 +81,10 @@ private:
   bool editChan_ = false;  /* false = choosing a role, true = tuning channels */
   int editCh_ = 0;         /* 0=R 1=G 2=B */
   int editR_ = 0, editG_ = 0, editB_ = 0; /* focused role's working channels */
+
+  /* on-device screen-composition picker (which scenes are in the ring) */
+  bool scenePickMode_ = false;
+  int scenePickSel_ = SCENE_DASH; /* 1..SCENE_FORZA-1 */
 };
 
 #endif

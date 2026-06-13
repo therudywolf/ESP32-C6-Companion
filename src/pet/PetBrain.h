@@ -32,6 +32,9 @@ public:
   const String &phrase() const { return phrase_; }
   int revealChars(unsigned long now) const; /* typewriter, UTF-8 aware */
   bool talkingAnim(unsigned long now) const;
+  /* last user action for the DEN reaction burst: 0 feed,1 play,2 talk,-1 none */
+  int reactionKind() const { return reactionKind_; }
+  unsigned long reactionAt() const { return reactionAt_; }
 
 private:
   void trigger(const char *bucket, const char *eventRu, unsigned long now,
@@ -56,6 +59,8 @@ private:
   int actionPending_ = -1;
   unsigned long actionPendingAt_ = 0;
   bool bootGreetPending_ = true;
+  int reactionKind_ = -1;          /* DEN particle burst kind */
+  unsigned long reactionAt_ = 0;   /* when the last action fired */
 
   /* edge detection */
   bool lastAlert_ = false;

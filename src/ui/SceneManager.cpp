@@ -128,8 +128,35 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     return;
   }
 
+  /* screen-composition picker: toggle which scenes ride the ring */
+  if (scenePickMode_) {
+    Settings &s = ui.st.settings;
+    switch (ev) {
+    case EV_SHORT:
+      if (++scenePickSel_ >= SCENE_FORZA) scenePickSel_ = SCENE_DASH;
+      break;
+    case EV_LONG:
+      s.sceneMask ^= (1u << scenePickSel_);
+      s.sceneMask |= 1u; /* DEN never toggles off */
+      break;
+    case EV_DOUBLE:
+      s.sceneMask |= 1u;
+      settings::save(s);
+      scenePickMode_ = false;
+      toast("экраны сохранены");
+      break;
+    case EV_TRIPLE:
+      scenePickMode_ = false;
+      toast("готово");
+      break;
+    default:
+      break;
+    }
+    return;
+  }
+
   if (menuOpen_) {
-    const int kMenuItems = 14;
+    const int kMenuItems = 15;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -174,10 +201,8 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
 
   switch (ev) {
   case EV_SHORT: {
-    /* FORZA is an app, not a ring member: cycle DEN..EVENTS */
-    int next = scene_ + 1;
-    if (next >= SCENE_FORZA) next = SCENE_DEN;
-    gotoScene(next, ui);
+    /* FORZA is an app, not a ring member: cycle the enabled ring scenes */
+    gotoScene(nextVisibleScene(scene_, ui.st.settings.sceneMask, true), ui);
     break;
   }
   case EV_DOUBLE:
@@ -285,15 +310,21 @@ void SceneManager::menuAction(UiCtx &ui) {
     editLoadRole();
     toast("редактор цвета");
     break;
-  case 11: /* Forza HUD (manual open — it also auto-enters on telemetry) */
+  case 11: /* screen composition picker */
+    menuOpen_ = false;
+    scenePickMode_ = true;
+    scenePickSel_ = SCENE_DASH;
+    toast("выбор экранов");
+    break;
+  case 12: /* Forza HUD (manual open — it also auto-enters on telemetry) */
     menuOpen_ = false;
     gotoScene(SCENE_FORZA, ui);
     break;
-  case 12: /* sysinfo */
+  case 13: /* sysinfo */
     sysInfo_ = true;
     menuOpen_ = false;
     break;
-  case 13: /* close */
+  case 14: /* close */
     menuOpen_ = false;
     break;
   }
@@ -307,7 +338,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[14][20];
+  char val[15][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -326,17 +357,23 @@ void SceneManager::drawMenu(UiCtx &ui) {
   snprintf(val[9], 20, "#%d%s", s.activeSlot + 1,
            s.slotUsed[s.activeSlot] ? "" : " нов");
   val[10][0] = '\0';
-  val[11][0] = '\0';
+  {
+    int onCount = 0;
+    for (int i = SCENE_DASH; i < SCENE_FORZA; i++)
+      if ((s.sceneMask >> i) & 1u) onCount++;
+    snprintf(val[11], 20, "%d/%d", onCount + 1, SCENE_FORZA); /* +1 = ЛОГОВО */
+  }
   val[12][0] = '\0';
   val[13][0] = '\0';
+  val[14][0] = '\0';
 
   static const char *names[] = {
-      "Карусель",   "Яркость",        "LED",        "Волк LLM",
-      "WiFi",       "Переворот",       "Тема",       "Фон",
-      "Светлый фон", "Слот темы",       "Цвета вручную", "Forza HUD",
-      "Инфо системы", "Закрыть"};
+      "Карусель",     "Яркость",       "LED",        "Волк LLM",
+      "WiFi",         "Переворот",      "Тема",       "Фон",
+      "Светлый фон",  "Слот темы",      "Цвета вручную", "Экраны",
+      "Forza HUD",    "Инфо системы",   "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 14, kVisible = 6, rowH = 22;
+  const int kRows = 15, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -431,6 +468,59 @@ void SceneManager::drawColorEditor(UiCtx &ui) {
     textAt(g, 8, 156, "1x +цвет · долго след.канал · 2x назад · 3x выход", DIM);
 }
 
+int SceneManager::nextVisibleScene(int from, uint32_t mask, bool allowDen) const {
+  for (int k = 1; k <= SCENE_FORZA; k++) {
+    int n = from + k;
+    while (n >= SCENE_FORZA) n -= SCENE_FORZA; /* wrap inside the ring 0..15 */
+    if (n == SCENE_DEN) {
+      if (allowDen) return n;
+      continue;
+    }
+    if (mask & (1u << n)) return n;
+  }
+  return SCENE_DEN; /* everything off → fall back home */
+}
+
+/* Screen-composition picker: toggle which scenes appear in the nav ring. */
+void SceneManager::drawScenePicker(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  Settings &s = ui.st.settings;
+  g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
+  g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  textAt(g, 8, 24, "ЭКРАНЫ В КАРУСЕЛИ (ЛОГОВО всегда вкл)", ORANGE);
+
+  const int first = SCENE_DASH, last = SCENE_FORZA - 1; /* DASH..HISTORY */
+  const int total = last - first + 1;
+  const int kVisible = 5, rowH = 22;
+  int idx = scenePickSel_ - first;
+  int scroll = idx - (kVisible - 1);
+  if (scroll < 0) scroll = 0;
+  g.setFont(&F_MED);
+  g.setTextSize(1);
+  for (int r = 0; r < kVisible && scroll + r < total; r++) {
+    int sc = first + scroll + r;
+    int y = 40 + r * rowH;
+    bool sel = sc == scenePickSel_;
+    bool on = (s.sceneMask >> sc) & 1u;
+    if (sel) g.fillRect(6, y - 2, NOCT_W - 18, rowH - 2, ORANGE);
+    char nm[24];
+    clipW(g, scenes::title(sc), nm, sizeof(nm), 210);
+    textAt(g, 14, y, nm, sel ? BG : TEXT);
+    textRight(g, NOCT_W - 20, y, on ? "вкл" : "выкл",
+              sel ? BG : (on ? GOOD : DIM));
+  }
+  /* scrollbar */
+  int sbH = (NOCT_H - 44) * kVisible / total;
+  int sbY = 40 + (NOCT_H - 44 - sbH) * scroll / (total - kVisible);
+  g.fillRect(NOCT_W - 6, 40, 3, NOCT_H - 50, PANEL);
+  g.fillRect(NOCT_W - 6, sbY, 3, sbH, ORANGE);
+
+  g.setFont(&F_TEXT);
+  textAt(g, 8, 156, "1x далее · долго вкл/выкл · 2x сохранить · 3x выход", DIM);
+}
+
 /* Ambient screensaver: drifting starfield + wandering wolf + big clock.
  * Replaces the old "dim to black" — any button press wakes it. */
 void SceneManager::drawScreensaver(UiCtx &ui) {
@@ -514,19 +604,17 @@ void SceneManager::draw(UiCtx &ui) {
   /* carousel — never on the wolf's home (you're interacting there: feed/play),
    * never inside his action submenu, never over the Forza HUD or a menu. */
   if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !editMode_ &&
-      !alertActive(ui) && scene_ != SCENE_FORZA && scene_ != SCENE_DEN &&
-      !denActionMode_ && ui.now - lastInput_ > 5000 &&
+      !scenePickMode_ && !alertActive(ui) && scene_ != SCENE_FORZA &&
+      scene_ != SCENE_DEN && !denActionMode_ && ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
-    int next = scene_ + 1;
-    if (next >= SCENE_FORZA) next = SCENE_DASH; /* ring sans DEN/FORZA */
-    gotoScene(next, ui);
+    gotoScene(nextVisibleScene(scene_, s.sceneMask, false), ui);
   }
 
   /* screensaver: after the dim timeout, dim a little and show the ambient
    * clock+wolf scene (not a black screen). Any input wakes it. */
   if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive && !editMode_ &&
-      !menuOpen_ &&
+      !menuOpen_ && !scenePickMode_ &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
     dimmed_ = true;
@@ -611,7 +699,7 @@ void SceneManager::draw(UiCtx &ui) {
    * SLIDES UP from the bottom over ANY scene, sits, then slides away. DEN
    * shows speech inline so it's skipped there. */
   if (ui.brain.bubbleVisible(ui.now) && effScene != SCENE_DEN && !menuOpen_ &&
-      !sysInfo_ && !editMode_ && !ui.brain.thinking()) {
+      !sysInfo_ && !editMode_ && !scenePickMode_ && !ui.brain.thinking()) {
     const String &p = ui.brain.phrase();
     if (p.length()) {
       /* taller card resting in the lower-CENTRE (was jammed at the bottom
@@ -645,6 +733,7 @@ void SceneManager::draw(UiCtx &ui) {
   /* menu / sysinfo overlays */
   if (menuOpen_) drawMenu(ui);
   if (editMode_) drawColorEditor(ui);
+  if (scenePickMode_) drawScenePicker(ui);
   if (sysInfo_) {
     g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_CONTENT_H, BG);
     scenes::drawSysInfo(ui);

@@ -216,6 +216,10 @@ void loop() {
       brain.onAction(a);
       led.setMode(StatusLed::BLIP_OK);
     }
+    if (state.rcSceneMask >= 0) {
+      cfg.sceneMask = (uint32_t)state.rcSceneMask | 1u; /* DEN always visible */
+      persist = true;
+    }
     if (state.rcScreen >= 0) sceneMgr.requestScene(state.rcScreen);
     if (state.rcSay.length()) brain.sayNow(state.rcSay);
     if (persist) settings::save(cfg);
