@@ -1,5 +1,7 @@
 #include "net/ForzaManager.h"
 
+#include <math.h>
+
 static float rdF(const uint8_t *p, int off) {
   float f;
   memcpy(&f, p + off, 4);
@@ -49,6 +51,38 @@ void ForzaManager::tick(unsigned long now, bool wifiUp) {
       if (st_.bestLap > 0.01f && prevBest > 0.01f &&
           st_.bestLap < prevBest - 0.005f)
         st_.bestLapMs = now;
+
+      /* reset session bests on a fresh race */
+      if (st_.raceOn && !lastRaceOn_) {
+        st_.topSpeed = st_.maxG = 0;
+        st_.peakHp = 0;
+      }
+      lastRaceOn_ = st_.raceOn;
+
+      /* G-force + drift detection (sideways, grip loss, moving) */
+      st_.gforce = sqrtf(st_.accelLat * st_.accelLat +
+                         st_.accelLong * st_.accelLong) /
+                   9.80665f;
+      float rearSlip = (st_.slip[2] + st_.slip[3]) * 0.5f;
+      bool sideways = fabsf(st_.latG()) > 0.55f && rearSlip > 0.55f &&
+                      st_.speedKmh > 25.0f;
+      if (sideways) {
+        if (!st_.drifting) {
+          st_.drifting = true;
+          st_.driftMs = now;
+          st_.driftPeakG = 0;
+        }
+        if (st_.gforce > st_.driftPeakG) st_.driftPeakG = st_.gforce;
+        st_.driftHoldMs = now;
+      } else if (st_.drifting && now - st_.driftHoldMs > 700) {
+        st_.drifting = false; /* hysteresis: keep drift state 0.7 s after */
+      }
+
+      /* session bests */
+      if (st_.speedKmh > st_.topSpeed) st_.topSpeed = st_.speedKmh;
+      if (st_.gforce > st_.maxG) st_.maxG = st_.gforce;
+      int hp = (int)(st_.powerW / 745.7f);
+      if (hp > st_.peakHp) st_.peakHp = hp;
     }
   }
 }
@@ -81,7 +115,10 @@ void ForzaManager::parse(const uint8_t *p, int len) {
 
   st_.speedKmh = rdF(p, 244 + d) * 3.6f;
   st_.powerW = rdF(p, 248 + d);
+  /* tyre temps FL/FR/RL/RR @256..268 (FM sends real values, FH ~ ambient) */
+  for (int i = 0; i < 4; i++) st_.tireTemp[i] = rdF(p, 256 + i * 4 + d);
   st_.boostPsi = rdF(p, 272 + d);
+  st_.distanceM = rdF(p, 280 + d);
   float fuel = rdF(p, 276 + d);
   st_.fuel = fuel < 0 ? 0 : (fuel > 1 ? 1 : fuel);
   /* lap times (seconds): BestLap@284 LastLap@288 CurrentLap@292 */

@@ -4,6 +4,7 @@
  * Big-font glyphs are placed via inkTop(): the u8g2 logisoso line box is
  * taller than the visible digits, so we anchor the INK, not the line. */
 #include <WiFi.h>
+#include <math.h>
 
 #include "core/config.h"
 #include "ui/Scenes.h"
@@ -43,6 +44,27 @@ static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
   int off = g.fontHeight() - inkH;
   if (off < 0) off = 0;
   return wantTop - off / 2; /* leading splits above/below the ink */
+}
+
+/* friction circle: a dot at (lateral, longitudinal) g, edge = 1.5 g. Shows how
+ * much grip you're using and which way — great for drift and free-ride. */
+static void drawGMeter(LGFX_Sprite &g, int cx, int cy, int r, float lat,
+                       float lon) {
+  g.drawCircle(cx, cy, r, ORANGE_DIM);
+  g.drawCircle(cx, cy, (r * 2) / 3, lerp565(BG, ORANGE_DIM, 120));
+  g.drawFastHLine(cx - r, cy, 2 * r + 1, lerp565(BG, ORANGE_DIM, 90));
+  g.drawFastVLine(cx, cy - r, 2 * r + 1, lerp565(BG, ORANGE_DIM, 90));
+  float scale = r / 1.5f;
+  float dx = lat * scale;       /* + = pushed right */
+  float dy = -lon * scale;      /* + accel forward = dot up */
+  float mag = sqrtf(dx * dx + dy * dy);
+  if (mag > r) {
+    dx = dx * r / mag;
+    dy = dy * r / mag;
+  }
+  float gtot = sqrtf(lat * lat + lon * lon);
+  uint16_t dc = gtot > 1.1f ? CRIT : (gtot > 0.6f ? WARN : GOOD);
+  g.fillCircle(cx + (int)dx, cy + (int)dy, 3, dc);
 }
 
 /* one cell of the bottom info row: small caption, 20px value */
@@ -188,60 +210,114 @@ void drawForza(UiCtx &ui) {
   hBar(g, 288, 96, 30, 14, fuelPct, fuelPct < 15 ? CRIT : ACCENT);
   textCenter(g, 303, 114, "FUEL", DIM);
 
-  /* ── info row: speed | boost | power | race — corner-safe grid ── */
-  g.drawFastHLine(10, 127, NOCT_W - 20, PANEL);
-  snprintf(v, sizeof(v), "%d", (int)(f.speedKmh + 0.5f));
-  infoCell(g, 10, 76, "КМ/Ч", v, TEXT);
-  if (f.boostPsi > 0.3f)
-    snprintf(v, sizeof(v), "%.1f", f.boostPsi * 0.0689f);
-  else
-    snprintf(v, sizeof(v), "-");
-  infoCell(g, 86, 76, "БУСТ BAR", v, INFO);
-  int hp = (int)(f.powerW / 745.7f);
-  snprintf(v, sizeof(v), "%d", hp > 0 ? hp : 0);
-  infoCell(g, 162, 76, "Л.С.", v, ACCENT);
-  if (f.lap > 0 || f.racePos > 0)
-    snprintf(v, sizeof(v), "%d/%d", f.lap + 1, f.racePos);
-  else
-    snprintf(v, sizeof(v), "-");
-  bool posChanged = f.posChangeMs && (ui.now - f.posChangeMs) < 2800;
-  uint16_t posC = posChanged ? (f.posGain > 0 ? GOOD : CRIT) : TEXT;
-  infoCell(g, 238, 72, "КРУГ/МЕСТО", v, posC);
-
-  /* ── dynamics strip (y160..170): place change > new best > live lap times.
-   * NOTE: Forza Data Out is ego-only — it has YOUR position & lap times but no
-   * other car's gap, so we surface place changes + lap deltas, not a live gap. */
-  bool newBest = f.bestLapMs && (ui.now - f.bestLapMs) < 3200;
+  /* ── adaptive info zone (y117..171): the HUD reads the situation and shows
+   * RACE data (position/laps), DRIFT data (G-meter/angle/timer) or FREE-RIDE
+   * cruise stats. NOTE: Forza Data Out is ego-only — no opponent gap exists,
+   * so place changes + lap deltas are the faithful substitute. ── */
   bool fl2 = (ui.now / 160) & 1;
-  if (posChanged) {
-    uint16_t bc = f.posGain > 0 ? GOOD : CRIT;
-    g.fillRect(8, 159, NOCT_W - 16, 12, fl2 ? lerp565(BG, bc, 70) : BG);
+  if (f.raceOn) {
+    int mode = f.drifting ? 1 : (f.racePos > 0 ? 0 : 2);
     g.setFont(&F_TEXT);
-    snprintf(v, sizeof(v), "%s  P%d  (%+d)",
-             f.posGain > 0 ? "ОБОГНАЛ!" : "ОТКАТ", f.racePos, f.posGain);
-    textCenter(g, NOCT_W / 2, 162, v, bc);
-  } else if (newBest) {
-    g.fillRect(8, 159, NOCT_W - 16, 12, fl2 ? lerp565(BG, ACCENT, 55) : BG);
-    g.setFont(&F_TEXT);
-    textCenter(g, NOCT_W / 2, 162, "ЛУЧШИЙ КРУГ!", ACCENT);
-  } else if (f.curLap > 0.01f || f.bestLap > 0.01f) {
-    char lc[10], lb[10], ll[10];
-    fmtLap(lc, sizeof(lc), f.curLap);
-    fmtLap(lb, sizeof(lb), f.bestLap);
-    fmtLap(ll, sizeof(ll), f.lastLap);
-    g.setFont(&F_TEXT);
-    snprintf(v, sizeof(v), "КРУГ %s   ЛУЧ %s   ПОСЛ %s", lc, lb, ll);
-    textCenter(g, NOCT_W / 2, 162, v, DIM);
-  }
+    textCenter(g, 166, 118,
+               mode == 1   ? "РЕЖИМ: ДРИФТ"
+               : mode == 0 ? "РЕЖИМ: ГОНКА"
+                           : "РЕЖИМ: СВОБОДНО",
+               mode == 1 ? ACCENT : (mode == 0 ? GOOD : INFO));
+    g.drawFastHLine(10, 127, NOCT_W - 20, PANEL);
 
-  /* ── overlays ── */
-  if (!f.raceOn) {
-    /* sits in the free band under the RPM caption — clear of the hero digits */
-    g.setFont(&F_MED);
+    if (mode == 1) { /* DRIFT */
+      drawGMeter(g, 34, 149, 18, f.latG(), f.longG());
+      g.setFont(&F_BIG);
+      snprintf(v, sizeof(v), "%.1f", fabsf(f.latG()));
+      textCenter(g, 116, 134, v, fl2 ? CRIT : WARN);
+      g.setFont(&F_TEXT);
+      textCenter(g, 116, 161, "БОКОВАЯ G", DIM);
+      g.setFont(&F_MED);
+      textCenter(g, 214, 132, fl2 ? "ДРИФТ!" : "ДРИФТ", fl2 ? ACCENT : ORANGE);
+      snprintf(v, sizeof(v), "%.1fс", (ui.now - f.driftMs) / 1000.0f);
+      textCenter(g, 196, 150, v, TEXT);
+      g.setFont(&F_TEXT);
+      snprintf(v, sizeof(v), "пик %.1fG", f.driftPeakG);
+      textCenter(g, 282, 150, v, INFO);
+    } else if (mode == 2) { /* FREE RIDE */
+      snprintf(v, sizeof(v), "%d", (int)(f.speedKmh + 0.5f));
+      infoCell(g, 6, 84, "КМ/Ч", v, TEXT);
+      int hp = (int)(f.powerW / 745.7f);
+      snprintf(v, sizeof(v), "%d", hp > 0 ? hp : 0);
+      infoCell(g, 96, 70, "Л.С.", v, ACCENT);
+      snprintf(v, sizeof(v), "%.1f", f.distanceM / 1000.0f);
+      infoCell(g, 168, 70, "КМ ПУТЬ", v, INFO);
+      drawGMeter(g, 286, 147, 17, f.latG(), f.longG());
+      g.setFont(&F_TEXT);
+      textCenter(g, 286, 168, "G", DIM);
+    } else { /* RACE */
+      snprintf(v, sizeof(v), "%d", (int)(f.speedKmh + 0.5f));
+      infoCell(g, 10, 76, "КМ/Ч", v, TEXT);
+      if (f.boostPsi > 0.3f)
+        snprintf(v, sizeof(v), "%.1f", f.boostPsi * 0.0689f);
+      else
+        snprintf(v, sizeof(v), "-");
+      infoCell(g, 86, 76, "БУСТ BAR", v, INFO);
+      int hp = (int)(f.powerW / 745.7f);
+      snprintf(v, sizeof(v), "%d", hp > 0 ? hp : 0);
+      infoCell(g, 162, 76, "Л.С.", v, ACCENT);
+      if (f.lap > 0 || f.racePos > 0)
+        snprintf(v, sizeof(v), "%d/%d", f.lap + 1, f.racePos);
+      else
+        snprintf(v, sizeof(v), "-");
+      bool posChanged = f.posChangeMs && (ui.now - f.posChangeMs) < 2800;
+      infoCell(g, 238, 72, "КРУГ/МЕСТО", v,
+               posChanged ? (f.posGain > 0 ? GOOD : CRIT) : TEXT);
+
+      bool newBest = f.bestLapMs && (ui.now - f.bestLapMs) < 3200;
+      if (posChanged) {
+        uint16_t bc = f.posGain > 0 ? GOOD : CRIT;
+        g.fillRect(8, 159, NOCT_W - 16, 12, fl2 ? lerp565(BG, bc, 70) : BG);
+        g.setFont(&F_TEXT);
+        snprintf(v, sizeof(v), "%s  P%d  (%+d)",
+                 f.posGain > 0 ? "ОБОГНАЛ!" : "ОТКАТ", f.racePos, f.posGain);
+        textCenter(g, NOCT_W / 2, 162, v, bc);
+      } else if (newBest) {
+        g.fillRect(8, 159, NOCT_W - 16, 12, fl2 ? lerp565(BG, ACCENT, 55) : BG);
+        g.setFont(&F_TEXT);
+        textCenter(g, NOCT_W / 2, 162, "ЛУЧШИЙ КРУГ!", ACCENT);
+      } else if (f.curLap > 0.01f || f.bestLap > 0.01f) {
+        char lc[10], lb[10], ll[10];
+        fmtLap(lc, sizeof(lc), f.curLap);
+        fmtLap(lb, sizeof(lb), f.bestLap);
+        fmtLap(ll, sizeof(ll), f.lastLap);
+        g.setFont(&F_TEXT);
+        snprintf(v, sizeof(v), "КРУГ %s   ЛУЧ %s   ПОСЛ %s", lc, lb, ll);
+        textCenter(g, NOCT_W / 2, 162, v, DIM);
+      }
+    }
+  } else {
+    /* ── paused / between events: session summary card ── */
+    int cx0 = 36, cy0 = 34, cw = 248, ch = 96;
+    g.fillRoundRect(cx0, cy0, cw, ch, 6, PANEL);
+    g.drawRoundRect(cx0, cy0, cw, ch, 6, ACCENT);
     bool blink = (ui.now / 400) & 1;
-    g.fillRoundRect(118, 108, 100, 22, 4, PANEL);
-    g.drawRoundRect(118, 108, 100, 22, 4, blink ? ACCENT : ORANGE_DIM);
-    textCenter(g, 168, 110, "ПАУЗА", blink ? ACCENT : DIM);
+    g.setFont(&F_MED);
+    textCenter(g, NOCT_W / 2, cy0 + 5, "ПАУЗА", blink ? ACCENT : DIM);
+    g.setFont(&F_TEXT);
+    textCenter(g, NOCT_W / 2, cy0 + 25, "СВОДКА СЕССИИ", DIM);
+    char lb[10];
+    fmtLap(lb, sizeof(lb), f.bestLap);
+    const char *cap[4] = {"лучший круг", "макс км/ч", "макс G", "пик л.с."};
+    char val[4][12];
+    uint16_t col[4] = {GOOD, TEXT, WARN, ACCENT};
+    snprintf(val[0], 12, "%s", lb);
+    snprintf(val[1], 12, "%d", (int)(f.topSpeed + 0.5f));
+    snprintf(val[2], 12, "%.1fG", f.maxG);
+    snprintf(val[3], 12, "%d", f.peakHp);
+    for (int i = 0; i < 4; i++) {
+      int qx = cx0 + 16 + (i % 2) * 120;
+      int qy = cy0 + 42 + (i / 2) * 28;
+      g.setFont(&F_TEXT);
+      textAt(g, qx, qy, cap[i], DIM);
+      g.setFont(&F_MED);
+      textAt(g, qx, qy + 9, val[i], col[i]);
+    }
   }
   if (ui.st.alertActive && ((ui.now / 300) & 1)) {
     g.fillTriangle(160, 124, 176, 124, 168, 112, CRIT);
