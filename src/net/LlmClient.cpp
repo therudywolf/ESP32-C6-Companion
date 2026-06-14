@@ -4,6 +4,8 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 
+#include "core/TextUtil.h"
+
 /* Natural-language persona — verified on the live model to produce coherent,
  * in-character one-liners (the old cryptic "состояние=N" context made the
  * small model ramble). gemma-4-e2b is a reasoning model: thoughts route to
@@ -16,7 +18,7 @@ static const char *kSystemPrompt =
     "умный, с лёгкой иронией, преданный, иногда ворчливый — как старый друг. "
     "Говоришь живым разговорным русским от первого лица. ВСЕГДА называй "
     "конкретную вещь, о которой говоришь — точное имя программы, процесса, "
-    "трека или события — а не общими словами («что-то», «какая-то программа» "
+    "трека или события — а не общими словами (что-то, какая-то программа "
     "запрещены). Отвечай РОВНО одной репликой длиной 5-14 слов. Без кавычек, "
     "без эмодзи, без описания действий — только сама фраза.";
 
@@ -147,7 +149,7 @@ bool LlmClient::callOnce(const char *base, const String &context,
 }
 
 String LlmClient::sanitize(const String &raw) {
-  String s = raw;
+  String s = stripGlyphs(raw); /* drop guillemets / emoji / tofu the model added */
   s.trim();
   s.replace("\r", " ");
   s.replace("\n", " ");
