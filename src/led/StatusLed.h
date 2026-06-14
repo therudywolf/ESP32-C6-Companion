@@ -22,6 +22,13 @@ public:
     moodG_ = g;
     moodB_ = b;
   }
+  /* brief solid-colour flash that overrides any mode (overtake blip, spikes) */
+  void flash(uint8_t r, uint8_t g, uint8_t b, unsigned long ms) {
+    flashR_ = r;
+    flashG_ = g;
+    flashB_ = b;
+    flashUntil_ = millis() + ms;
+  }
 
   void begin() { px(0, 0, 0); }
 
@@ -41,6 +48,10 @@ public:
     if (!enabled_) return;
     if (now - lastMs_ < 33) return;
     lastMs_ = now;
+    if (now < flashUntil_) { /* override everything for the flash window */
+      px(flashR_, flashG_, flashB_);
+      return;
+    }
     switch (mode_) {
     case OFF:
       px(0, 0, 0);
@@ -127,6 +138,8 @@ private:
   uint8_t moodR_ = 252, moodG_ = 238, moodB_ = 10;
   unsigned long lastMs_ = 0;
   unsigned long blipStart_ = 0;
+  unsigned long flashUntil_ = 0;
+  uint8_t flashR_ = 0, flashG_ = 0, flashB_ = 0;
 };
 
 #endif

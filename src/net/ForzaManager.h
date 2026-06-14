@@ -27,11 +27,25 @@ struct ForzaState {
   float powerW = 0;   /* engine output, watts */
   float boostPsi = 0; /* turbo boost, PSI */
   float bestLap = 0, lastLap = 0, curLap = 0; /* seconds (0 = none) */
+  float tireTemp[4] = {0, 0, 0, 0};  /* FL FR RL RR, degrees (FM only) */
+  float distanceM = 0;               /* total distance travelled, metres */
+  float gforce = 0;                  /* |accel| in g, computed by the manager */
   unsigned long lastPacketMs = 0;
   /* dynamics: stamped when the value changes so the HUD can animate it */
   int posGain = 0;                 /* +N gained / -N lost places on last change */
   unsigned long posChangeMs = 0;   /* when racePos last changed */
   unsigned long bestLapMs = 0;     /* when a new personal best was set */
+  /* drift detection (sideways + grip loss + moving), with hysteresis */
+  bool drifting = false;
+  unsigned long driftMs = 0;       /* start of the current drift */
+  unsigned long driftHoldMs = 0;   /* last sideways sample */
+  float driftPeakG = 0;            /* peak lateral g of the current drift */
+  /* session bests (reset on each race start) */
+  float topSpeed = 0, maxG = 0;
+  int peakHp = 0;
+
+  float latG() const { return accelLat / 9.80665f; }
+  float longG() const { return accelLong / 9.80665f; }
 
   /* 0..1 of usable rev range (idle..max). */
   float rpmPct() const {
@@ -59,6 +73,7 @@ private:
   ForzaState st_;
   uint8_t buf_[400];
   bool warnedLen_ = false;
+  bool lastRaceOn_ = false; /* rising edge resets the session bests */
 };
 
 #endif

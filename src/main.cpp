@@ -262,7 +262,13 @@ void loop() {
   if (state.alertActive) {
     led.setMode(StatusLed::ALERT);
   } else if (forzaLive && forza.state().raceOn) {
-    led.setForzaPct(forza.state().rpmPct());
+    const ForzaState &fz = forza.state();
+    static unsigned long lastPosBlip = 0;
+    if (fz.posChangeMs && fz.posChangeMs != lastPosBlip) {
+      lastPosBlip = fz.posChangeMs; /* green blip on a gain, red on a loss */
+      led.flash(fz.posGain > 0 ? 0 : 170, fz.posGain > 0 ? 170 : 0, 0, 650);
+    }
+    led.setForzaPct(fz.rpmPct());
     led.setMode(StatusLed::FORZA);
   } else if (state.link.llmBusy) {
     led.setMode(StatusLed::LLM);
