@@ -280,6 +280,8 @@ void drawDash(UiCtx &ui) {
     g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%d%%", load);
     textRight(g, t[k].x + t[k].w - 8, t[k].y + 8, v, pctColor(load));
+    trendArrow(g, t[k].x + t[k].w - 12 - g.textWidth(v), t[k].y + 8,
+               cpu ? ui.gr.cpuLoad : ui.gr.gpuLoad, 8, 3);
     g.setTextSize(1);
     hBar(g, t[k].x + 6, t[k].y + 45, t[k].w - 12, 11, load, pctColor(load));
   }
@@ -296,6 +298,7 @@ void drawDash(UiCtx &ui) {
   g.setTextSize(1);
   snprintf(v, sizeof(v), "/%.0fG", hw.ra);
   textAt(g, t[2].x + 11 + vw2, t[2].y + 24, v, DIM);
+  trendArrow(g, t[2].x + t[2].w - 14, t[2].y + 8, ui.gr.ramUsed, 8, 1);
   g.setTextSize(1);
   hBar(g, t[2].x + 6, t[2].y + 45, t[2].w - 12, 11, rpct, pctColor(rpct));
 

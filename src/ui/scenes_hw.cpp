@@ -62,6 +62,7 @@ void drawCpu(UiCtx &ui) {
 
   panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
   heroTemp(g, 14, 36, hw.ct, tempColor(hw.ct, 75, 85));
+  trendArrow(g, 118, 32, ui.gr.cpuTemp, 8, 1);
 
   panel(g, 140, 26, 176, 50, "НАГРУЗКА");
   g.setFont(&F_VALUE);
@@ -69,6 +70,7 @@ void drawCpu(UiCtx &ui) {
   snprintf(v, sizeof(v), "%d%%", hw.cl);
   textAt(g, 148, 36, v, pctColor(hw.cl));
   g.setTextSize(1);
+  trendArrow(g, 218, 34, ui.gr.cpuLoad, 8, 3);
   sparkline(g, 232, 34, 76, 34, ui.gr.cpuLoad, GOOD);
 
   panel(g, 140, 82, 176, 32, "КУЛЕР / ПИТАНИЕ");
@@ -99,6 +101,7 @@ void drawGpu(UiCtx &ui) {
 
   panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
   heroTemp(g, 14, 36, hw.gt, tempColor(hw.gt, 70, 80));
+  trendArrow(g, 118, 32, ui.gr.gpuTemp, 8, 1);
 
   panel(g, 140, 26, 176, 50, "НАГРУЗКА");
   g.setFont(&F_VALUE);
@@ -106,6 +109,7 @@ void drawGpu(UiCtx &ui) {
   snprintf(v, sizeof(v), "%d%%", hw.gl);
   textAt(g, 148, 36, v, pctColor(hw.gl));
   g.setTextSize(1);
+  trendArrow(g, 218, 34, ui.gr.gpuLoad, 8, 3);
   sparkline(g, 232, 34, 76, 34, ui.gr.gpuLoad, GOOD);
 
   panel(g, 140, 82, 176, 32, "VRAM");
