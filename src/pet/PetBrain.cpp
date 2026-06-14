@@ -346,13 +346,13 @@ void PetBrain::tick(unsigned long now, AppState &st) {
                app.startsWith("System") || app == "pythonw3.13.exe" ||
                app == "dwm.exe" || app == "Registry";
     if (!sys && app != lastApp_ && now - lastAppAt_ > 20000) {
-      String ev = "хозяин запустил программу «" + app + "», прокомментируй";
+      String ev = "хозяин запустил программу " + app + ", прокомментируй";
       /* games get a livelier angle */
       String low = app;
       low.toLowerCase();
       if (low.indexOf("forza") >= 0 || low.indexOf("game") >= 0 ||
           low.indexOf("steam") >= 0)
-        ev = "хозяин запустил игру «" + app + "» — пожелай удачной катки";
+        ev = "хозяин запустил игру " + app + " — пожелай удачной катки";
       if (lastApp_.length()) trigger("app", ev.c_str(), now, st, false);
       lastApp_ = app;
       lastAppAt_ = now;
@@ -378,10 +378,10 @@ void PetBrain::tick(unsigned long now, AppState &st) {
        * the wolf names a real track / app / metric instead of vague chitchat */
       String angle;
       if (viewSceneName_ && random(2) == 0)
-        angle = String("хозяин засмотрелся на экран «") + viewSceneName_ +
-                "» — скажи что-нибудь по теме этого экрана";
+        angle = String("хозяин засмотрелся на экран ") + viewSceneName_ +
+                " — скажи что-нибудь по теме этого экрана";
       else if (st.media.isPlaying && st.media.track.length())
-        angle = "под музыку «" + st.media.track + "» от " + st.media.artist +
+        angle = "под музыку " + st.media.track + " от " + st.media.artist +
                 " — скажи пару слов";
       else if (st.events.count > 0 && st.events.top[0])
         angle = "глянь на событие сервера: " + String(st.events.top) +
@@ -390,8 +390,8 @@ void PetBrain::tick(unsigned long now, AppState &st) {
         angle = "видеокарта хозяина занята на " + String(st.hw.gl) +
                 " процентов — прокомментируй чем";
       else if (st.process.cpuNames[0].length())
-        angle = "хозяин сейчас сидит в «" + st.process.cpuNames[0] +
-                "» — подколи или похвали";
+        angle = "хозяин сейчас сидит в " + st.process.cpuNames[0] +
+                " — подколи или похвали";
       else if (st.weatherReceived)
         angle = "за окном " + String(st.weather.temp) +
                 " градусов — свяжи с настроением";

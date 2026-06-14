@@ -2,11 +2,13 @@
 
 #include <ArduinoJson.h>
 
+#include "core/TextUtil.h"
 #include "ui/SceneIds.h"
 
 static void copyStr(char *dst, size_t cap, const char *src) {
   if (!src) src = "";
-  strncpy(dst, src, cap - 1);
+  String s = stripGlyphs(src); /* drop tofu glyphs before they reach a panel */
+  strncpy(dst, s.c_str(), cap - 1);
   dst[cap - 1] = '\0';
 }
 
@@ -165,7 +167,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   if (!doc["wt"].isNull() || doc["wd"].is<const char *>()) {
     state.weather.temp = doc["wt"] | state.weather.temp;
     if (doc["wd"].is<const char *>())
-      state.weather.desc = (const char *)doc["wd"];
+      state.weather.desc = stripGlyphs((const char *)doc["wd"]);
     state.weather.wmoCode = doc["wi"] | state.weather.wmoCode;
     if (!state.weatherReceived)
       Serial.printf("[NET] weather: %s %dC wmo=%d\n",
@@ -188,7 +190,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     JsonArray tp = doc["tp"];
     for (int i = 0; i < 3; i++) {
       if (i < (int)tp.size()) {
-        state.process.cpuNames[i] = (const char *)(tp[i]["n"] | "");
+        state.process.cpuNames[i] = stripGlyphs(tp[i]["n"] | "");
         state.process.cpuPercent[i] = tp[i]["c"] | 0;
       } else {
         state.process.cpuNames[i] = "";
@@ -200,7 +202,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     JsonArray tr = doc["tr"];
     for (int i = 0; i < 2; i++) {
       if (i < (int)tr.size()) {
-        state.process.ramNames[i] = (const char *)(tr[i]["n"] | "");
+        state.process.ramNames[i] = stripGlyphs(tr[i]["n"] | "");
         state.process.ramMb[i] = tr[i]["r"] | 0;
       } else {
         state.process.ramNames[i] = "";
@@ -210,8 +212,8 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   }
 
   if (doc["art"].is<const char *>() || doc["trk"].is<const char *>()) {
-    state.media.artist = (const char *)(doc["art"] | "");
-    state.media.track = (const char *)(doc["trk"] | "");
+    state.media.artist = stripGlyphs(doc["art"] | "");
+    state.media.track = stripGlyphs(doc["trk"] | "");
     state.media.isPlaying = doc["mp"] | false;
     state.media.isIdle = doc["idle"] | false;
     state.media.mediaStatus = (const char *)(doc["media_status"] | "PAUSED");
@@ -220,7 +222,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   if (doc["claude"].is<JsonObject>()) {
     JsonObject c = doc["claude"];
     state.claude.available = c["ok"] | false;
-    state.claude.plan = (const char *)(c["plan"] | "");
+    state.claude.plan = stripGlyphs(c["plan"] | "");
     state.claude.windowPct = c["win"] | -1;
     state.claude.weeklyPct = c["wk"] | -1;
     state.claude.resetsInMin = c["rst"] | -1;
@@ -300,7 +302,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcSeq = seq;
       state.rcNew = true;
       state.rcScreen = rc["screen"] | -1;
-      state.rcSay = (const char *)(rc["say"] | "");
+      state.rcSay = stripGlyphs(rc["say"] | "");
       state.rcTheme = rc["theme"] | -1;
       state.rcBright = rc["bright"] | -1;
       state.rcAction = (const char *)(rc["action"] | "");
