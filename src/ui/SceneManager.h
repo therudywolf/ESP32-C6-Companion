@@ -51,6 +51,7 @@ private:
   Deps d_{};
   int scene_ = SCENE_DEN;
   unsigned long transStart_ = 0;
+  int transDir_ = 1; /* +1 forward (reveal L→R), -1 back (reveal R→L) */
 
   bool menuOpen_ = false;
   int menuSel_ = 0;

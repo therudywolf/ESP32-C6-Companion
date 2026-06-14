@@ -23,6 +23,9 @@ public:
   void tick(unsigned long now, AppState &st);
   /* remote: make the wolf say a literal line right now (companion app). */
   void sayNow(const String &text) { show(text, millis()); }
+  /* the scene the owner is currently looking at (nullptr = DEN/Forza/none);
+   * lets idle chatter occasionally comment on what's on screen. */
+  void setViewScene(const char *name) { viewSceneName_ = name; }
 
   /* Rendering state */
   bool bubbleVisible(unsigned long now) const;
@@ -32,7 +35,7 @@ public:
   const String &phrase() const { return phrase_; }
   int revealChars(unsigned long now) const; /* typewriter, UTF-8 aware */
   bool talkingAnim(unsigned long now) const;
-  /* last user action for the DEN reaction burst: 0 feed,1 play,2 talk,-1 none */
+  /* last action for the DEN reaction burst: 0 feed,1 play,2 pet,3 talk,-1 none */
   int reactionKind() const { return reactionKind_; }
   unsigned long reactionAt() const { return reactionAt_; }
 
@@ -61,6 +64,7 @@ private:
   bool bootGreetPending_ = true;
   int reactionKind_ = -1;          /* DEN particle burst kind */
   unsigned long reactionAt_ = 0;   /* when the last action fired */
+  const char *viewSceneName_ = nullptr; /* scene the owner is viewing */
 
   /* edge detection */
   bool lastAlert_ = false;

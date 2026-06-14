@@ -377,7 +377,10 @@ void PetBrain::tick(unsigned long now, AppState &st) {
       /* ground the idle remark in whatever is actually happening right now, so
        * the wolf names a real track / app / metric instead of vague chitchat */
       String angle;
-      if (st.media.isPlaying && st.media.track.length())
+      if (viewSceneName_ && random(2) == 0)
+        angle = String("хозяин засмотрелся на экран «") + viewSceneName_ +
+                "» — скажи что-нибудь по теме этого экрана";
+      else if (st.media.isPlaying && st.media.track.length())
         angle = "под музыку «" + st.media.track + "» от " + st.media.artist +
                 " — скажи пару слов";
       else if (st.events.count > 0 && st.events.top[0])

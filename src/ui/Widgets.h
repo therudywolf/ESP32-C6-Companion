@@ -58,6 +58,15 @@ void weatherIcon(LGFX_Sprite &g, int cx, int cy, int r, int wmo,
 /* kb/s humanizer: "1.2M" / "850K". */
 void fmtRate(char *out, size_t cap, int kbs);
 
+/* Tiny 8px trend caret from a rolling graph: up (rising, amber) / down
+ * (falling, green) / flat (dim dash). Blinks red/cyan when the recent change
+ * is a spike, so big jumps catch the eye. Draws within an 8x8 box at (x,y). */
+void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr,
+                int back = 8, int deadband = 2);
+
+/* Little wolf paw print (pad + 4 toe beans) centred at (cx,cy), ~8x10. */
+void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color);
+
 /* Word-wrap text into a box at the current font, breaking overlong words by
  * characters (UTF-8 aware). Returns the next y after the last line drawn.
  * Stops at maxLines / box bottom. */

@@ -13,6 +13,31 @@ void fmtRate(char *out, size_t cap, int kbs) {
     snprintf(out, cap, "%dK", kbs);
 }
 
+void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr, int back,
+                int dead) {
+  if (gr.count < back + 2) return;
+  int d = gr.at(gr.count - 1) - gr.at(gr.count - 1 - back);
+  bool spike = d > dead * 3 || d < -dead * 3;
+  bool blink = (nowMs / 200) & 1;
+  if (d > dead) {
+    uint16_t c = spike && blink ? CRIT : WARN; /* rising */
+    g.fillTriangle(x, y + 7, x + 8, y + 7, x + 4, y, c);
+  } else if (d < -dead) {
+    uint16_t c = spike && blink ? INFO : GOOD; /* falling */
+    g.fillTriangle(x, y, x + 8, y, x + 4, y + 7, c);
+  } else {
+    g.drawFastHLine(x, y + 3, 8, DIM); /* steady */
+  }
+}
+
+void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color) {
+  g.fillCircle(cx, cy + 2, 3, color);     /* main pad */
+  g.fillCircle(cx - 3, cy - 1, 1, color); /* four toe beans */
+  g.fillCircle(cx - 1, cy - 3, 1, color);
+  g.fillCircle(cx + 1, cy - 3, 1, color);
+  g.fillCircle(cx + 3, cy - 1, 1, color);
+}
+
 /* UTF-8 word-wrap with hard char-break for overlong words. */
 int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
              int maxLines, uint16_t color) {

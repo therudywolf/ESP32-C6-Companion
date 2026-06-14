@@ -21,9 +21,18 @@ bool SceneManager::alertActive(UiCtx &ui) const {
 
 void SceneManager::gotoScene(int s, UiCtx &ui) {
   if (s == scene_) return;
-  scene_ = (s % SCENE_COUNT + SCENE_COUNT) % SCENE_COUNT;
+  int target = (s % SCENE_COUNT + SCENE_COUNT) % SCENE_COUNT;
+  /* shortest-path direction around the ring → slide reveals that way */
+  int diff = target - scene_;
+  transDir_ = (diff > 0) ? (diff <= SCENE_COUNT / 2 ? 1 : -1)
+                         : (diff < -SCENE_COUNT / 2 ? 1 : -1);
+  scene_ = target;
   transStart_ = ui.now;
   sceneOsdAt_ = ui.now; /* brief scene-name OSD so switches are obvious */
+  /* let the wolf know what the owner is looking at (not DEN / Forza) */
+  ui.brain.setViewScene(
+      (scene_ == SCENE_DEN || scene_ == SCENE_FORZA) ? nullptr
+                                                     : scenes::title(scene_));
   d_.tcp->sendScreen(scene_);
   if (scene_ == SCENE_CLAUDE) d_.tcp->sendCmd("claude");
   if (scene_ == SCENE_FOREST || scene_ == SCENE_SERVICES)
@@ -559,6 +568,15 @@ void SceneManager::drawScreensaver(UiCtx &ui) {
   int phase = (int)((now / 24) % (2 * span));
   int wx = phase < span ? phase : 2 * span - phase;
   int wy = 96 + (int)(sinf(now / 360.0f) * 6);
+  /* fading paw-print trail the wolf leaves behind */
+  for (int k = 1; k <= 4; k++) {
+    long pnow = (long)now - k * 260;
+    if (pnow < 0) break;
+    int ph = (int)((pnow / 24) % (2 * span));
+    int pwx = ph < span ? ph : 2 * span - ph;
+    widgets::pawPrint(g, pwx + 32, 150 + (k & 1) * 6,
+                      lerp565(BG, ORANGE_DIM, 150 - k * 30));
+  }
   const unsigned char *frame = ((now / 200) & 3) == 0 ? wolf_blink : wolf_idle;
   if (!ui.st.link.tcpConnected) frame = wolf_idle;
   widgets::xbmScaled(g, wx, wy, frame, 32, 32, 2, ORANGE);
@@ -761,6 +779,8 @@ void SceneManager::draw(UiCtx &ui) {
       g.fillRoundRect(px, py, tw, 24, 6, lerp565(BG, PANEL, a * 220 / 255));
       uint16_t fc = lerp565(BG, ORANGE, a);
       g.drawRoundRect(px, py, tw, 24, 6, fc);
+      widgets::pawPrint(g, px + 12, py + 12, fc); /* furry flourish */
+      widgets::pawPrint(g, px + tw - 12, py + 12, fc);
       textCenter(g, NOCT_W / 2, py + 3, nm, fc);
     }
   }
@@ -774,12 +794,17 @@ void SceneManager::draw(UiCtx &ui) {
     textAt(g, tx + 8, 134, toast_.c_str(), BG);
   }
 
-  /* scene-change wipe (180 ms) */
+  /* scene-change wipe (180 ms), directional: forward reveals L→R, back R→L */
   if (transStart_ && ui.now - transStart_ < NOCT_TRANSITION_MS) {
     int p = (int)((ui.now - transStart_) * NOCT_W / NOCT_TRANSITION_MS);
-    g.fillRect(p, NOCT_CONTENT_TOP, NOCT_W - p, NOCT_CONTENT_H, BG);
-    g.drawFastVLine(p, NOCT_CONTENT_TOP, NOCT_CONTENT_H, ORANGE);
-    g.drawFastVLine(p + 1, NOCT_CONTENT_TOP, NOCT_CONTENT_H, ORANGE_DIM);
+    int edge = transDir_ >= 0 ? p : NOCT_W - p;
+    if (transDir_ >= 0)
+      g.fillRect(edge, NOCT_CONTENT_TOP, NOCT_W - edge, NOCT_CONTENT_H, BG);
+    else
+      g.fillRect(0, NOCT_CONTENT_TOP, edge, NOCT_CONTENT_H, BG);
+    g.drawFastVLine(edge, NOCT_CONTENT_TOP, NOCT_CONTENT_H, ORANGE);
+    g.drawFastVLine(edge + (transDir_ >= 0 ? 1 : -1), NOCT_CONTENT_TOP,
+                    NOCT_CONTENT_H, ORANGE_DIM);
   } else {
     transStart_ = 0;
   }
@@ -837,16 +862,19 @@ void SceneManager::bootAnimation(UiCtx &ui) {
   g.setTextSize(1);
   textCenter(g, NOCT_W / 2, 134, "N O C T U R N E", TEXT);
   g.setTextSize(1);
+  widgets::pawPrint(g, 58, 140, ORANGE_DIM); /* flanking paws */
+  widgets::pawPrint(g, NOCT_W - 58, 140, ORANGE_DIM);
   d_.disp->push();
   delay(350);
 
-  /* 4. segmented loading bar */
+  /* 4. segmented loading bar with a paw walking it */
   int bx = 60, by = 156, bw = 200, seg = 10;
   for (int i = 0; i <= seg; i++) {
-    g.fillRect(bx - 2, by - 2, bw + 4, 12, BG);
+    g.fillRect(bx - 2, by - 6, bw + 4, 18, BG);
     g.drawRect(bx - 2, by - 2, bw + 4, 12, ORANGE_DIM);
     for (int k = 0; k < i; k++)
       g.fillRect(bx + k * (bw / seg) + 1, by, bw / seg - 2, 8, ORANGE);
+    if (i < seg) widgets::pawPrint(g, bx + i * (bw / seg) + 4, by + 4, TEXT);
     d_.disp->push();
     delay(60);
   }
