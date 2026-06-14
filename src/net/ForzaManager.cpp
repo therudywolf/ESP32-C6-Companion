@@ -37,8 +37,18 @@ void ForzaManager::tick(unsigned long now, bool wifiUp) {
     }
     int n = udp_.read(buf_, sizeof(buf_));
     if (n >= NOCT_FORZA_MIN_PACKET) {
+      uint8_t prevPos = st_.racePos;   /* snapshot before parse overwrites */
+      float prevBest = st_.bestLap;
       parse(buf_, n);
       st_.lastPacketMs = now;
+      /* dynamics: detect a place change and a new personal-best lap */
+      if (st_.racePos > 0 && prevPos > 0 && st_.racePos != prevPos) {
+        st_.posGain = (int)prevPos - (int)st_.racePos; /* +N = gained places */
+        st_.posChangeMs = now;
+      }
+      if (st_.bestLap > 0.01f && prevBest > 0.01f &&
+          st_.bestLap < prevBest - 0.005f)
+        st_.bestLapMs = now;
     }
   }
 }
@@ -74,6 +84,10 @@ void ForzaManager::parse(const uint8_t *p, int len) {
   st_.boostPsi = rdF(p, 272 + d);
   float fuel = rdF(p, 276 + d);
   st_.fuel = fuel < 0 ? 0 : (fuel > 1 ? 1 : fuel);
+  /* lap times (seconds): BestLap@284 LastLap@288 CurrentLap@292 */
+  st_.bestLap = rdF(p, 284 + d);
+  st_.lastLap = rdF(p, 288 + d);
+  st_.curLap = rdF(p, 292 + d);
   st_.lap = rdU16(p, 300 + d);
   st_.racePos = p[302 + d];
   st_.throttle = p[303 + d];

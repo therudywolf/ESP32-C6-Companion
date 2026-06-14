@@ -73,6 +73,7 @@ private:
 
   unsigned long lastCarousel_ = 0;
   unsigned long lastInput_ = 0;
+  unsigned long sceneOsdAt_ = 0; /* scene-change name OSD timer */
   bool dimmed_ = false;
 
   /* on-device colour editor (10 roles x R/G/B, saves to a theme slot) */
