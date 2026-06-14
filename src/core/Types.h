@@ -126,6 +126,7 @@ struct Settings {
   bool petLlm = true;            /* "petLlm"   wolf speaks via LLM */
   int wolfChatter = 2;           /* "wChat" idle talk: 0 off/1 rare/2 norm/3 often */
   int wolfTone = 0;              /* "wTone" 0 обычный/1 добрый/2 ворчун/3 дерзкий */
+  uint16_t uiElements = 0xFFFF;  /* "uiElem" which optional widget classes show */
   bool flipped = false;          /* "flip"     rotate display 180 */
   int themePreset = 0;           /* "theme"    palette preset index */
   int bgStyle = 1;               /* "bgStyle"  0 solid/1 anim/2 grid */
@@ -196,6 +197,7 @@ struct AppState {
   long rcSceneMask = -1;         /* visible-scene bitmask, -1 = none */
   int rcWolfChatter = -1;        /* 0..3, -1 = none */
   int rcWolfTone = -1;           /* 0..3, -1 = none */
+  long rcUiElem = -1;            /* UI element bitmask, -1 = none */
   int rcColorRole = -1;         /* single-role edit: role 0..9, -1 = none */
   int rcColorR = 0, rcColorG = 0, rcColorB = 0;
   bool rcHasPalette = false;    /* full 10-role palette in rcPalette */

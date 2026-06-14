@@ -316,6 +316,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcSceneMask = rc["scenemask"] | (long)-1;
       state.rcWolfChatter = rc["wchat"] | -1;
       state.rcWolfTone = rc["wtone"] | -1;
+      state.rcUiElem = rc["uielem"] | (long)-1;
       state.rcPresetReset = rc["resetcustom"] | -1;
       state.rcColorRole = -1;
       if (rc["color"].is<JsonArray>() && rc["color"].size() == 4) {

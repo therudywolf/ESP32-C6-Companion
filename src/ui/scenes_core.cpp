@@ -235,7 +235,7 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   }
 
   /* freed bottom band: wolf age + device uptime (hidden in the action menu) */
-  if (!actionMode) {
+  if (!actionMode && uiOn(UI_STRIPS)) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
     char vb[48];
@@ -322,14 +322,16 @@ void drawDash(UiCtx &ui) {
 
   /* freed bottom band: total power draw + hottest component (F_TEXT keeps the
    * line inside y171 — F_MED's 20px cell would clip past the screen edge) */
-  g.drawFastHLine(4, 153, NOCT_W - 8, ORANGE_DIM);
-  g.setFont(&F_TEXT);
-  g.setTextSize(1);
-  snprintf(v, sizeof(v), "питание %d Вт", hw.pw);
-  textAt(g, 6, 158, v, INFO);
-  int peak = hw.ct > hw.gt ? hw.ct : hw.gt;
-  snprintf(v, sizeof(v), "пик %d C", peak);
-  textRight(g, NOCT_W - 6, 158, v, tempColor(peak, 75, 85));
+  if (uiOn(UI_STRIPS)) {
+    g.drawFastHLine(4, 153, NOCT_W - 8, ORANGE_DIM);
+    g.setFont(&F_TEXT);
+    g.setTextSize(1);
+    snprintf(v, sizeof(v), "питание %d Вт", hw.pw);
+    textAt(g, 6, 158, v, INFO);
+    int peak = hw.ct > hw.gt ? hw.ct : hw.gt;
+    snprintf(v, sizeof(v), "пик %d C", peak);
+    textRight(g, NOCT_W - 6, 158, v, tempColor(peak, 75, 85));
+  }
 }
 
 } // namespace scenes
