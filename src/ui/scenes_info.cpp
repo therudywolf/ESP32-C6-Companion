@@ -380,13 +380,15 @@ void drawEvents(UiCtx &ui) {
   textWrap(g, e.text, 8, 86, NOCT_W - 16, 21, 2, TEXT);
 
   /* other firing alerts fill the freed bottom band (up to 3 more lines) */
-  g.setFont(&F_TEXT);
-  int shown = 0;
-  for (int i = 1; i < e.count && i < EventsData::kMaxList; i++) {
-    if (!e.list[i][0]) continue;
-    snprintf(v, sizeof(v), "+ %s", e.list[i]);
-    textAt(g, 8, 134 + shown * 12, v, DIM);
-    shown++;
+  if (uiOn(UI_STRIPS)) {
+    g.setFont(&F_TEXT);
+    int shown = 0;
+    for (int i = 1; i < e.count && i < EventsData::kMaxList; i++) {
+      if (!e.list[i][0]) continue;
+      snprintf(v, sizeof(v), "+ %s", e.list[i]);
+      textAt(g, 8, 134 + shown * 12, v, DIM);
+      shown++;
+    }
   }
 }
 

@@ -20,6 +20,7 @@ bool bgLight = false;
 unsigned long nowMs = 0;
 int reactLevel = 0;
 bool reactAlert = false;
+uint16_t uiElements = 0xFFFF;
 
 uint16_t lerp565(uint16_t a, uint16_t b, int t) {
   int ar = (a >> 11) & 0x1F, ag = (a >> 5) & 0x3F, ab = a & 0x1F;

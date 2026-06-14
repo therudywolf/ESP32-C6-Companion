@@ -19,6 +19,7 @@ void load(Settings &s) {
   s.petLlm = p.getBool("petLlm", true);
   s.wolfChatter = p.getInt("wChat", 2);
   s.wolfTone = p.getInt("wTone", 0);
+  s.uiElements = (uint16_t)p.getUShort("uiElem", 0xFFFF);
   if (s.wolfChatter < 0 || s.wolfChatter > 3) s.wolfChatter = 2;
   if (s.wolfTone < 0 || s.wolfTone > 3) s.wolfTone = 0;
   s.flipped = p.getBool("flip", false);
@@ -55,6 +56,7 @@ void save(const Settings &s) {
   p.putBool("petLlm", s.petLlm);
   p.putInt("wChat", s.wolfChatter);
   p.putInt("wTone", s.wolfTone);
+  p.putUShort("uiElem", s.uiElements);
   p.putBool("flip", s.flipped);
   p.putInt("theme", s.themePreset);
   p.putInt("bgStyle", s.bgStyle);

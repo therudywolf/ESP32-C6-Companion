@@ -42,6 +42,7 @@ private:
   void drawColorEditor(UiCtx &ui);
   void editLoadRole(); /* pull the focused role's RGB out of the live palette */
   void drawScenePicker(UiCtx &ui);
+  void drawElemPicker(UiCtx &ui);
   /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
   int nextVisibleScene(int from, uint32_t mask, bool allowDen) const;
   void menuAction(UiCtx &ui);
@@ -87,6 +88,10 @@ private:
   /* on-device screen-composition picker (which scenes are in the ring) */
   bool scenePickMode_ = false;
   int scenePickSel_ = SCENE_DASH; /* 1..SCENE_FORZA-1 */
+
+  /* on-device element-composition picker (which widget classes show) */
+  bool elemPickMode_ = false;
+  int elemPickSel_ = 0; /* 0..UI_ELEM_COUNT-1 */
 };
 
 #endif

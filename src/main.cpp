@@ -232,6 +232,10 @@ void loop() {
       cfg.wolfTone = state.rcWolfTone > 3 ? 3 : state.rcWolfTone;
       persist = true;
     }
+    if (state.rcUiElem >= 0) {
+      cfg.uiElements = (uint16_t)state.rcUiElem;
+      persist = true;
+    }
     if (state.rcScreen >= 0) sceneMgr.requestScene(state.rcScreen);
     if (state.rcSay.length()) brain.sayNow(state.rcSay);
     if (persist) settings::save(cfg);

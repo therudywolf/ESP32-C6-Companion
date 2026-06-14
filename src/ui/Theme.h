@@ -68,6 +68,19 @@ extern unsigned long nowMs;
  * = max(cpu,gpu) load) makes the background livelier; reactAlert tints it red. */
 extern int reactLevel;
 extern bool reactAlert;
+
+/* Per-element UI composition: a bitmask of which optional widget classes are
+ * shown across scenes. Set once per frame from Settings. */
+enum {
+  UI_GRAPHS = 0, /* sparklines / history curves */
+  UI_TRENDS,     /* ▲▼ trend carets */
+  UI_STRIPS,     /* secondary bottom-band info lines */
+  UI_PAWS,       /* decorative paw prints */
+  UI_WOLFOVL,    /* wolf speech overlay on non-DEN scenes */
+  UI_ELEM_COUNT
+};
+extern uint16_t uiElements;
+inline bool uiOn(int bit) { return (uiElements >> bit) & 1u; }
 /* Linear-interpolate two RGB565 colors (t = 0..255). */
 uint16_t lerp565(uint16_t a, uint16_t b, int t);
 

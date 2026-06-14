@@ -15,6 +15,7 @@ void fmtRate(char *out, size_t cap, int kbs) {
 
 void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr, int back,
                 int dead) {
+  if (!uiOn(UI_TRENDS)) return; /* element composition */
   if (gr.count < back + 2) return;
   int d = gr.at(gr.count - 1) - gr.at(gr.count - 1 - back);
   bool spike = d > dead * 3 || d < -dead * 3;
@@ -31,6 +32,7 @@ void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr, int back,
 }
 
 void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color) {
+  if (!uiOn(UI_PAWS)) return; /* element composition */
   g.fillCircle(cx, cy + 2, 3, color);     /* main pad */
   g.fillCircle(cx - 3, cy - 1, 1, color); /* four toe beans */
   g.fillCircle(cx - 1, cy - 3, 1, color);
@@ -205,6 +207,7 @@ void footer(UiCtx &ui, const char *action, int scene, int sceneCount) {
 
 void sparkline(LGFX_Sprite &g, int x, int y, int w, int h,
                const RollingGraph &gr, uint16_t color, int maxFloor) {
+  if (!uiOn(UI_GRAPHS)) return; /* element composition */
   g.drawRect(x, y, w, h, PANEL);
   if (gr.count < 2) return;
   int m = gr.maxVal(maxFloor);

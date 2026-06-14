@@ -165,8 +165,34 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     return;
   }
 
+  /* element-composition picker: toggle which widget classes show */
+  if (elemPickMode_) {
+    Settings &s = ui.st.settings;
+    switch (ev) {
+    case EV_SHORT:
+      if (++elemPickSel_ >= theme::UI_ELEM_COUNT) elemPickSel_ = 0;
+      break;
+    case EV_LONG:
+      s.uiElements ^= (1u << elemPickSel_);
+      theme::uiElements = s.uiElements; /* apply live */
+      break;
+    case EV_DOUBLE:
+      settings::save(s);
+      elemPickMode_ = false;
+      toast("элементы сохранены");
+      break;
+    case EV_TRIPLE:
+      elemPickMode_ = false;
+      toast("готово");
+      break;
+    default:
+      break;
+    }
+    return;
+  }
+
   if (menuOpen_) {
-    const int kMenuItems = 17;
+    const int kMenuItems = 18;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -351,7 +377,13 @@ void SceneManager::menuAction(UiCtx &ui) {
     toast(n[s.wolfTone & 3]);
     break;
   }
-  case 16: /* close */
+  case 16: /* element composition picker */
+    menuOpen_ = false;
+    elemPickMode_ = true;
+    elemPickSel_ = 0;
+    toast("элементы экрана");
+    break;
+  case 17: /* close */
     menuOpen_ = false;
     break;
   }
@@ -365,7 +397,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[17][20];
+  char val[18][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -398,16 +430,22 @@ void SceneManager::drawMenu(UiCtx &ui) {
     snprintf(val[14], 20, "%s", chatterN[s.wolfChatter & 3]);
     snprintf(val[15], 20, "%s", toneN[s.wolfTone & 3]);
   }
-  val[16][0] = '\0';
+  {
+    int onCount = 0;
+    for (int i = 0; i < theme::UI_ELEM_COUNT; i++)
+      if ((s.uiElements >> i) & 1u) onCount++;
+    snprintf(val[16], 20, "%d/%d", onCount, theme::UI_ELEM_COUNT);
+  }
+  val[17][0] = '\0';
 
   static const char *names[] = {
       "Карусель",     "Яркость",       "LED",          "Волк LLM",
       "WiFi",         "Переворот",      "Тема",         "Фон",
       "Светлый фон",  "Слот темы",      "Цвета вручную", "Экраны",
       "Forza HUD",    "Инфо системы",   "Болтливость",  "Характер",
-      "Закрыть"};
+      "Элементы",     "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 17, kVisible = 6, rowH = 22;
+  const int kRows = 18, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -555,6 +593,34 @@ void SceneManager::drawScenePicker(UiCtx &ui) {
   textAt(g, 8, 156, "1x далее / долго вкл-выкл / 2x сохранить / 3x выход", DIM);
 }
 
+/* Element-composition picker: toggle which optional widget classes show. */
+void SceneManager::drawElemPicker(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  Settings &s = ui.st.settings;
+  g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
+  g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  textAt(g, 8, 24, "ЭЛЕМЕНТЫ ИНТЕРФЕЙСА (на всех экранах)", ORANGE);
+
+  static const char *names[theme::UI_ELEM_COUNT] = {
+      "Графики", "Стрелки тренда", "Доп. строки", "Лапки",
+      "Реплики на экранах"};
+  g.setFont(&F_MED);
+  g.setTextSize(1);
+  for (int i = 0; i < theme::UI_ELEM_COUNT; i++) {
+    int y = 40 + i * 22;
+    bool sel = i == elemPickSel_;
+    bool on = (s.uiElements >> i) & 1u;
+    if (sel) g.fillRect(6, y - 2, NOCT_W - 18, 20, ORANGE);
+    textAt(g, 14, y, names[i], sel ? BG : TEXT);
+    textRight(g, NOCT_W - 20, y, on ? "вкл" : "выкл",
+              sel ? BG : (on ? GOOD : DIM));
+  }
+  g.setFont(&F_TEXT);
+  textAt(g, 8, 156, "1x далее / долго вкл-выкл / 2x сохранить / 3x выход", DIM);
+}
+
 /* Ambient screensaver: drifting starfield + wandering wolf + big clock.
  * Replaces the old "dim to black" — any button press wakes it. */
 void SceneManager::drawScreensaver(UiCtx &ui) {
@@ -623,6 +689,7 @@ void SceneManager::draw(UiCtx &ui) {
   /* feed the reactive backdrop: busier PC = livelier bg, alert = red */
   theme::reactLevel = ui.st.hw.cl > ui.st.hw.gl ? ui.st.hw.cl : ui.st.hw.gl;
   theme::reactAlert = alertActive(ui);
+  theme::uiElements = ui.st.settings.uiElements; /* per-element composition */
   g.fillSprite(BG);
 
   /* remote scene jump (companion app) */
@@ -650,7 +717,8 @@ void SceneManager::draw(UiCtx &ui) {
   /* carousel — never on the wolf's home (you're interacting there: feed/play),
    * never inside his action submenu, never over the Forza HUD or a menu. */
   if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !editMode_ &&
-      !scenePickMode_ && !alertActive(ui) && scene_ != SCENE_FORZA &&
+      !scenePickMode_ && !elemPickMode_ && !alertActive(ui) &&
+      scene_ != SCENE_FORZA &&
       scene_ != SCENE_DEN && !denActionMode_ && ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
@@ -660,7 +728,7 @@ void SceneManager::draw(UiCtx &ui) {
   /* screensaver: after the dim timeout, dim a little and show the ambient
    * clock+wolf scene (not a black screen). Any input wakes it. */
   if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive && !editMode_ &&
-      !menuOpen_ && !scenePickMode_ &&
+      !menuOpen_ && !scenePickMode_ && !elemPickMode_ &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
     dimmed_ = true;
@@ -745,7 +813,8 @@ void SceneManager::draw(UiCtx &ui) {
    * SLIDES UP from the bottom over ANY scene, sits, then slides away. DEN
    * shows speech inline so it's skipped there. */
   if (ui.brain.bubbleVisible(ui.now) && effScene != SCENE_DEN && !menuOpen_ &&
-      !sysInfo_ && !editMode_ && !scenePickMode_ && !ui.brain.thinking()) {
+      !sysInfo_ && !editMode_ && !scenePickMode_ && !elemPickMode_ &&
+      !ui.brain.thinking() && theme::uiOn(theme::UI_WOLFOVL)) {
     const String &p = ui.brain.phrase();
     if (p.length()) {
       /* taller card resting in the lower-CENTRE (was jammed at the bottom
@@ -780,6 +849,7 @@ void SceneManager::draw(UiCtx &ui) {
   if (menuOpen_) drawMenu(ui);
   if (editMode_) drawColorEditor(ui);
   if (scenePickMode_) drawScenePicker(ui);
+  if (elemPickMode_) drawElemPicker(ui);
   if (sysInfo_) {
     g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_CONTENT_H, BG);
     scenes::drawSysInfo(ui);
@@ -790,7 +860,8 @@ void SceneManager::draw(UiCtx &ui) {
   {
     unsigned long osdAge = ui.now - sceneOsdAt_;
     if (sceneOsdAt_ && osdAge < 850 && !menuOpen_ && !editMode_ &&
-        !scenePickMode_ && !sysInfo_ && scene_ != SCENE_FORZA) {
+        !scenePickMode_ && !elemPickMode_ && !sysInfo_ &&
+        scene_ != SCENE_FORZA) {
       int a = osdAge < 130     ? (int)(osdAge * 255 / 130)
               : osdAge > 700   ? (int)((850 - osdAge) * 255 / 150)
                                : 255;
