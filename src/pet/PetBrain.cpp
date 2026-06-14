@@ -76,6 +76,13 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
       c += ". ";
     }
   }
+  /* tone follows the "Характер" setting */
+  switch (st.settings.wolfTone) {
+  case 1: c += "Будь тёплым, ласковым и заботливым. "; break;
+  case 2: c += "Будь ворчливым, язвительным и саркастичным. "; break;
+  case 3: c += "Будь дерзким, нахальным и самоуверенным. "; break;
+  default: break;
+  }
   c += "Скажи свою короткую реплику.";
   return c;
 }
@@ -369,10 +376,16 @@ void PetBrain::tick(unsigned long now, AppState &st) {
 
   if (st.link.tcpConnected && !st.link.signalLost) seenFirstPayload_ = true;
 
-  /* 5) idle observations — random angle each time */
-  if ((long)(now - nextIdleChatter_) >= 0) {
-    nextIdleChatter_ = now + NOCT_LLM_IDLE_CHATTER_MIN_MS +
-                       random(NOCT_LLM_IDLE_CHATTER_RND_MS);
+  /* 5) idle observations — frequency follows the "Болтливость" setting
+   * (0 off / 1 rare / 2 normal / 3 often) */
+  if (st.settings.wolfChatter > 0 && (long)(now - nextIdleChatter_) >= 0) {
+    unsigned long base, rnd;
+    switch (st.settings.wolfChatter) {
+    case 1: base = 40UL * 60000; rnd = 20UL * 60000; break; /* rare */
+    case 3: base = 6UL * 60000;  rnd = 6UL * 60000;  break; /* often */
+    default: base = 20UL * 60000; rnd = 20UL * 60000; break; /* normal */
+    }
+    nextIdleChatter_ = now + base + random(rnd);
     if (pet_->isAlive() && !pet_->isSleeping()) {
       /* ground the idle remark in whatever is actually happening right now, so
        * the wolf names a real track / app / metric instead of vague chitchat */

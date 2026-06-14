@@ -63,6 +63,11 @@ const char *bgStyleName(int s);
 /* Frame clock for animations — set once per frame in SceneManager::draw, read
  * by draw helpers so they animate without threading `now` through every call. */
 extern unsigned long nowMs;
+
+/* Reactive backdrop state, set once per frame: reactLevel 0..100 (PC busy-ness,
+ * = max(cpu,gpu) load) makes the background livelier; reactAlert tints it red. */
+extern int reactLevel;
+extern bool reactAlert;
 /* Linear-interpolate two RGB565 colors (t = 0..255). */
 uint16_t lerp565(uint16_t a, uint16_t b, int t);
 

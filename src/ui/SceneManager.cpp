@@ -166,7 +166,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 15;
+    const int kMenuItems = 17;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -337,7 +337,21 @@ void SceneManager::menuAction(UiCtx &ui) {
     sysInfo_ = true;
     menuOpen_ = false;
     break;
-  case 14: /* close */
+  case 14: { /* wolf chatter frequency */
+    s.wolfChatter = (s.wolfChatter + 1) % 4;
+    static const char *n[] = {"болтливость: выкл", "болтливость: редко",
+                              "болтливость: норма", "болтливость: часто"};
+    toast(n[s.wolfChatter & 3]);
+    break;
+  }
+  case 15: { /* wolf tone / character */
+    s.wolfTone = (s.wolfTone + 1) % 4;
+    static const char *n[] = {"характер: обычный", "характер: добрый",
+                              "характер: ворчун", "характер: дерзкий"};
+    toast(n[s.wolfTone & 3]);
+    break;
+  }
+  case 16: /* close */
     menuOpen_ = false;
     break;
   }
@@ -351,7 +365,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[15][20];
+  char val[17][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -378,15 +392,22 @@ void SceneManager::drawMenu(UiCtx &ui) {
   }
   val[12][0] = '\0';
   val[13][0] = '\0';
-  val[14][0] = '\0';
+  {
+    static const char *chatterN[] = {"выкл", "редко", "норма", "часто"};
+    static const char *toneN[] = {"обычный", "добрый", "ворчун", "дерзкий"};
+    snprintf(val[14], 20, "%s", chatterN[s.wolfChatter & 3]);
+    snprintf(val[15], 20, "%s", toneN[s.wolfTone & 3]);
+  }
+  val[16][0] = '\0';
 
   static const char *names[] = {
-      "Карусель",     "Яркость",       "LED",        "Волк LLM",
-      "WiFi",         "Переворот",      "Тема",       "Фон",
+      "Карусель",     "Яркость",       "LED",          "Волк LLM",
+      "WiFi",         "Переворот",      "Тема",         "Фон",
       "Светлый фон",  "Слот темы",      "Цвета вручную", "Экраны",
-      "Forza HUD",    "Инфо системы",   "Закрыть"};
+      "Forza HUD",    "Инфо системы",   "Болтливость",  "Характер",
+      "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 15, kVisible = 6, rowH = 22;
+  const int kRows = 17, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -599,6 +620,9 @@ void SceneManager::draw(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
   theme::nowMs = ui.now; /* frame clock for animated draw helpers */
+  /* feed the reactive backdrop: busier PC = livelier bg, alert = red */
+  theme::reactLevel = ui.st.hw.cl > ui.st.hw.gl ? ui.st.hw.cl : ui.st.hw.gl;
+  theme::reactAlert = alertActive(ui);
   g.fillSprite(BG);
 
   /* remote scene jump (companion app) */
