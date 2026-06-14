@@ -224,6 +224,14 @@ void loop() {
       cfg.sceneMask = (uint32_t)state.rcSceneMask | 1u; /* DEN always visible */
       persist = true;
     }
+    if (state.rcWolfChatter >= 0) {
+      cfg.wolfChatter = state.rcWolfChatter > 3 ? 3 : state.rcWolfChatter;
+      persist = true;
+    }
+    if (state.rcWolfTone >= 0) {
+      cfg.wolfTone = state.rcWolfTone > 3 ? 3 : state.rcWolfTone;
+      persist = true;
+    }
     if (state.rcScreen >= 0) sceneMgr.requestScene(state.rcScreen);
     if (state.rcSay.length()) brain.sayNow(state.rcSay);
     if (persist) settings::save(cfg);

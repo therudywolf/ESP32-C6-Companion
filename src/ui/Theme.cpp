@@ -18,6 +18,8 @@ int currentPreset = 0;
 int bgStyle = 1;
 bool bgLight = false;
 unsigned long nowMs = 0;
+int reactLevel = 0;
+bool reactAlert = false;
 
 uint16_t lerp565(uint16_t a, uint16_t b, int t) {
   int ar = (a >> 11) & 0x1F, ag = (a >> 5) & 0x3F, ab = a & 0x1F;
@@ -219,26 +221,48 @@ const char *presetName(int idx) {
 }
 
 void backdrop(LGFX_Sprite &g, int y0, int y1) {
-  if (bgStyle == 0) return; /* solid background, no texture */
-  uint16_t tint = bgLight ? DIM : INFO;
+  int energy = reactLevel < 0 ? 0 : (reactLevel > 100 ? 100 : reactLevel);
+  if (bgStyle == 0) {
+    /* even on a solid background, a hot alert breathes a faint red edge */
+    if (reactAlert) {
+      int p = ((nowMs / 350) & 1) ? 18 : 7;
+      g.drawRect(0, y0, 320, y1 - y0, lerp565(BG, CRIT, p));
+      g.drawRect(1, y0 + 1, 318, y1 - y0 - 2, lerp565(BG, CRIT, p / 2));
+    }
+    return;
+  }
+  /* the backdrop LIVES: busier PC sweeps faster & brighter, an alert turns it
+   * red with a second counter-sweep. */
+  uint16_t tint = reactAlert ? CRIT : (bgLight ? DIM : INFO);
+  uint16_t sheenC = reactAlert ? CRIT : (bgLight ? rgb(0, 0, 0) : TEXT);
+  int sweepDiv = 13 - energy / 12; /* 13..~5: faster under load */
+  if (sweepDiv < 4) sweepDiv = 4;
   if (bgStyle == 1) {
-    /* faint horizontal scanlines + a soft sweeping sheen (kept light so the
-     * scene stays punchy, not washed) */
-    uint16_t sl = lerp565(BG, tint, bgLight ? 14 : 5);
+    uint16_t sl = lerp565(BG, tint, (bgLight ? 14 : 5) + energy / 18);
     for (int y = y0; y < y1; y += 4) g.drawFastHLine(0, y, 320, sl);
-    int sx = (int)((nowMs / 11) % (320 + 90)) - 45;
+    int sheen = 14 + energy / 8; /* brighter sheen under load */
+    int sx = (int)((nowMs / sweepDiv) % (320 + 90)) - 45;
     for (int dx = -7; dx <= 7; dx++) {
       int xx = sx + dx;
       if (xx < 0 || xx >= 320) continue;
-      int a = 14 - (dx < 0 ? -dx : dx) * 2;
-      if (a > 0)
-        g.drawFastVLine(xx, y0, y1 - y0,
-                        lerp565(BG, bgLight ? rgb(0, 0, 0) : TEXT, a));
+      int a = sheen - (dx < 0 ? -dx : dx) * 2;
+      if (a > 0) g.drawFastVLine(xx, y0, y1 - y0, lerp565(BG, sheenC, a));
+    }
+    if (reactAlert) { /* red counter-sweep that screams "look here" */
+      int sx2 = 365 - ((int)((nowMs / 6) % (320 + 90)));
+      for (int dx = -5; dx <= 5; dx++) {
+        int xx = sx2 + dx;
+        if (xx < 0 || xx >= 320) continue;
+        int a = 13 - (dx < 0 ? -dx : dx) * 2;
+        if (a > 0) g.drawFastVLine(xx, y0, y1 - y0, lerp565(BG, CRIT, a));
+      }
     }
   } else {
-    /* drifting dot grid */
-    uint16_t dot = lerp565(BG, tint, bgLight ? 28 : 12);
-    int ox = (int)((nowMs / 90) % 18), oy = (int)((nowMs / 130) % 18);
+    /* drifting dot grid — drifts faster and brightens with load */
+    uint16_t dot = lerp565(BG, tint, (bgLight ? 28 : 12) + energy / 10);
+    int ds = 90 - energy / 2;
+    if (ds < 28) ds = 28;
+    int ox = (int)((nowMs / ds) % 18), oy = (int)((nowMs / (ds + 40)) % 18);
     for (int y = y0 + oy; y < y1; y += 18)
       for (int x = ox; x < 320; x += 18) g.drawPixel(x, y, dot);
   }

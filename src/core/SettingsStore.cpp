@@ -17,6 +17,10 @@ void load(Settings &s) {
   s.pinnedScene = p.getInt("pinScene", -1);
   s.netSel = p.getInt("netSel", -1);
   s.petLlm = p.getBool("petLlm", true);
+  s.wolfChatter = p.getInt("wChat", 2);
+  s.wolfTone = p.getInt("wTone", 0);
+  if (s.wolfChatter < 0 || s.wolfChatter > 3) s.wolfChatter = 2;
+  if (s.wolfTone < 0 || s.wolfTone > 3) s.wolfTone = 0;
   s.flipped = p.getBool("flip", false);
   s.themePreset = p.getInt("theme", 0);
   s.bgStyle = p.getInt("bgStyle", 1);
@@ -49,6 +53,8 @@ void save(const Settings &s) {
   p.putInt("pinScene", s.pinnedScene);
   p.putInt("netSel", s.netSel);
   p.putBool("petLlm", s.petLlm);
+  p.putInt("wChat", s.wolfChatter);
+  p.putInt("wTone", s.wolfTone);
   p.putBool("flip", s.flipped);
   p.putInt("theme", s.themePreset);
   p.putInt("bgStyle", s.bgStyle);

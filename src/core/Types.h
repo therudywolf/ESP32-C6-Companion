@@ -124,6 +124,8 @@ struct Settings {
   int pinnedScene = -1;          /* "pinScene" home scene; -1 = DEN */
   int netSel = -1;               /* "netSel"   WiFi lock; -1 = auto */
   bool petLlm = true;            /* "petLlm"   wolf speaks via LLM */
+  int wolfChatter = 2;           /* "wChat" idle talk: 0 off/1 rare/2 norm/3 often */
+  int wolfTone = 0;              /* "wTone" 0 обычный/1 добрый/2 ворчун/3 дерзкий */
   bool flipped = false;          /* "flip"     rotate display 180 */
   int themePreset = 0;           /* "theme"    palette preset index */
   int bgStyle = 1;               /* "bgStyle"  0 solid/1 anim/2 grid */
@@ -192,6 +194,8 @@ struct AppState {
   int rcBgStyle = -1;            /* 0/1/2, -1 = none */
   int rcBgLight = -1;            /* 0/1, -1 = none */
   long rcSceneMask = -1;         /* visible-scene bitmask, -1 = none */
+  int rcWolfChatter = -1;        /* 0..3, -1 = none */
+  int rcWolfTone = -1;           /* 0..3, -1 = none */
   int rcColorRole = -1;         /* single-role edit: role 0..9, -1 = none */
   int rcColorR = 0, rcColorG = 0, rcColorB = 0;
   bool rcHasPalette = false;    /* full 10-role palette in rcPalette */
