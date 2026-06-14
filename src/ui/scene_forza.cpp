@@ -27,6 +27,16 @@ static uint16_t slipColor(float s) {
   return GOOD;
 }
 
+/* seconds -> "m:ss.t"; "--:--" when no time yet */
+static void fmtLap(char *out, size_t cap, float s) {
+  if (s <= 0.01f || s > 5999.0f) {
+    snprintf(out, cap, "--:--");
+    return;
+  }
+  int tenths = (int)(s * 10.0f + 0.5f);
+  snprintf(out, cap, "%d:%02d.%d", tenths / 600, (tenths / 10) % 60, tenths % 10);
+}
+
 /* y to pass to textAt so the visible glyph TOP lands at wantTop.
  * inkH = the glyph height we expect (64 for F_HUGE size2). */
 static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
@@ -194,7 +204,35 @@ void drawForza(UiCtx &ui) {
     snprintf(v, sizeof(v), "%d/%d", f.lap + 1, f.racePos);
   else
     snprintf(v, sizeof(v), "-");
-  infoCell(g, 238, 72, "КРУГ/МЕСТО", v, TEXT);
+  bool posChanged = f.posChangeMs && (ui.now - f.posChangeMs) < 2800;
+  uint16_t posC = posChanged ? (f.posGain > 0 ? GOOD : CRIT) : TEXT;
+  infoCell(g, 238, 72, "КРУГ/МЕСТО", v, posC);
+
+  /* ── dynamics strip (y160..170): place change > new best > live lap times.
+   * NOTE: Forza Data Out is ego-only — it has YOUR position & lap times but no
+   * other car's gap, so we surface place changes + lap deltas, not a live gap. */
+  bool newBest = f.bestLapMs && (ui.now - f.bestLapMs) < 3200;
+  bool fl2 = (ui.now / 160) & 1;
+  if (posChanged) {
+    uint16_t bc = f.posGain > 0 ? GOOD : CRIT;
+    g.fillRect(8, 159, NOCT_W - 16, 12, fl2 ? lerp565(BG, bc, 70) : BG);
+    g.setFont(&F_TEXT);
+    snprintf(v, sizeof(v), "%s  P%d  (%+d)",
+             f.posGain > 0 ? "ОБОГНАЛ!" : "ОТКАТ", f.racePos, f.posGain);
+    textCenter(g, NOCT_W / 2, 162, v, bc);
+  } else if (newBest) {
+    g.fillRect(8, 159, NOCT_W - 16, 12, fl2 ? lerp565(BG, ACCENT, 55) : BG);
+    g.setFont(&F_TEXT);
+    textCenter(g, NOCT_W / 2, 162, "ЛУЧШИЙ КРУГ!", ACCENT);
+  } else if (f.curLap > 0.01f || f.bestLap > 0.01f) {
+    char lc[10], lb[10], ll[10];
+    fmtLap(lc, sizeof(lc), f.curLap);
+    fmtLap(lb, sizeof(lb), f.bestLap);
+    fmtLap(ll, sizeof(ll), f.lastLap);
+    g.setFont(&F_TEXT);
+    snprintf(v, sizeof(v), "КРУГ %s   ЛУЧ %s   ПОСЛ %s", lc, lb, ll);
+    textCenter(g, NOCT_W / 2, 162, v, DIM);
+  }
 
   /* ── overlays ── */
   if (!f.raceOn) {

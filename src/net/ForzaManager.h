@@ -26,7 +26,12 @@ struct ForzaState {
   float accelLat = 0, accelLong = 0;
   float powerW = 0;   /* engine output, watts */
   float boostPsi = 0; /* turbo boost, PSI */
+  float bestLap = 0, lastLap = 0, curLap = 0; /* seconds (0 = none) */
   unsigned long lastPacketMs = 0;
+  /* dynamics: stamped when the value changes so the HUD can animate it */
+  int posGain = 0;                 /* +N gained / -N lost places on last change */
+  unsigned long posChangeMs = 0;   /* when racePos last changed */
+  unsigned long bestLapMs = 0;     /* when a new personal best was set */
 
   /* 0..1 of usable rev range (idle..max). */
   float rpmPct() const {

@@ -23,6 +23,7 @@ void SceneManager::gotoScene(int s, UiCtx &ui) {
   if (s == scene_) return;
   scene_ = (s % SCENE_COUNT + SCENE_COUNT) % SCENE_COUNT;
   transStart_ = ui.now;
+  sceneOsdAt_ = ui.now; /* brief scene-name OSD so switches are obvious */
   d_.tcp->sendScreen(scene_);
   if (scene_ == SCENE_CLAUDE) d_.tcp->sendCmd("claude");
   if (scene_ == SCENE_FOREST || scene_ == SCENE_SERVICES)
@@ -740,6 +741,28 @@ void SceneManager::draw(UiCtx &ui) {
   if (sysInfo_) {
     g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_CONTENT_H, BG);
     scenes::drawSysInfo(ui);
+  }
+
+  /* scene-change OSD: a brief centred name pill so switches read clearly
+   * (fades in/out; skipped over modals and the Forza HUD) */
+  {
+    unsigned long osdAge = ui.now - sceneOsdAt_;
+    if (sceneOsdAt_ && osdAge < 850 && !menuOpen_ && !editMode_ &&
+        !scenePickMode_ && !sysInfo_ && scene_ != SCENE_FORZA) {
+      int a = osdAge < 130     ? (int)(osdAge * 255 / 130)
+              : osdAge > 700   ? (int)((850 - osdAge) * 255 / 150)
+                               : 255;
+      a = a < 0 ? 0 : (a > 255 ? 255 : a);
+      const char *nm = scenes::title(scene_);
+      g.setFont(&F_MED);
+      g.setTextSize(1);
+      int tw = g.textWidth(nm) + 26;
+      int px = (NOCT_W - tw) / 2, py = 24;
+      g.fillRoundRect(px, py, tw, 24, 6, lerp565(BG, PANEL, a * 220 / 255));
+      uint16_t fc = lerp565(BG, ORANGE, a);
+      g.drawRoundRect(px, py, tw, 24, 6, fc);
+      textCenter(g, NOCT_W / 2, py + 3, nm, fc);
+    }
   }
 
   /* toast */
