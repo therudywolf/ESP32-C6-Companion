@@ -121,44 +121,48 @@ void drawWeather(UiCtx &ui) {
   }
   char v[32];
 
-  /* Layout: animated icon (left) | 64px temperature | description in the
-   * right column, positioned AFTER the measured temp width (so wide values
-   * like "+26" never slide under it) and word-wrapped to 2 lines. */
-  /* icon | big temperature with a small degree ring (no "C" letter — it just
-   * crowded the text) | russian description in the right column */
-  weatherIcon(g, 32, 58, 20, w.wmoCode, ui.now);
+  /* Header row, all aligned on one centre line (cy): animated icon | big
+   * temperature with a superscript degree ring | wrapped description. */
+  const int cy = 56;
+  weatherIcon(g, 30, cy, 20, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  int ty = 28 - (g.fontHeight() - 64) / 2;
+  int ty = cy - g.fontHeight() / 2; /* centre the temp on cy */
   textAt(g, 58, ty, v, TEXT);
-  g.drawCircle(58 + vw + 7, ty + 8, 4, DIM); /* ° degree mark */
-  g.drawCircle(58 + vw + 7, ty + 8, 3, DIM);
+  int dgx = 58 + vw + 8, dgy = ty + 10; /* degree as a top-right superscript */
+  g.drawCircle(dgx, dgy, 4, DIM);
+  g.drawCircle(dgx, dgy, 3, DIM);
   g.setTextSize(1);
   {
-    int dx = 58 + vw + 22;
-    if (dx > 188) dx = 188;
+    int dx = 58 + vw + 24;
+    if (dx > 196) dx = 196;
     int bw = NOCT_W - dx - 6;
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
     bool oneLine = g.textWidth(d.c_str()) <= bw;
-    int y0 = oneLine ? 50 : 32; /* 1 line centered, else 2 lines */
-    textWrap(g, d.c_str(), dx, y0, bw, 22, 2, ORANGE);
+    int y0 = oneLine ? cy - 10 : cy - 20; /* centre 1 or 2 lines on cy */
+    textWrap(g, d.c_str(), dx, y0, bw, 20, 2, ORANGE);
   }
 
-  /* 5-day forecast — taller, every element inside panel y92..164 (screen 171) */
+  /* forecast — CENTRED so it isn't lopsided when fewer than 5 days arrive */
   static const char *dayNames[] = {"сег", "+1", "+2", "+3", "+4"};
-  for (int i = 0; i < w.wfDays && i < 5; i++) {
-    int x = 8 + i * 62;
-    panel(g, x, 92, 56, 72, dayNames[i]); /* day name in the panel tab */
-    weatherIcon(g, x + 28, 116, 12, w.wfCode[i], ui.now);
-    g.setFont(&F_MED);
-    snprintf(v, sizeof(v), "%d", w.wfMax[i]);
-    textCenter(g, x + 28, 132, v, WARN); /* hi: y132..152 */
-    g.setFont(&F_TEXT);
-    snprintf(v, sizeof(v), "%d", w.wfMin[i]);
-    textCenter(g, x + 28, 152, v, INFO); /* lo: y152..163, inside 164 */
+  int nd = w.wfDays < 5 ? w.wfDays : 5;
+  if (nd > 0) {
+    int totalW = nd * 62 - 6; /* 56-wide tiles, 6 px gaps */
+    int x0 = (NOCT_W - totalW) / 2;
+    for (int i = 0; i < nd; i++) {
+      int x = x0 + i * 62;
+      panel(g, x, 92, 56, 72, dayNames[i]); /* day name in the panel tab */
+      weatherIcon(g, x + 28, 116, 12, w.wfCode[i], ui.now);
+      g.setFont(&F_MED);
+      snprintf(v, sizeof(v), "%d", w.wfMax[i]);
+      textCenter(g, x + 28, 132, v, WARN); /* hi */
+      g.setFont(&F_TEXT);
+      snprintf(v, sizeof(v), "%d", w.wfMin[i]);
+      textCenter(g, x + 28, 152, v, INFO); /* lo, inside y164 */
+    }
   }
 }
 
