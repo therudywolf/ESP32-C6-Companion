@@ -289,14 +289,15 @@ void drawMb(UiCtx &ui) {
     g.drawCircle(x + 18 + vw, y + 22, 4, DIM); /* ° */
     g.drawCircle(x + 18 + vw, y + 22, 3, DIM);
   }
-  /* 6th cell: chipset-area fan, correctly labelled as RPM */
+  /* 6th cell: package power (the chipset-fan reading was bogus / irrelevant) */
   int x = 6 + 2 * 104, y = 96;
-  panel(g, x, y, 100, 66, "ЧИПСЕТ ФАН");
-  snprintf(v, sizeof(v), "%d", hw.cf);
-  g.setFont(&F_BIG);
-  textAt(g, x + 12, y + 20, v, INFO);
+  panel(g, x, y, 100, 66, "ПИТАНИЕ");
+  snprintf(v, sizeof(v), "%d", hw.pw);
+  g.setFont(&F_HUGE);
+  int vw = g.textWidth(v);
+  textAt(g, x + 12, y + 14 - (g.fontHeight() - 32) / 2, v, ACCENT);
   g.setFont(&F_MED);
-  textRight(g, x + 92, y + 40, "RPM", DIM);
+  textAt(g, x + 16 + vw, y + 30, "Вт", DIM);
 }
 
 void drawNet(UiCtx &ui) {

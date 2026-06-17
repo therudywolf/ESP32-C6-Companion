@@ -121,28 +121,25 @@ void drawWeather(UiCtx &ui) {
   }
   char v[32];
 
-  /* Header row, all aligned on one centre line (cy): animated icon | big
-   * temperature with a superscript degree ring | wrapped description. */
-  const int cy = 56;
-  weatherIcon(g, 30, cy, 20, w.wmoCode, ui.now);
+  /* header in FIXED columns so nothing drifts with the temperature's width:
+   *   left: animated icon | big temperature + superscript degree
+   *   right (fixed x): wrapped description
+   * Temp is ink-anchored like the CPU/GPU hero tiles (inkH 64 -> ink y30..94). */
+  weatherIcon(g, 28, 58, 18, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  int ty = cy - g.fontHeight() / 2; /* centre the temp on cy */
-  textAt(g, 58, ty, v, TEXT);
-  int dgx = 58 + vw + 8, dgy = ty + 10; /* degree as a top-right superscript */
-  g.drawCircle(dgx, dgy, 4, DIM);
-  g.drawCircle(dgx, dgy, 3, DIM);
+  textAt(g, 54, 30 - (g.fontHeight() - 64) / 2, v, TEXT);
+  g.drawCircle(54 + vw + 6, 36, 4, DIM); /* degree, top-right superscript */
+  g.drawCircle(54 + vw + 6, 36, 3, DIM);
   g.setTextSize(1);
   {
-    int dx = 58 + vw + 24;
-    if (dx > 196) dx = 196;
-    int bw = NOCT_W - dx - 6;
+    const int dx = 176, bw = NOCT_W - 176 - 6; /* fixed right column */
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
     bool oneLine = g.textWidth(d.c_str()) <= bw;
-    int y0 = oneLine ? cy - 10 : cy - 20; /* centre 1 or 2 lines on cy */
+    int y0 = oneLine ? 54 : 42; /* sit beside the temp, 1 or 2 lines */
     textWrap(g, d.c_str(), dx, y0, bw, 20, 2, ORANGE);
   }
 
