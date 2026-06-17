@@ -23,6 +23,7 @@ struct UiCtx {
   const ForzaState *forza = nullptr;
   bool forzaLive = false; /* packets within the timeout window */
   const Histories *hist = nullptr; /* on-device hour history */
+  const uint16_t *cover = nullptr; /* album cover RGB565 (CoverClient), or null */
 };
 
 namespace widgets {

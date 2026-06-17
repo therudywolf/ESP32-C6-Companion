@@ -76,6 +76,6 @@
 /* Backlight cap: at full PWM (255) this panel self-heats and the matrix blooms
  * a black blob. 210 (~82%) is bright but stays well under the thermal cliff. */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.5.1"
+#define NOCT_VERSION "1.6.0"
 
 #endif

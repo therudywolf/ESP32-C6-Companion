@@ -58,6 +58,7 @@ struct MediaData {
   bool isPlaying = false;
   bool isIdle = false;
   String mediaStatus = "PAUSED"; /* "PLAYING" | "PAUSED" */
+  long coverTok = 0;             /* "ctok": album cover changed -> refetch */
 };
 
 /** External events from Prometheus Alertmanager (server "events" block). */

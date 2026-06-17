@@ -217,6 +217,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     state.media.isPlaying = doc["mp"] | false;
     state.media.isIdle = doc["idle"] | false;
     state.media.mediaStatus = (const char *)(doc["media_status"] | "PAUSED");
+    state.media.coverTok = doc["ctok"] | (long)0;
   }
 
   if (doc["claude"].is<JsonObject>()) {

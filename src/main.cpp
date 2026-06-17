@@ -20,6 +20,7 @@
 #include "led/StatusLed.h"
 #include "net/ForzaManager.h"
 #include "net/LlmClient.h"
+#include "net/CoverClient.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
 #include "pet/PetBrain.h"
@@ -37,6 +38,7 @@ static const int kLlmCount = sizeof(kLlmEndpoints) / sizeof(kLlmEndpoints[0]);
 static Display display;
 static WifiManager wifi;
 static TelemetryClient tcp;
+static CoverClient coverClient;
 static ForzaManager forza;
 static LlmClient llm;
 static SdStore sd;
@@ -99,6 +101,7 @@ void setup() {
 
   wifi.begin(kWifiNets, kWifiCount, state.settings.netSel);
   tcp.setServer(PC_IP, TCP_PORT);
+  coverClient.begin(PC_IP, 8899); /* album cover from the control panel */
 
   SceneManager::Deps deps{};
   deps.disp = &display;
@@ -126,6 +129,7 @@ void loop() {
   strncpy(state.link.ssid, wifi.ssid(), sizeof(state.link.ssid) - 1);
 
   tcp.tick(now, wifi.connected(), state, graphs);
+  coverClient.update(state.media.coverTok); /* refetch cover on track change */
   if (tcp.connected() && !prevTcpConnected) led.setMode(StatusLed::BLIP_OK);
   prevTcpConnected = tcp.connected();
 
@@ -310,14 +314,16 @@ void loop() {
   ButtonEvent ev = input->update();
   if (ev != EV_NONE) {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
-             now,        &forza.state(), forzaLive, &histories};
+             now,        &forza.state(), forzaLive, &histories,
+             coverClient.ready() ? coverClient.data() : nullptr};
     sceneMgr.handleInput(ev, ui);
   }
 
   /* frame */
   if (frameTimer.check(now)) {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
-             now,        &forza.state(), forzaLive, &histories};
+             now,        &forza.state(), forzaLive, &histories,
+             coverClient.ready() ? coverClient.data() : nullptr};
     sceneMgr.draw(ui);
     display.push();
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
