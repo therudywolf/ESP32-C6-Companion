@@ -18,6 +18,60 @@ static uint16_t stColor(const char *st) {
 
 /* ── MEDIA: cassette deck ────────────────────────────────────────────── */
 
+/* "M:SS  [====o─────]  M:SS" track timeline, drawn in the footer band.
+ * The server sends a position snapshot (mpos) + length (mdur); we interpolate
+ * locally while playing so the playhead glides instead of stepping each second.
+ * dur<=0 (live stream / ad with no length) -> an indeterminate shimmer. */
+static void mediaTimeline(LGFX_Sprite &g, const MediaData &m, bool playing,
+                          unsigned long now, int y) {
+  int dur = m.durSec;
+  float pos = (float)m.posSec;
+  /* interpolate only for a recent snapshot of a KNOWN-length track: a telemetry
+   * stall then can't run the clock away (mirrors the server's 30 s bound), and an
+   * unknown-length stream/ad just shows its frozen snapshot instead of climbing. */
+  unsigned long age = now - m.posStamp;
+  if (playing && m.posStamp && dur > 0 && age < 30000UL)
+    pos += (float)age / 1000.0f;
+  if (pos < 0) pos = 0;
+  if (dur > 0 && pos > (float)dur) pos = (float)dur;
+
+  char et[8], tt[8];
+  snprintf(et, sizeof(et), "%d:%02d", (int)pos / 60, (int)pos % 60);
+  if (dur > 0) snprintf(tt, sizeof(tt), "%d:%02d", dur / 60, dur % 60);
+  else         snprintf(tt, sizeof(tt), "--:--");
+
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  int etw = g.textWidth(et), ttw = g.textWidth(tt);
+  int by = y + 5, bh = 5;            /* progress bar, just below the time labels */
+  int bx = 10 + etw + 8;
+  int bex = NOCT_W - 10 - ttw - 8;
+  int bw = bex - bx;
+  if (bw < 20) bw = 20;
+
+  textAt(g, 10, y, et, playing ? TEXT : DIM);
+  textAt(g, NOCT_W - 10 - ttw, y, tt, DIM);
+
+  g.fillRoundRect(bx, by, bw, bh, 2, PANEL);
+  g.drawRoundRect(bx, by, bw, bh, 2, ORANGE_DIM);
+
+  if (dur > 0) {
+    float frac = pos / (float)dur;
+    if (frac > 1) frac = 1;
+    int fw = (int)(bw * frac);
+    if (fw > 1) g.fillRoundRect(bx, by, fw, bh, 2, ACCENT);
+    int hx = bx + fw;                /* playhead — a tick kept inside the bar */
+    if (hx > bx + bw - 1) hx = bx + bw - 1;
+    g.drawFastVLine(hx, by, bh, playing ? TEXT : DIM);
+  } else {
+    int seg = bw / 4;               /* unknown length -> sliding highlight */
+    int off = (int)((now / 6) % (unsigned long)(bw + seg)) - seg;
+    g.setClipRect(bx, by, bw, bh);
+    g.fillRoundRect(bx + off, by, seg, bh, 2, playing ? ACCENT : ORANGE_DIM);
+    g.clearClipRect();
+  }
+}
+
 static void reel(LGFX_Sprite &g, int cx, int cy, int r, float angle,
                  uint16_t c) {
   g.drawCircle(cx, cy, r, c);
@@ -109,16 +163,8 @@ void drawMedia(UiCtx &ui) {
       textAt(g, rx + 7, 101, nt, lerp565(BG, ACCENT, a));
     }
 
-    /* full-width colour spectrum across the bottom */
-    const int bars = 40, bw2 = (NOCT_W - 12) / bars;
-    for (int i = 0; i < bars; i++) {
-      float ph = ui.now / (playing ? 120.0f : 700.0f);
-      float s = sinf(ph + i * 0.5f) * 0.5f + sinf(ph * 1.7f + i * 0.9f) * 0.3f +
-                sinf(ph * 0.5f + i) * 0.2f;
-      int h = playing ? (int)(3 + (s * 0.5f + 0.5f) * 36) : 2;
-      int bx = 6 + i * bw2;
-      g.fillRect(bx, 170 - h, bw2 - 1, h, lerp565(INFO, ACCENT, i * 255 / bars));
-    }
+    /* real track timeline across the bottom (replaces the old fake spectrum) */
+    mediaTimeline(g, m, playing, ui.now, 154);
     return;
   }
 
@@ -163,19 +209,8 @@ void drawMedia(UiCtx &ui) {
   if (aw > NOCT_W - 8) a = a.substring(0, 24);
   textCenter(g, NOCT_W / 2, 138, a.c_str(), ORANGE);
 
-  /* animated equaliser across the freed bottom band (y156..170) */
-  const int bars = 28, bw = (NOCT_W - 12) / bars;
-  for (int i = 0; i < bars; i++) {
-    float ph = ui.now / (playing ? 130.0f : 700.0f);
-    /* pseudo-spectrum: layered sines per bar */
-    float s = sinf(ph + i * 0.6f) * 0.5f + sinf(ph * 1.7f + i * 0.9f) * 0.3f +
-              sinf(ph * 0.5f + i) * 0.2f;
-    int hgt = playing ? (int)(3 + (s * 0.5f + 0.5f) * 13) : 2;
-    int bx = 6 + i * bw;
-    uint16_t c = hgt > 11 ? CRIT : (hgt > 7 ? WARN : GOOD);
-    g.fillRect(bx, 170 - hgt, bw - 1, hgt, c);
-    g.drawPixel(bx, 170 - hgt - 1, lerp565(c, TEXT, 120));
-  }
+  /* track timeline across the freed bottom band (replaces the equaliser) */
+  mediaTimeline(g, m, playing, ui.now, 154);
 }
 
 /* ── WEATHER ─────────────────────────────────────────────────────────── */
