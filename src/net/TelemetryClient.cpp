@@ -166,6 +166,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
 
   if (!doc["wt"].isNull() || doc["wd"].is<const char *>()) {
     state.weather.temp = doc["wt"] | state.weather.temp;
+    state.weather.precip = doc["wp"] | state.weather.precip;
     if (doc["wd"].is<const char *>())
       state.weather.desc = stripGlyphs((const char *)doc["wd"]);
     state.weather.wmoCode = doc["wi"] | state.weather.wmoCode;

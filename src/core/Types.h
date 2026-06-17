@@ -36,6 +36,7 @@ struct HardwareData {
 
 struct WeatherData {
   int temp = 0;
+  int precip = 0; /* precipitation probability %, "wp" */
   String desc = "";
   int wmoCode = 0;
   static const int kMaxDays = 5;
