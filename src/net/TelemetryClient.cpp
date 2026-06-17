@@ -219,6 +219,9 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     state.media.isIdle = doc["idle"] | false;
     state.media.mediaStatus = (const char *)(doc["media_status"] | "PAUSED");
     state.media.coverTok = doc["ctok"] | (long)0;
+    state.media.posSec = doc["mpos"] | 0;
+    state.media.durSec = doc["mdur"] | 0;
+    state.media.posStamp = millis(); /* anchor for on-device interpolation */
   }
 
   if (doc["claude"].is<JsonObject>()) {
