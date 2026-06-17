@@ -55,6 +55,11 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     d_.disp->setBrightness(ui.st.settings.brightness);
     return;
   }
+  /* a button during a media peek cancels the auto-return — you take over */
+  if (mediaPeekUntil_) {
+    mediaPeekUntil_ = 0;
+    preMediaScene_ = -1;
+  }
 
   /* alert takeover: any LONG press snoozes */
   if (alertActive(ui) && ev == EV_LONG) {
@@ -714,10 +719,37 @@ void SceneManager::draw(UiCtx &ui) {
     preForzaScene_ = -1;
   }
 
+  /* media peek: Spotify starting / a track change briefly takes over the МЕДИА
+   * scene, then returns to where you were (works over the Forza HUD too). */
+  {
+    MediaData &md = ui.st.media;
+    bool trackNew = md.track.length() && md.track != lastPeekTrack_;
+    bool playStart = md.isPlaying && !lastPeekPlaying_;
+    lastPeekTrack_ = md.track;
+    lastPeekPlaying_ = md.isPlaying;
+    bool free = !menuOpen_ && !sysInfo_ && !editMode_ && !scenePickMode_ &&
+                !elemPickMode_ && !alertActive(ui);
+    if ((trackNew || playStart) && md.isPlaying && free &&
+        scene_ != SCENE_MEDIA) {
+      int from = scene_;
+      preMediaScene_ = from;
+      gotoScene(SCENE_MEDIA, ui);
+      mediaPeekUntil_ = ui.now + (from == SCENE_FORZA ? 4500 : 7000);
+    } else if (trackNew && scene_ == SCENE_MEDIA && mediaPeekUntil_) {
+      mediaPeekUntil_ = ui.now + (preMediaScene_ == SCENE_FORZA ? 4500 : 7000);
+    }
+    if (mediaPeekUntil_ && ui.now > mediaPeekUntil_) {
+      mediaPeekUntil_ = 0;
+      if (scene_ == SCENE_MEDIA && preMediaScene_ >= 0)
+        gotoScene(preMediaScene_, ui);
+      preMediaScene_ = -1;
+    }
+  }
+
   /* carousel — never on the wolf's home (you're interacting there: feed/play),
    * never inside his action submenu, never over the Forza HUD or a menu. */
   if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !editMode_ &&
-      !scenePickMode_ && !elemPickMode_ && !alertActive(ui) &&
+      !scenePickMode_ && !elemPickMode_ && !mediaPeekUntil_ && !alertActive(ui) &&
       scene_ != SCENE_FORZA &&
       scene_ != SCENE_DEN && !denActionMode_ && ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
