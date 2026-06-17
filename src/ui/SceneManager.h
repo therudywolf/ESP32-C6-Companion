@@ -65,6 +65,12 @@ private:
   int preForzaScene_ = -1;
   int pendingScene_ = -1; /* set by requestScene(), applied in draw() */
 
+  /* media peek: a Spotify play / track change briefly takes over МЕДИА */
+  unsigned long mediaPeekUntil_ = 0;
+  int preMediaScene_ = -1;
+  String lastPeekTrack_;
+  bool lastPeekPlaying_ = false;
+
   /* DEN action submenu: LONG enters, SHORT cycles, LONG executes */
   bool denActionMode_ = false;
   int denSel_ = 0;
