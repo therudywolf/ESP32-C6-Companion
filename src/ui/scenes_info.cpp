@@ -38,7 +38,10 @@ void drawMedia(UiCtx &ui) {
   /* Spotify mode: real album cover + track/artist + a colour spectrum. */
   if (ui.cover) {
     const int cw = 96, cx = 10, cy = 26;
+    bool sw = g.getSwapBytes();
+    g.setSwapBytes(true); /* cover bytes are RGB565; match the sprite's order */
     g.pushImage(cx, cy, cw, cw, ui.cover);
+    g.setSwapBytes(sw);
     g.drawRect(cx - 1, cy - 1, cw + 2, cw + 2, ORANGE);
     g.drawRect(cx - 2, cy - 2, cw + 4, cw + 4, ORANGE_DIM);
 
@@ -169,21 +172,22 @@ void drawWeather(UiCtx &ui) {
    *   left: animated icon | big temperature + superscript degree
    *   right (fixed x): wrapped description
    * Temp is ink-anchored like the CPU/GPU hero tiles (inkH 64 -> ink y30..94). */
-  weatherIcon(g, 28, 58, 18, w.wmoCode, ui.now);
+  weatherIcon(g, 28, 50, 18, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
   int vw = g.textWidth(v);
-  textAt(g, 54, 30 - (g.fontHeight() - 64) / 2, v, TEXT);
-  g.drawCircle(54 + vw + 6, 36, 4, DIM); /* degree, top-right superscript */
-  g.drawCircle(54 + vw + 6, 36, 3, DIM);
+  /* ink top ~y18 so the 64px digits end by ~y82, clear of the forecast (y92) */
+  textAt(g, 54, 18 - (g.fontHeight() - 64) / 2, v, TEXT);
+  g.drawCircle(54 + vw + 6, 26, 4, DIM); /* degree, top-right superscript */
+  g.drawCircle(54 + vw + 6, 26, 3, DIM);
   g.setTextSize(1);
   {
     const int dx = 176, bw = NOCT_W - 176 - 6; /* fixed right column */
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
     bool oneLine = g.textWidth(d.c_str()) <= bw;
-    int y0 = oneLine ? 54 : 42; /* sit beside the temp, 1 or 2 lines */
+    int y0 = oneLine ? 42 : 30; /* centred on the temp's ~y50 mid */
     textWrap(g, d.c_str(), dx, y0, bw, 20, 2, ORANGE);
   }
 
