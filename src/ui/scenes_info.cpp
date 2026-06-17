@@ -38,11 +38,31 @@ void drawMedia(UiCtx &ui) {
   /* Spotify mode: real album cover + track/artist + a colour spectrum. */
   if (ui.cover) {
     const int cw = 96, cx = 10, cy = 26;
+    /* track-change transition: the cover reveals top-down, its frame flashes,
+     * and a "НОВЫЙ ТРЕК" badge fades in/out. */
+    static String lastTrack;
+    static unsigned long changeAt = 0;
+    if (m.track != lastTrack) {
+      lastTrack = m.track;
+      changeAt = ui.now;
+    }
+    unsigned long age = changeAt ? ui.now - changeAt : 999999UL;
+    int shown = age < 380 ? (int)((float)age / 380.0f * cw) : cw;
+
     bool sw = g.getSwapBytes();
     g.setSwapBytes(true); /* cover bytes are RGB565; match the sprite's order */
-    g.pushImage(cx, cy, cw, cw, ui.cover);
+    if (shown >= cw) {
+      g.pushImage(cx, cy, cw, cw, ui.cover);
+    } else if (shown > 0) {
+      g.setClipRect(cx, cy, cw, shown); /* reveal from the top down */
+      g.pushImage(cx, cy, cw, cw, ui.cover);
+      g.clearClipRect();
+      g.drawFastHLine(cx, cy + shown, cw, ACCENT); /* sweeping reveal edge */
+    }
     g.setSwapBytes(sw);
-    g.drawRect(cx - 1, cy - 1, cw + 2, cw + 2, ORANGE);
+    uint16_t frameC =
+        (age < 600 && ((ui.now / 120) & 1)) ? ACCENT : ORANGE; /* flash */
+    g.drawRect(cx - 1, cy - 1, cw + 2, cw + 2, frameC);
     g.drawRect(cx - 2, cy - 2, cw + 4, cw + 4, ORANGE_DIM);
 
     int rx = cx + cw + 12, rw = NOCT_W - rx - 6; /* right column */
@@ -56,18 +76,38 @@ void drawMedia(UiCtx &ui) {
     g.setTextSize(1);
     String t = m.track.length() ? m.track : String("--- нет трека ---");
     int tw = g.textWidth(t.c_str());
-    if (tw > rw) { /* scroll long titles within the right column */
+    g.setClipRect(rx, 48, rw, 20);
+    if (tw > rw) { /* scroll long titles seamlessly */
       int span = tw + 40, off = (int)((ui.now / 35) % span);
-      g.setClipRect(rx, 48, rw, 20);
       textAt(g, rx - off, 52, t.c_str(), TEXT);
       textAt(g, rx - off + span, 52, t.c_str(), TEXT);
-      g.clearClipRect();
     } else {
       textAt(g, rx, 52, t.c_str(), TEXT);
     }
-    g.setClipRect(rx, 74, rw, 20);
-    textAt(g, rx, 76, m.artist.c_str(), ORANGE);
     g.clearClipRect();
+    g.setClipRect(rx, 74, rw, 20); /* artist, scroll if long too */
+    int aw = g.textWidth(m.artist.c_str());
+    if (aw > rw) {
+      int span = aw + 40, off = (int)((ui.now / 40) % span);
+      textAt(g, rx - off, 76, m.artist.c_str(), ORANGE);
+      textAt(g, rx - off + span, 76, m.artist.c_str(), ORANGE);
+    } else {
+      textAt(g, rx, 76, m.artist.c_str(), ORANGE);
+    }
+    g.clearClipRect();
+
+    if (age < 1500) { /* "НОВЫЙ ТРЕК" badge, fades in then out */
+      int a = age < 200 ? (int)(age * 255 / 200)
+              : age > 1200 ? (int)((1500 - age) * 255 / 300)
+                           : 255;
+      a = a < 0 ? 0 : (a > 255 ? 255 : a);
+      g.setFont(&F_TEXT);
+      const char *nt = "НОВЫЙ ТРЕК";
+      int bwl = g.textWidth(nt) + 14;
+      g.fillRoundRect(rx, 98, bwl, 14, 4, lerp565(BG, PANEL, a));
+      g.drawRoundRect(rx, 98, bwl, 14, 4, lerp565(BG, ACCENT, a));
+      textAt(g, rx + 7, 101, nt, lerp565(BG, ACCENT, a));
+    }
 
     /* full-width colour spectrum across the bottom */
     const int bars = 40, bw2 = (NOCT_W - 12) / bars;
@@ -172,22 +212,25 @@ void drawWeather(UiCtx &ui) {
    *   left: animated icon | big temperature + superscript degree
    *   right (fixed x): wrapped description
    * Temp is ink-anchored like the CPU/GPU hero tiles (inkH 64 -> ink y30..94). */
-  weatherIcon(g, 28, 50, 18, w.wmoCode, ui.now);
+  weatherIcon(g, 28, 54, 18, w.wmoCode, ui.now);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%+d", w.temp);
-  int vw = g.textWidth(v);
-  /* ink top ~y18 so the 64px digits end by ~y82, clear of the forecast (y92) */
-  textAt(g, 54, 18 - (g.fontHeight() - 64) / 2, v, TEXT);
-  g.drawCircle(54 + vw + 6, 26, 4, DIM); /* degree, top-right superscript */
-  g.drawCircle(54 + vw + 6, 26, 3, DIM);
+  /* just the signed number (no degree symbol). Ink top ~y26: below the status
+   * bar (y19) and above the forecast (y92). */
+  textAt(g, 50, 26 - (g.fontHeight() - 64) / 2, v, TEXT);
   g.setTextSize(1);
+  /* precipitation probability in the free top-right corner */
+  g.setFont(&F_TEXT);
+  snprintf(v, sizeof(v), "осадки %d%%", w.precip);
+  textRight(g, NOCT_W - 6, 26, v, w.precip >= 50 ? INFO : DIM);
+  /* description below the precip, in the right column */
   {
-    const int dx = 176, bw = NOCT_W - 176 - 6; /* fixed right column */
+    const int dx = 168, bw = NOCT_W - dx - 6;
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
     bool oneLine = g.textWidth(d.c_str()) <= bw;
-    int y0 = oneLine ? 42 : 30; /* centred on the temp's ~y50 mid */
+    int y0 = oneLine ? 58 : 48;
     textWrap(g, d.c_str(), dx, y0, bw, 20, 2, ORANGE);
   }
 
