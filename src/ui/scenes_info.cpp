@@ -35,7 +35,51 @@ void drawMedia(UiCtx &ui) {
   MediaData &m = ui.st.media;
   bool playing = m.isPlaying;
 
-  /* cassette body */
+  /* Spotify mode: real album cover + track/artist + a colour spectrum. */
+  if (ui.cover) {
+    const int cw = 96, cx = 10, cy = 26;
+    g.pushImage(cx, cy, cw, cw, ui.cover);
+    g.drawRect(cx - 1, cy - 1, cw + 2, cw + 2, ORANGE);
+    g.drawRect(cx - 2, cy - 2, cw + 4, cw + 4, ORANGE_DIM);
+
+    int rx = cx + cw + 12, rw = NOCT_W - rx - 6; /* right column */
+    const char *stTxt = playing ? "PLAYING" : (m.isIdle ? "IDLE" : "PAUSED");
+    uint16_t stc = playing ? GOOD : WARN;
+    g.setFont(&F_TEXT);
+    if (!playing || ((ui.now / 500) & 1)) g.fillCircle(rx + 3, cy + 4, 3, stc);
+    textAt(g, rx + 10, cy, stTxt, stc);
+
+    g.setFont(&F_MED);
+    g.setTextSize(1);
+    String t = m.track.length() ? m.track : String("--- нет трека ---");
+    int tw = g.textWidth(t.c_str());
+    if (tw > rw) { /* scroll long titles within the right column */
+      int span = tw + 40, off = (int)((ui.now / 35) % span);
+      g.setClipRect(rx, 48, rw, 20);
+      textAt(g, rx - off, 52, t.c_str(), TEXT);
+      textAt(g, rx - off + span, 52, t.c_str(), TEXT);
+      g.clearClipRect();
+    } else {
+      textAt(g, rx, 52, t.c_str(), TEXT);
+    }
+    g.setClipRect(rx, 74, rw, 20);
+    textAt(g, rx, 76, m.artist.c_str(), ORANGE);
+    g.clearClipRect();
+
+    /* full-width colour spectrum across the bottom */
+    const int bars = 40, bw2 = (NOCT_W - 12) / bars;
+    for (int i = 0; i < bars; i++) {
+      float ph = ui.now / (playing ? 120.0f : 700.0f);
+      float s = sinf(ph + i * 0.5f) * 0.5f + sinf(ph * 1.7f + i * 0.9f) * 0.3f +
+                sinf(ph * 0.5f + i) * 0.2f;
+      int h = playing ? (int)(3 + (s * 0.5f + 0.5f) * 36) : 2;
+      int bx = 6 + i * bw2;
+      g.fillRect(bx, 170 - h, bw2 - 1, h, lerp565(INFO, ACCENT, i * 255 / bars));
+    }
+    return;
+  }
+
+  /* cassette body (no cover / "all" media mode) */
   panel(g, 30, 28, 260, 84);
   g.drawRoundRect(54, 40, 212, 60, 4, ORANGE_DIM);
   float angle = playing ? (ui.now % 3600) * 2 * PI / 3600.0f : 0.7f;
