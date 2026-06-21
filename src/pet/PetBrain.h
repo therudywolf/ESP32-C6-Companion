@@ -41,8 +41,8 @@ public:
 
 private:
   void trigger(const char *bucket, const char *eventRu, unsigned long now,
-               AppState &st, bool urgent, bool forceLlm = false);
-  bool pcIdle(const AppState &st) const;
+               AppState &st, bool urgent, bool forceLlm = false,
+               bool solicited = false);
   void show(const String &p, unsigned long now);
   String buildContext(const char *eventRu, AppState &st);
   void diary(const char *ev);
