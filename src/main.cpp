@@ -254,6 +254,7 @@ void loop() {
     lastWolfReport = now;
     tcp.sendWolf(pet.hunger(), pet.happy(), pet.energy(), pet.mood(),
                  pet.isAlive(), pet.isSleeping(), pet.ageDays());
+    tcp.sendCfg(state.settings); /* mirror live settings to the web panel */
   }
 
   forza.tick(now, wifi.connected());

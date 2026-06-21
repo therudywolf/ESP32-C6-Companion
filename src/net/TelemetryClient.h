@@ -25,6 +25,8 @@ public:
   /* report wolf state upstream so the companion app can show it */
   void sendWolf(int hunger, int joy, int energy, int mood, bool alive,
                 bool sleeping, unsigned long ageDays);
+  /* report current device settings upstream so the panel mirrors the board */
+  void sendCfg(const Settings &s);
   bool connected() const { return tcpConnected_; }
   bool signalLost(unsigned long now) const;
   bool hasData() const { return firstData_; }
