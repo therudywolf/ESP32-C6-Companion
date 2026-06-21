@@ -51,6 +51,20 @@ void TelemetryClient::sendWolf(int hunger, int joy, int energy, int mood,
                  alive ? 1 : 0, sleeping ? 1 : 0, ageDays);
 }
 
+void TelemetryClient::sendCfg(const Settings &s) {
+  if (!tcpConnected_) return;
+  /* one CSV the panel reads back so its controls show the board's live state.
+   * order: petllm,wchat,wtone,led,flip,bglight,bright,carousel,timeout,
+   *        bgstyle,theme,uielem,scenemask  (carousel/theme use -1 sentinels) */
+  client_.printf("cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu\n",
+                 s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone,
+                 s.ledEnabled ? 1 : 0, s.flipped ? 1 : 0, s.bgLight ? 1 : 0,
+                 s.brightness, s.carouselEnabled ? s.carouselIntervalSec : -1,
+                 s.displayTimeoutSec, s.bgStyle,
+                 s.customActive ? -1 : s.themePreset, (unsigned)s.uiElements,
+                 (unsigned long)s.sceneMask);
+}
+
 bool TelemetryClient::signalLost(unsigned long now) const {
   if (!tcpConnected_) return true;
   if (!firstData_) return (now - connectTime_) > NOCT_SIGNAL_GRACE_MS;
