@@ -87,19 +87,6 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
   return c;
 }
 
-/* PC counts as idle when the owner has clearly stepped away AND the machine
- * is quiet — only then may the wolf spend GPU time thinking. Strict on
- * purpose (user: "LLM не должна юзаться если я пользуюсь пк"): explicit TALK
- * still forces a reply regardless of this gate. */
-bool PetBrain::pcIdle(const AppState &st) const {
-  if (st.forzaLive) return false;
-  if (!st.link.tcpConnected || st.link.signalLost) return false;
-  if (st.alertActive) return false;
-  bool away = st.pcIdleSec >= 0 && st.pcIdleSec >= 90; /* ≥1.5 min no input */
-  bool quiet = st.hw.gl < 18 && st.hw.cl < 30;          /* GPU/CPU near-free */
-  return away && quiet;
-}
-
 void PetBrain::show(const String &p, unsigned long now) {
   phrase_ = p;
   speechStart_ = now;
@@ -111,7 +98,12 @@ void PetBrain::show(const String &p, unsigned long now) {
 
 void PetBrain::trigger(const char *bucket, const char *eventRu,
                        unsigned long now, AppState &st, bool urgent,
-                       bool forceLlm) {
+                       bool forceLlm, bool solicited) {
+  /* "Болтливость: выкл" (wolfChatter==0) is a true mute: the wolf says nothing
+   * on its own — no ambient remark, no cached fallback, and no LLM/LM Studio
+   * call from any telemetry/pet/idle edge. Only an explicit request (the owner
+   * pressing "Говорить") is solicited and still speaks. */
+  if (!solicited && st.settings.wolfChatter == 0) return;
   if (!urgent && now - lastSpeech_ < NOCT_LLM_COOLDOWN_MS) return;
   if (thinking_) return; /* one request in flight, latest-wins not needed */
 
@@ -203,9 +195,10 @@ void PetBrain::tick(unsigned long now, AppState &st) {
       trigger("pet", "хозяин ласково тебя гладит, ответь по-волчьи", now, st,
               true);
     } else {
-      /* explicit TALK: the owner asked the AI directly — force the LLM */
+      /* explicit TALK: the owner asked the AI directly — force the LLM and
+       * bypass the chatter-mute (this is the one way to make a muted wolf talk) */
       trigger("talk", "хозяин просит тебя что-нибудь сказать", now, st, true,
-              true);
+              true, /*solicited=*/true);
     }
   } else {
     actionPending_ = -1;
