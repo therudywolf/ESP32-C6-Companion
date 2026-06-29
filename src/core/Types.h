@@ -144,6 +144,7 @@ struct Settings {
   int wolfChatter = 2;           /* "wChat" idle talk: 0 off/1 rare/2 norm/3 often */
   int wolfTone = 0;              /* "wTone" 0 обычный/1 добрый/2 ворчун/3 дерзкий */
   bool notifShow = true;         /* "notifShow" show PC notification flyovers */
+  int ledMode = 0;               /* "ledMode" idle LED: 0 mood/1 off/2 rainbow/3 candle */
   uint16_t uiElements = 0xFFFF;  /* "uiElem" which optional widget classes show */
   bool flipped = false;          /* "flip"     rotate display 180 */
   int themePreset = 0;           /* "theme"    palette preset index */
@@ -217,6 +218,7 @@ struct AppState {
   int rcWolfChatter = -1;        /* 0..3, -1 = none */
   int rcWolfTone = -1;           /* 0..3, -1 = none */
   int rcNotif = -1;              /* 0/1 show PC notifications, -1 = none */
+  int rcLedMode = -1;            /* 0..3 idle LED style, -1 = none */
   long rcUiElem = -1;            /* UI element bitmask, -1 = none */
   int rcColorRole = -1;         /* single-role edit: role 0..9, -1 = none */
   int rcColorR = 0, rcColorG = 0, rcColorB = 0;

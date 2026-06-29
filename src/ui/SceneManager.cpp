@@ -202,7 +202,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 19;
+    const int kMenuItems = 20;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -397,7 +397,14 @@ void SceneManager::menuAction(UiCtx &ui) {
     s.notifShow = !s.notifShow;
     toast(s.notifShow ? "уведомления: вкл" : "уведомления: выкл");
     break;
-  case 18: /* close */
+  case 18: { /* idle LED ambient style */
+    s.ledMode = (s.ledMode + 1) % 4;
+    static const char *ln[] = {"подсветка: настроение", "подсветка: выкл",
+                               "подсветка: радуга", "подсветка: свеча"};
+    toast(ln[s.ledMode & 3]);
+    break;
+  }
+  case 19: /* close */
     menuOpen_ = false;
     break;
   }
@@ -411,7 +418,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[19][20];
+  char val[20][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -451,16 +458,20 @@ void SceneManager::drawMenu(UiCtx &ui) {
     snprintf(val[16], 20, "%d/%d", onCount, theme::UI_ELEM_COUNT);
   }
   snprintf(val[17], 20, "%s", s.notifShow ? "вкл" : "выкл");
-  val[18][0] = '\0';
+  {
+    static const char *ln[] = {"настроение", "выкл", "радуга", "свеча"};
+    snprintf(val[18], 20, "%s", ln[s.ledMode & 3]);
+  }
+  val[19][0] = '\0';
 
   static const char *names[] = {
       "Карусель",     "Яркость",       "LED",          "Волк LLM",
       "WiFi",         "Переворот",      "Тема",         "Фон",
       "Светлый фон",  "Слот темы",      "Цвета вручную", "Экраны",
       "Forza HUD",    "Инфо системы",   "Болтливость",  "Характер",
-      "Элементы",     "Уведомления",    "Закрыть"};
+      "Элементы",     "Уведомления",    "Подсветка",    "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 19, kVisible = 6, rowH = 22;
+  const int kRows = 20, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -845,8 +856,7 @@ void SceneManager::draw(UiCtx &ui) {
         notifAt_ = ui.now;
         notifDurMs_ = nt.durSec > 0 ? (unsigned long)nt.durSec * 1000UL : 7000UL;
         notifUntil_ = ui.now + notifDurMs_;
-        if (nt.led && d_.led)
-          d_.led->flash(40, 150, 170, 600); /* cyan blip on arrival */
+        if (nt.led && d_.led) d_.led->notify(); /* cyan blink burst on arrival */
       }
     }
     if (notifUntil_ && (long)(ui.now - notifUntil_) >= 0) notifUntil_ = 0;
