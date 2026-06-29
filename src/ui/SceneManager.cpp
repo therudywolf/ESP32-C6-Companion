@@ -738,7 +738,8 @@ void SceneManager::drawNotifCard(UiCtx &ui) {
   }
   g.drawFastHLine(mx + 10, cy + 30, cw - 20, lerp565(PANEL, ACCENT, 70));
 
-  /* sender / title — marquee if it doesn't fit */
+  /* sender / title — its own colour (orange) so it reads apart from the white
+   * message below; marquee if it doesn't fit. */
   g.setFont(&F_MED);
   g.setTextSize(1);
   const char *t = n.title.length() ? n.title.c_str() : "-";
@@ -746,19 +747,21 @@ void SceneManager::drawNotifCard(UiCtx &ui) {
   g.setClipRect(tx, cy + 37, tcw, 22); /* full F_MED cell incl. descenders */
   if (tw > tcw) {
     int span = tw + 40, off = (int)((ui.now / 35) % span);
-    textAt(g, tx - off, cy + 38, t, TEXT);
-    textAt(g, tx - off + span, cy + 38, t, TEXT);
+    textAt(g, tx - off, cy + 38, t, ORANGE);
+    textAt(g, tx - off + span, cy + 38, t, ORANGE);
   } else {
-    textAt(g, tx, cy + 38, t, TEXT);
+    textAt(g, tx, cy + 38, t, ORANGE);
   }
   g.clearClipRect();
+  /* divider between sender and message — three clear blocks: app / from / text */
+  g.drawFastHLine(mx + 10, cy + 59, cw - 20, lerp565(PANEL, ORANGE, 55));
 
   /* body — the message itself, in the largest Cyrillic-capable font (F_MED),
-   * wrapped to up to 3 lines. This is the star of the card, so full brightness. */
+   * wrapped to up to 3 lines, full-bright white = the star of the card. */
   if (n.body.length()) {
     g.setFont(&F_MED);
     g.setTextSize(1);
-    widgets::textWrap(g, n.body.c_str(), mx + 10, cy + 60, cw - 20, 20, 3, TEXT);
+    widgets::textWrap(g, n.body.c_str(), mx + 10, cy + 63, cw - 20, 20, 3, TEXT);
   }
 
   /* auto-dismiss countdown bar */
