@@ -236,6 +236,10 @@ void loop() {
       cfg.wolfTone = state.rcWolfTone > 3 ? 3 : state.rcWolfTone;
       persist = true;
     }
+    if (state.rcNotif >= 0) {
+      cfg.notifShow = state.rcNotif != 0;
+      persist = true;
+    }
     if (state.rcUiElem >= 0) {
       cfg.uiElements = (uint16_t)state.rcUiElem;
       persist = true;
