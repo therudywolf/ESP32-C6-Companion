@@ -38,12 +38,14 @@ void WolfPet::save() {
   p.putBool("alive", alive_);
   p.putBool("slp", sleeping_);
   p.end();
+  dirty_ = false;
 }
 
 void WolfPet::tick(unsigned long now) {
   while (now - lastDecayMs_ >= NOCT_WOLF_DECAY_INTERVAL_MS) {
     lastDecayMs_ += NOCT_WOLF_DECAY_INTERVAL_MS;
     if (!alive_) continue;
+    dirty_ = true; /* stats are about to change this decay step */
     ageAccumMs_ += NOCT_WOLF_DECAY_INTERVAL_MS;
     if (ageAccumMs_ >= NOCT_WOLF_DAY_MS) {
       ageAccumMs_ -= NOCT_WOLF_DAY_MS;
@@ -70,7 +72,7 @@ void WolfPet::tick(unsigned long now) {
   }
   if (now - lastSaveMs_ >= NOCT_WOLF_SAVE_INTERVAL_MS) {
     lastSaveMs_ = now;
-    save();
+    if (dirty_) save(); /* skip the NVS write when nothing changed */
   }
 }
 

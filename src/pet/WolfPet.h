@@ -39,6 +39,8 @@ private:
   unsigned long lastDecayMs_ = 0;
   unsigned long lastSaveMs_ = 0;
   uint32_t ageAccumMs_ = 0;
+  bool dirty_ = false; /* unsaved stat change — skips the periodic NVS write
+                          while nothing changed (e.g. the pet is fainted) */
 };
 
 #endif
