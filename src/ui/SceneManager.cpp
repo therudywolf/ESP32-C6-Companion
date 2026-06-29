@@ -701,7 +701,7 @@ void SceneManager::drawNotifCard(UiCtx &ui) {
   int left = leftL > 0 ? (int)leftL : 0;
 
   /* slide in from the top: ease-out over the first 220 ms */
-  const int mx = 6, cw = NOCT_W - 2 * mx, ch = 116;
+  const int mx = 6, cw = NOCT_W - 2 * mx, ch = 142;
   float env = age < 220 ? (float)age / 220.0f : 1.0f;
   float e = 1.0f - powf(1.0f - env, 3.0f);
   int cy = -ch + (int)(e * (ch + 4)); /* from off-top up to y=4 */
@@ -748,11 +748,12 @@ void SceneManager::drawNotifCard(UiCtx &ui) {
   }
   g.clearClipRect();
 
-  /* body — wrapped to up to 3 lines (empty in sender-only mode) */
+  /* body — the message itself, in the largest Cyrillic-capable font (F_MED),
+   * wrapped to up to 3 lines. This is the star of the card, so full brightness. */
   if (n.body.length()) {
-    g.setFont(&F_TEXT);
-    widgets::textWrap(g, n.body.c_str(), mx + 10, cy + 58, cw - 20, 15, 3,
-                      lerp565(TEXT, BG, 50));
+    g.setFont(&F_MED);
+    g.setTextSize(1);
+    widgets::textWrap(g, n.body.c_str(), mx + 10, cy + 60, cw - 20, 20, 3, TEXT);
   }
 
   /* auto-dismiss countdown bar */
