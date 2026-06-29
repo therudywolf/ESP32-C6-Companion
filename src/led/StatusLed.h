@@ -30,6 +30,13 @@ public:
     flashUntil_ = millis() + ms;
   }
 
+  /* a notification arrived: a distinct cyan blink burst (~1.6 s) over the idle
+   * ambient (but a hardware ALERT still wins). */
+  void notify() { notifUntil_ = millis() + 1600; }
+
+  /* idle/ambient style: 0 mood-breathe, 1 off, 2 rainbow, 3 candle. */
+  void setAmbient(int a) { ambient_ = a; }
+
   void begin() { px(0, 0, 0); }
 
   void setEnabled(bool en) {
@@ -52,16 +59,34 @@ public:
       px(flashR_, flashG_, flashB_);
       return;
     }
+    if (now < notifUntil_ && mode_ != ALERT) { /* cyan blink for a new message */
+      bool on = ((now / 150) % 2) == 0;
+      px(0, on ? 150 : 0, on ? 165 : 0);
+      return;
+    }
     switch (mode_) {
     case OFF:
       px(0, 0, 0);
       break;
-    case BREATHE: { /* mood-colored breathing, period ~4s */
-      phase_ = (phase_ + 1) % 120;
-      int tri = phase_ < 60 ? phase_ : 120 - phase_;
-      int v = 8 + tri * 92 / 60; /* 8..100 scale % */
-      px((uint8_t)(moodR_ * v / 255), (uint8_t)(moodG_ * v / 255),
-         (uint8_t)(moodB_ * v / 255));
+    case BREATHE: { /* idle ambient — style chosen by ambient_ */
+      if (ambient_ == 1) { /* off: only events light the LED */
+        px(0, 0, 0);
+      } else if (ambient_ == 2) { /* rainbow: slow dim hue cycle */
+        phase_ = (phase_ + 1) % 360;
+        uint8_t r, gg, b;
+        hsv(phase_, 220, 60, r, gg, b);
+        px(r, gg, b);
+      } else if (ambient_ == 3) { /* candle: smoothed warm flicker */
+        uint8_t target = 40 + (uint8_t)random(70);
+        flick_ = (uint8_t)((flick_ * 3 + target) / 4);
+        px(flick_, (uint8_t)(flick_ * 4 / 10), 0);
+      } else { /* 0 = mood-coloured breathing, period ~4 s */
+        phase_ = (phase_ + 1) % 120;
+        int tri = phase_ < 60 ? phase_ : 120 - phase_;
+        int v = 8 + tri * 92 / 60; /* 8..100 scale % */
+        px((uint8_t)(moodR_ * v / 255), (uint8_t)(moodG_ * v / 255),
+           (uint8_t)(moodB_ * v / 255));
+      }
       break;
     }
     case ALERT: { /* hard red strobe ~4Hz */
@@ -130,15 +155,34 @@ private:
     rgbLedWrite(pin_, g, r, b);
   }
 
+  /* h 0..359 -> RGB at saturation s and peak value vmax (both 0..255). */
+  static void hsv(int h, uint8_t s, uint8_t vmax, uint8_t &r, uint8_t &g,
+                  uint8_t &b) {
+    int region = (h / 60) % 6, rem = (h % 60) * 255 / 60;
+    uint8_t q = (uint8_t)(vmax * (255 - (s * rem / 255)) / 255);
+    uint8_t t = (uint8_t)(vmax * (255 - (s * (255 - rem) / 255)) / 255);
+    switch (region) {
+    case 0: r = vmax; g = t; b = 0; break;
+    case 1: r = q; g = vmax; b = 0; break;
+    case 2: r = 0; g = vmax; b = t; break;
+    case 3: r = 0; g = q; b = vmax; break;
+    case 4: r = t; g = 0; b = vmax; break;
+    default: r = vmax; g = 0; b = q; break;
+    }
+  }
+
   static const int pin_ = 8;
   Mode mode_ = BREATHE;
   bool enabled_ = true;
   int phase_ = 0;
+  int ambient_ = 0; /* idle style: 0 mood / 1 off / 2 rainbow / 3 candle */
+  uint8_t flick_ = 60;
   float forzaPct_ = 0;
   uint8_t moodR_ = 252, moodG_ = 238, moodB_ = 10;
   unsigned long lastMs_ = 0;
   unsigned long blipStart_ = 0;
   unsigned long flashUntil_ = 0;
+  unsigned long notifUntil_ = 0;
   uint8_t flashR_ = 0, flashG_ = 0, flashB_ = 0;
 };
 

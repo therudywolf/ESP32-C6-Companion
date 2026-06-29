@@ -240,6 +240,10 @@ void loop() {
       cfg.notifShow = state.rcNotif != 0;
       persist = true;
     }
+    if (state.rcLedMode >= 0) {
+      cfg.ledMode = state.rcLedMode > 3 ? 3 : state.rcLedMode;
+      persist = true;
+    }
     if (state.rcUiElem >= 0) {
       cfg.uiElements = (uint16_t)state.rcUiElem;
       persist = true;
@@ -313,6 +317,7 @@ void loop() {
       led.setMoodColor(0, 40, 200); /* sad blue */
     led.setMode(StatusLed::BREATHE);
   }
+  led.setAmbient(state.settings.ledMode); /* idle ambient style */
   led.tick(now);
 
   /* input */
