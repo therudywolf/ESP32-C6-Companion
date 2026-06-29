@@ -79,7 +79,7 @@ static void infoCell(LGFX_Sprite &g, int x, int w, const char *cap,
 void drawForza(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   const ForzaState *fz = ui.forza;
-  char v[48];
+  char v[64]; /* must hold "КРУГ %s   ЛУЧ %s   ПОСЛ %s" (31B + 3×lap) */
 
   if (!ui.forzaLive || !fz) {
     g.setFont(&F_MED);

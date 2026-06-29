@@ -40,6 +40,10 @@ bool LlmClient::request(const String &context, bool big) {
   pendingCtx_ = context;
   pendingBig_ = big;
   hasPending_ = true;
+  /* drop any stale reply still in the mailbox (e.g. a timed-out call that the
+   * caller stopped waiting for) so it can't be mis-attributed to THIS request */
+  hasReply_ = false;
+  reply_ = "";
   xSemaphoreGive(mux_);
   busy_ = true;
   return true;

@@ -13,7 +13,15 @@ void LiteClient::begin(const char *url, const char *token) {
 }
 
 void LiteClient::tick(unsigned long now, bool pcDown) {
-  if (!url_.length() || !pcDown) return;
+  if (!url_.length()) return;
+  if (!pcDown) {
+    /* PC is back: drop any unconsumed/in-flight fallback so a later PC-down
+     * can't be served a stale payload, and a fresh fetch starts clean */
+    ready_ = false;
+    payload_ = "";
+    pending_ = false;
+    return;
+  }
   /* one in flight at a time; steady cadence when healthy, faster after a fail */
   unsigned long iv = ok_ ? kIntervalMs : kRetryMs;
   if (!pending_ && !ready_ && now - lastReq_ >= iv) {
@@ -52,6 +60,11 @@ void LiteClient::taskLoop() {
 }
 
 bool LiteClient::fetch(String &out) {
+  /* CA validation checks the cert's validity dates against the wall clock — if
+   * NTP hasn't synced yet (RTC ~1970) the handshake would fail with a bogus
+   * "cert not yet valid". Skip until the clock is real; the retry cadence picks
+   * it up once SNTP lands (seconds after WiFi). */
+  if (time(nullptr) < 1700000000L) return false;
   WiFiClientSecure client;
   client.setCACert(LITE_CA_ISRG_X1); /* verify the chain — no MITM, no leak */
   HTTPClient http;
