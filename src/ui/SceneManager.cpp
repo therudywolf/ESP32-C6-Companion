@@ -717,41 +717,36 @@ void SceneManager::drawNotifCard(UiCtx &ui) {
   g.drawRoundRect(mx, cy, cw, ch, 10, ACCENT);
   g.drawRoundRect(mx + 1, cy + 1, cw - 2, ch - 2, 9, lerp565(PANEL, ACCENT, 90));
 
-  /* header: bell + app name (cyan) + optional "+N" queue badge */
-  g.fillCircle(mx + 16, cy + 17, 3, INFO);
-  g.drawCircle(mx + 16, cy + 17, 5, lerp565(PANEL, INFO, 120));
-  g.setFont(&F_TEXT);
+  /* header: bell + app name (cyan, F_MED so it's readable) + "+N" queue badge */
+  g.fillCircle(mx + 16, cy + 16, 3, INFO);
+  g.drawCircle(mx + 16, cy + 16, 5, lerp565(PANEL, INFO, 120));
+  g.setFont(&F_MED);
   g.setTextSize(1);
   /* clip the app name so a long one can't run into the +N badge */
-  int appRight = mx + cw - (n.pending > 0 ? 44 : 10);
-  g.setClipRect(mx + 28, cy + 6, appRight - (mx + 28), 18);
-  textAt(g, mx + 28, cy + 10, n.app.length() ? n.app.c_str() : "Уведомление",
-         INFO);
+  int appRight = mx + cw - (n.pending > 0 ? 46 : 10);
+  g.setClipRect(mx + 28, cy + 6, appRight - (mx + 28), 22);
+  widgets::drawEmojiText(g, n.app.length() ? n.app.c_str() : "Уведомление",
+                         mx + 28, cy + 8, appRight - (mx + 28), 20, 1, INFO);
   g.clearClipRect();
   if (n.pending > 0) {
+    g.setFont(&F_TEXT);
+    g.setTextSize(1);
     char b[10];
     snprintf(b, sizeof(b), "+%d", n.pending);
     int bw = g.textWidth(b) + 12, bx = mx + cw - bw - 8;
-    g.fillRoundRect(bx, cy + 8, bw, 16, 8, lerp565(BG, ACCENT, 70));
-    g.drawRoundRect(bx, cy + 8, bw, 16, 8, ACCENT);
+    g.fillRoundRect(bx, cy + 9, bw, 15, 7, lerp565(BG, ACCENT, 70));
+    g.drawRoundRect(bx, cy + 9, bw, 15, 7, ACCENT);
     textAt(g, bx + 6, cy + 11, b, ACCENT);
   }
-  g.drawFastHLine(mx + 10, cy + 30, cw - 20, lerp565(PANEL, ACCENT, 70));
+  g.drawFastHLine(mx + 10, cy + 31, cw - 20, lerp565(PANEL, ACCENT, 70));
 
-  /* sender / title — its own colour (orange) so it reads apart from the white
-   * message below; marquee if it doesn't fit. */
+  /* sender / title — orange (reads apart from the white message), inline emoji,
+   * clipped to one line. */
   g.setFont(&F_MED);
   g.setTextSize(1);
   const char *t = n.title.length() ? n.title.c_str() : "-";
-  int tx = mx + 10, tcw = cw - 20, tw = g.textWidth(t);
-  g.setClipRect(tx, cy + 37, tcw, 22); /* full F_MED cell incl. descenders */
-  if (tw > tcw) {
-    int span = tw + 40, off = (int)((ui.now / 35) % span);
-    textAt(g, tx - off, cy + 38, t, ORANGE);
-    textAt(g, tx - off + span, cy + 38, t, ORANGE);
-  } else {
-    textAt(g, tx, cy + 38, t, ORANGE);
-  }
+  g.setClipRect(mx + 10, cy + 37, cw - 20, 22);
+  widgets::drawEmojiText(g, t, mx + 10, cy + 38, cw - 20, 20, 1, ORANGE);
   g.clearClipRect();
   /* divider between sender and message — three clear blocks: app / from / text */
   g.drawFastHLine(mx + 10, cy + 59, cw - 20, lerp565(PANEL, ORANGE, 55));
@@ -761,7 +756,10 @@ void SceneManager::drawNotifCard(UiCtx &ui) {
   if (n.body.length()) {
     g.setFont(&F_MED);
     g.setTextSize(1);
-    widgets::textWrap(g, n.body.c_str(), mx + 10, cy + 63, cw - 20, 20, 3, TEXT);
+    g.setClipRect(mx + 10, cy + 62, cw - 20, 62); /* keep it inside the card */
+    widgets::drawEmojiText(g, n.body.c_str(), mx + 10, cy + 63, cw - 20, 20, 3,
+                           TEXT);
+    g.clearClipRect();
   }
 
   /* auto-dismiss countdown bar */

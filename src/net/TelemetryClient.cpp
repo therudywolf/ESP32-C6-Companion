@@ -242,9 +242,9 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   if (doc["notif"].is<JsonObject>()) {
     JsonObject nt = doc["notif"];
     state.notif.seq = nt["seq"] | (long)0;
-    state.notif.app = stripGlyphs(nt["app"] | "");
-    state.notif.title = stripGlyphs(nt["title"] | "");
-    state.notif.body = stripGlyphs(nt["body"] | "");
+    state.notif.app = stripGlyphsEmoji(nt["app"] | "");
+    state.notif.title = stripGlyphsEmoji(nt["title"] | "");
+    state.notif.body = stripGlyphsEmoji(nt["body"] | "");
     state.notif.pending = nt["pending"] | 0;
     state.notif.durSec = nt["dur"] | 0;
     state.notif.led = nt["led"] | true;

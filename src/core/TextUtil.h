@@ -51,4 +51,51 @@ inline String stripGlyphs(const String &in) {
   return out;
 }
 
+/* Like stripGlyphs but ALSO preserves emoji-range codepoints (so the inline
+ * emoji renderer can blit them from the atlas). Use only for fields drawn via
+ * widgets::drawEmojiText (notification app/sender/body) — never for text drawn
+ * with plain textAt, or the emoji would render as tofu. Non-atlas emoji in the
+ * range are kept here but simply skipped by drawEmojiText. */
+inline bool isEmojiCp(uint32_t cp) {
+  return (cp >= 0x1F000 && cp <= 0x1FAFF) || (cp >= 0x2600 && cp <= 0x27BF) ||
+         (cp >= 0x2300 && cp <= 0x23FF) || (cp >= 0x2B00 && cp <= 0x2BFF) ||
+         (cp >= 0x2190 && cp <= 0x21FF) || cp == 0x2122 || cp == 0x2139;
+}
+
+inline String stripGlyphsEmoji(const String &in) {
+  String out;
+  out.reserve(in.length());
+  int n = in.length();
+  for (int i = 0; i < n;) {
+    uint8_t c = (uint8_t)in[i];
+    if (c < 0x80) {
+      if (c >= 0x20) out += (char)c;
+      i += 1;
+      continue;
+    }
+    int len = (c < 0xC0) ? 1 : (c < 0xE0) ? 2 : (c < 0xF0) ? 3 : 4;
+    if (i + len > n) break;
+    uint32_t cp = 0;
+    if (len == 2)
+      cp = ((c & 0x1F) << 6) | ((uint8_t)in[i + 1] & 0x3F);
+    else if (len == 3)
+      cp = ((c & 0x0F) << 12) | (((uint8_t)in[i + 1] & 0x3F) << 6) |
+           ((uint8_t)in[i + 2] & 0x3F);
+    else if (len == 4)
+      cp = ((c & 0x07) << 18) | (((uint8_t)in[i + 1] & 0x3F) << 12) |
+           (((uint8_t)in[i + 2] & 0x3F) << 6) | ((uint8_t)in[i + 3] & 0x3F);
+
+    if ((cp >= 0x0400 && cp <= 0x04FF) || cp == 0x2014 || isEmojiCp(cp)) {
+      for (int k = 0; k < len; k++) out += in[i + k]; /* Cyrillic / em-dash / emoji */
+    } else if (cp == 0x2026) {
+      out += "...";
+    } else if (cp == 0x2013 || cp == 0x2022 || cp == 0x00B7) {
+      out += '-';
+    }
+    /* guillemets / curly quotes / accented latin dropped */
+    i += len;
+  }
+  return out;
+}
+
 #endif

@@ -74,6 +74,12 @@ void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color);
 int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
              int maxLines, uint16_t color);
 
+/* Like textWrap, but renders inline COLOUR emoji from the emoji atlas: emoji
+ * codepoints are blitted as 18x18 bitmaps, other text drawn with the current
+ * font. Word-wrapped, UTF-8 aware (incl. 4-byte). Returns lines drawn. */
+int drawEmojiText(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
+                  int maxLines, uint16_t color);
+
 } // namespace widgets
 
 #endif
