@@ -114,7 +114,7 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
   bool affordable = !st.forzaLive && st.hw.gl < 55 && st.hw.cl < 80;
   bool allowLlm = forceLlm || affordable;
   bool canLlm = st.settings.petLlm && llm_ && !llm_->busy() &&
-                st.link.wifiConnected && allowLlm;
+                st.link.wifiConnected && allowLlm && now >= llmSuppressUntil_;
   if (canLlm && llm_->request(buildContext(eventRu, st), /*big=*/false)) {
     strncpy(pendingBucket_, bucket, sizeof(pendingBucket_) - 1);
     pendingBucket_[sizeof(pendingBucket_) - 1] = '\0';
@@ -160,12 +160,15 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     bool ok = false;
     if (llm_->takeReply(reply, ok)) {
       if (ok) {
+        llmFailStreak_ = 0; /* LLM is healthy again */
         cache_->remember(pendingBucket_, reply);
         show(reply, now);
       } else {
+        if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
         show(cache_->pick(pendingBucket_), now);
       }
     } else if (now - speechStart_ > NOCT_LLM_TIMEOUT_MS + 4000UL) {
+      if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
       thinking_ = false; /* belt & braces: task wedged — fall back */
       show(cache_->pick(pendingBucket_), now);
     }

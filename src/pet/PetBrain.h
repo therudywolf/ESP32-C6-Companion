@@ -89,6 +89,18 @@ private:
   int lastPidle_ = -1;
   bool awayFired_ = false;
   bool lastForzaLive_ = false;
+
+  /* LLM failure backoff. The LM Studio endpoints live on the owner's PC (LAN +
+   * public DDNS fallback). With the PC off, both are dead and each call burns
+   * ~connect-timeout walking them before falling back — so after 2 consecutive
+   * failures we suppress LLM calls for a window and go STRAIGHT to the instant
+   * phrase cache (no "thinking" stall). The window expiry lets one probe retry,
+   * so it self-heals the moment the PC/LLM is reachable again. This keeps the
+   * hotspot scenario alive (PC on, telemetry unreachable, public LLM works)
+   * unlike a blunt tcpConnected gate. */
+  int llmFailStreak_ = 0;
+  unsigned long llmSuppressUntil_ = 0;
+  static const unsigned long kLlmSuppressMs = 300000UL; /* 5 min */
 };
 
 #endif
