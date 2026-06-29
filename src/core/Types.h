@@ -73,6 +73,8 @@ struct NotifData {
   String title = ""; /* sender / headline */
   String body = "";  /* message text (may be empty in sender-only mode) */
   int pending = 0;   /* extra notifications still waiting behind this one */
+  int durSec = 0;    /* "dur": how long to show the card (0 = default 7s) */
+  bool led = true;   /* "led": flash the LED on arrival */
 };
 
 /** External events from Prometheus Alertmanager (server "events" block). */
