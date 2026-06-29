@@ -106,7 +106,7 @@ bool LlmClient::callOnce(const char *base, const String &context,
   String url = String(base) + "/v1/chat/completions";
   if (!http.begin(url)) return false;
   http.setTimeout(NOCT_LLM_TIMEOUT_MS);
-  http.setConnectTimeout(4000);
+  http.setConnectTimeout(2500); /* fail fast on a dead endpoint (PC off) */
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", String("Bearer ") + apiKey_);
 

@@ -3,9 +3,13 @@
  * Runs in its own FreeRTOS task: network only, NEVER touches SPI. The UI
  * polls the mailbox. Endpoints tried in order (LAN first — the public DDNS
  * name is unreachable from inside the home network, hairpin NAT), sticky on
- * success. gemma-4 is a reasoning model: reasoning_effort "none" keeps the
- * replies fast (~0.4 s warm) and the tokens cheap; a cold call pays the JIT
- * model load (~13 s), hence the generous timeout.
+ * success. gemma-4-e2b is a reasoning model and reasoning stays ON: thoughts
+ * route to reasoning_content and the clean line lands in `content`, with the
+ * ~800-token budget (NOCT_LLM_MAX_TOKENS) covering the thinking — this is the
+ * recipe that empirically yields coherent one-liners (no reasoning_effort
+ * field is sent). A cold call also pays the JIT model load (~13 s), hence the
+ * generous timeout. PetBrain backs off after repeated failures so a dead LLM
+ * (PC off) never stalls the wolf.
  */
 #ifndef NOCT_LLM_CLIENT_H
 #define NOCT_LLM_CLIENT_H

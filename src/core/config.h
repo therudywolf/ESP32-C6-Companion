@@ -69,6 +69,7 @@
 #define NOCT_FORZA_TIMEOUT_MS 3000
 #define NOCT_FORZA_MIN_PACKET 311
 #define NOCT_FORZA_SHIFT_PCT 0.95f /* strobe + SHIFT! above this rev pct */
+#define NOCT_FORZA_MAX_DRAIN 8 /* cap UDP packets parsed per tick (bound frame time) */
 
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 #define NOCT_SD_SPI_HZ 25000000
@@ -76,6 +77,6 @@
 /* Backlight cap: at full PWM (255) this panel self-heats and the matrix blooms
  * a black blob. 210 (~82%) is bright but stays well under the thermal cliff. */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.8.0"
+#define NOCT_VERSION "1.8.1"
 
 #endif

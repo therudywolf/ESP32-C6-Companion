@@ -31,7 +31,7 @@ void ForzaManager::tick(unsigned long now, bool wifiUp) {
     if (bound_) Serial.println("[FORZA] UDP listening on 5300");
     return;
   }
-  int len;
+  int len, drained = 0;
   while ((len = udp_.parsePacket()) > 0) {
     if (len > (int)sizeof(buf_)) {
       udp_.clear();
@@ -84,6 +84,7 @@ void ForzaManager::tick(unsigned long now, bool wifiUp) {
       int hp = (int)(st_.powerW / 745.7f);
       if (hp > st_.peakHp) st_.peakHp = hp;
     }
+    if (++drained >= NOCT_FORZA_MAX_DRAIN) break; /* leave the rest for next tick */
   }
 }
 

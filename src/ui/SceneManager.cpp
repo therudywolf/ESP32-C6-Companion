@@ -258,9 +258,12 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     menuOpen_ = true;
     menuSel_ = 0;
     break;
-  case EV_TRIPLE:
-    gotoScene(SCENE_DEN, ui);
+  case EV_TRIPLE: {
+    /* home gesture: jump to the pinned scene if the owner set one, else DEN */
+    int h = ui.st.settings.pinnedScene;
+    gotoScene((h >= 0 && h < SCENE_FORZA) ? (SceneId)h : SCENE_DEN, ui);
     break;
+  }
   case EV_LONG: {
     if (scene_ == SCENE_DEN) {
       denActionMode_ = true; /* enter the wolf's submenu */
@@ -272,6 +275,17 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     } else if (scene_ == SCENE_FOREST || scene_ == SCENE_SERVICES) {
       d_.tcp->sendCmd("status");
       toast("обновляю...");
+    } else if (scene_ != SCENE_FORZA) {
+      /* pin / unpin this scene as the TRIPLE-press "home" (reversible) */
+      Settings &s = ui.st.settings;
+      if (s.pinnedScene == scene_) {
+        s.pinnedScene = -1;
+        toast("дом сброшен на волка");
+      } else {
+        s.pinnedScene = scene_;
+        toast("этот экран — дом");
+      }
+      settings::save(s);
     }
     break;
   }
