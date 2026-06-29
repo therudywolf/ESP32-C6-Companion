@@ -128,6 +128,20 @@ void loop() {
   state.link.rssi = wifi.rssi();
   strncpy(state.link.ssid, wifi.ssid(), sizeof(state.link.ssid) - 1);
 
+  /* own clock via NTP (MSK) so the time survives the PC being off — overrides
+   * the server's "clk" once synced; the status bar/screensaver then run standalone */
+  static bool ntpInit = false;
+  if (wifi.connected() && !ntpInit) {
+    configTime(3 * 3600, 0, "pool.ntp.org", "time.google.com");
+    ntpInit = true;
+  }
+  if (ntpInit) {
+    struct tm tmNow;
+    if (getLocalTime(&tmNow, 0))
+      snprintf(state.pcClock, sizeof(state.pcClock), "%02d:%02d", tmNow.tm_hour,
+               tmNow.tm_min);
+  }
+
   tcp.tick(now, wifi.connected(), state, graphs);
   coverClient.update(state.media.coverTok); /* refetch cover on track change */
   if (tcp.connected() && !prevTcpConnected) led.setMode(StatusLed::BLIP_OK);
