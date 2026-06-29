@@ -100,8 +100,31 @@ void LlmClient::taskLoop() {
   }
 }
 
+/* The Authorization: Bearer <sk-lm token> must never cross the open internet in
+ * the clear. https is always fine; plain http is allowed ONLY to a private/LAN
+ * literal IP. A public http endpoint (e.g. a DDNS LM Studio on a hotspot) is
+ * skipped entirely — front it with TLS to use it off-LAN. */
+static bool endpointSafe(const char *base) {
+  if (strncmp(base, "https://", 8) == 0) return true;
+  const char *h = strstr(base, "://");
+  h = h ? h + 3 : base;
+  if (strncmp(h, "10.", 3) == 0 || strncmp(h, "192.168.", 8) == 0 ||
+      strncmp(h, "127.", 4) == 0)
+    return true;
+  if (strncmp(h, "172.", 4) == 0) { /* 172.16.0.0/12 */
+    int second = atoi(h + 4);
+    return second >= 16 && second <= 31;
+  }
+  return false;
+}
+
 bool LlmClient::callOnce(const char *base, const String &context,
                          const char *model, String &out) {
+  if (!endpointSafe(base)) {
+    Serial.printf("[LLM] skip %s (token would cross cleartext to a public host)\n",
+                  base);
+    return false;
+  }
   HTTPClient http;
   String url = String(base) + "/v1/chat/completions";
   if (!http.begin(url)) return false;

@@ -4,8 +4,11 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
-void LiteClient::begin(const char *url) {
+#include "net/lite_ca.h"
+
+void LiteClient::begin(const char *url, const char *token) {
   url_ = url ? url : "";
+  token_ = token ? token : "";
   if (url_.length()) xTaskCreate(taskEntry, "lite", 12288, this, 1, &task_);
 }
 
@@ -47,11 +50,15 @@ void LiteClient::taskLoop() {
 
 bool LiteClient::fetch(String &out) {
   WiFiClientSecure client;
-  client.setInsecure(); /* the URL token authenticates; skip cert validation */
+  client.setCACert(LITE_CA_ISRG_X1); /* verify the chain — no MITM, no leak */
   HTTPClient http;
   if (!http.begin(client, url_)) return false;
   http.setTimeout(9000);
   http.setConnectTimeout(5000);
+  /* token in the Authorization header, not the URL query, so it never lands in
+   * a reverse-proxy access log */
+  if (token_.length())
+    http.addHeader("Authorization", String("Bearer ") + token_);
   int code = http.GET();
   if (code == 200) out = http.getString();
   http.end();

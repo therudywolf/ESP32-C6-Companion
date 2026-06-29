@@ -13,7 +13,7 @@
 
 class LiteClient {
 public:
-  void begin(const char *url);
+  void begin(const char *url, const char *token);
   /* call every loop; only fetches while pcDown, at most every kIntervalMs */
   void tick(unsigned long now, bool pcDown);
   /* moves a freshly-fetched payload into `out` and returns true (consumes it) */
@@ -25,6 +25,7 @@ private:
   bool fetch(String &out);
 
   String url_;
+  String token_;
   volatile bool pending_ = false;
   volatile bool ready_ = false;
   String payload_;

@@ -110,8 +110,8 @@ void setup() {
   wifi.begin(kWifiNets, kWifiCount, state.settings.netSel);
   tcp.setServer(PC_IP, TCP_PORT);
   coverClient.begin(PC_IP, 8899); /* album cover from the control panel */
-#ifdef LITE_URL
-  liteClient.begin(LITE_URL); /* always-on fallback when the PC is off */
+#if defined(LITE_URL) && defined(LITE_TOKEN)
+  liteClient.begin(LITE_URL, LITE_TOKEN); /* always-on fallback when PC is off */
 #endif
 
   SceneManager::Deps deps{};

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Nocturne pre-commit secret guard.
+# Blocks staged content matching either:
+#   - high-confidence generic secrets (private keys, AWS keys, Slack tokens)
+#   - project "персуха" patterns from the gitignored .secretpatterns file
+# Real secrets live ONLY in gitignored files (secrets.h / .env), never in git.
+# Override (rarely!) with: git commit --no-verify
+set -u
+
+added=$(git diff --cached -U0 --no-color | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+[ -z "$added" ] && exit 0
+
+fail() {
+  echo "✖ pre-commit BLOCKED — staged lines look like a secret / персуха:"
+  printf '%s\n' "$1" | head -20
+  echo "  → Real secrets belong in gitignored secrets.h / .env, not in git."
+  echo "  → False positive? re-run with: git commit --no-verify"
+  exit 1
+}
+
+generic='-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}'
+hit=$(printf '%s\n' "$added" | grep -nEi -e "$generic" || true)
+[ -n "$hit" ] && fail "$hit"
+
+if [ -f .secretpatterns ]; then
+  hit=$(printf '%s\n' "$added" | grep -nEi -f .secretpatterns || true)
+  [ -n "$hit" ] && fail "$hit"
+fi
+exit 0
