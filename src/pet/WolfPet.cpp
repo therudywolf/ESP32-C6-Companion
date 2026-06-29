@@ -106,7 +106,9 @@ void WolfPet::doAction(int action) {
     break;
   }
   clampAll();
-  save();
+  /* only persist actions that actually changed stats — ACT_TALK (and any no-op)
+   * must not spend an NVS write cycle every chatter-driven "talk" */
+  if (action == ACT_FEED || action == ACT_PLAY || action == ACT_PET) save();
 }
 
 int WolfPet::mood() const {

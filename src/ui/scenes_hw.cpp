@@ -327,7 +327,7 @@ void drawNet(UiCtx &ui) {
   panel(g, 164, 94, 152, 74, "УСТРОЙСТВО");
   g.setFont(&F_MED);
   g.setTextSize(1);
-  snprintf(v, sizeof(v), "%.10s", ui.st.link.ssid);
+  clipW(g, ui.st.link.ssid, v, sizeof(v), 140); /* codepoint-safe (no mid-glyph cut) */
   textAt(g, 172, 102, v, TEXT);          /* y102..122 */
   g.setFont(&F_TEXT);
   snprintf(v, sizeof(v), "RSSI %d dBm", ui.st.link.rssi);

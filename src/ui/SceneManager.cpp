@@ -202,7 +202,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 20;
+    const int kMenuItems = 21; /* must match names[]/val[]/kRows in drawMenu */
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -418,7 +418,16 @@ void SceneManager::menuAction(UiCtx &ui) {
     toast(ln[s.ledMode & 3]);
     break;
   }
-  case 19: /* close */
+  case 19: { /* screen dim / screensaver timeout (mirrors the panel options) */
+    s.displayTimeoutSec = s.displayTimeoutSec == 0    ? 30
+                          : s.displayTimeoutSec == 30 ? 60
+                                                      : 0;
+    toast(s.displayTimeoutSec == 0    ? "гашение: выкл"
+          : s.displayTimeoutSec == 30 ? "гашение: 30с"
+                                      : "гашение: 60с");
+    break;
+  }
+  case 20: /* close */
     menuOpen_ = false;
     break;
   }
@@ -432,7 +441,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[20][20];
+  char val[21][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -476,16 +485,21 @@ void SceneManager::drawMenu(UiCtx &ui) {
     static const char *ln[] = {"настроение", "выкл", "радуга", "свеча"};
     snprintf(val[18], 20, "%s", ln[s.ledMode & 3]);
   }
-  val[19][0] = '\0';
+  if (s.displayTimeoutSec <= 0)
+    snprintf(val[19], 20, "выкл");
+  else
+    snprintf(val[19], 20, "%dс", s.displayTimeoutSec);
+  val[20][0] = '\0';
 
   static const char *names[] = {
       "Карусель",     "Яркость",       "LED",          "Волк LLM",
       "WiFi",         "Переворот",      "Тема",         "Фон",
       "Светлый фон",  "Слот темы",      "Цвета вручную", "Экраны",
       "Forza HUD",    "Инфо системы",   "Болтливость",  "Характер",
-      "Элементы",     "Уведомления",    "Подсветка",    "Закрыть"};
+      "Элементы",     "Уведомления",    "Подсветка",    "Гашение экрана",
+      "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 20, kVisible = 6, rowH = 22;
+  const int kRows = 21, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);

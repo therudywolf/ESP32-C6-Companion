@@ -204,9 +204,12 @@ void loop() {
     if (state.rcAccentR >= 0)
       theme::setAccent(state.rcAccentR, state.rcAccentG, state.rcAccentB);
     if (state.rcBright >= 10) {
-      /* clamp before persisting so NVS + menu % + step logic agree with the
-       * panel (Display::setBrightness re-clamps too, but cfg would store raw) */
-      int b = state.rcBright > NOCT_BRIGHT_MAX ? NOCT_BRIGHT_MAX : state.rcBright;
+      /* clamp BOTH ends before persisting so the stored value matches what
+       * load() will produce (floor 30) and the panel/menu agree — otherwise a
+       * panel-set 20-29 is saved raw then bumped to 30 on next boot */
+      int b = state.rcBright < 30           ? 30
+              : state.rcBright > NOCT_BRIGHT_MAX ? NOCT_BRIGHT_MAX
+                                               : state.rcBright;
       cfg.brightness = b;
       display.setBrightness(b);
       persist = true;
