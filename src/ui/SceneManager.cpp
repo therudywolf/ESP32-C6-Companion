@@ -202,7 +202,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 18;
+    const int kMenuItems = 19;
     switch (ev) {
     case EV_SHORT:
       menuSel_ = (menuSel_ + 1) % kMenuItems;
@@ -393,7 +393,11 @@ void SceneManager::menuAction(UiCtx &ui) {
     elemPickSel_ = 0;
     toast("элементы экрана");
     break;
-  case 17: /* close */
+  case 17: /* PC notifications flyover */
+    s.notifShow = !s.notifShow;
+    toast(s.notifShow ? "уведомления: вкл" : "уведомления: выкл");
+    break;
+  case 18: /* close */
     menuOpen_ = false;
     break;
   }
@@ -407,7 +411,7 @@ void SceneManager::drawMenu(UiCtx &ui) {
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[18][20];
+  char val[19][20];
   if (s.carouselEnabled)
     snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
   else
@@ -446,16 +450,17 @@ void SceneManager::drawMenu(UiCtx &ui) {
       if ((s.uiElements >> i) & 1u) onCount++;
     snprintf(val[16], 20, "%d/%d", onCount, theme::UI_ELEM_COUNT);
   }
-  val[17][0] = '\0';
+  snprintf(val[17], 20, "%s", s.notifShow ? "вкл" : "выкл");
+  val[18][0] = '\0';
 
   static const char *names[] = {
       "Карусель",     "Яркость",       "LED",          "Волк LLM",
       "WiFi",         "Переворот",      "Тема",         "Фон",
       "Светлый фон",  "Слот темы",      "Цвета вручную", "Экраны",
       "Forza HUD",    "Инфо системы",   "Болтливость",  "Характер",
-      "Элементы",     "Закрыть"};
+      "Элементы",     "Уведомления",    "Закрыть"};
   /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 18, kVisible = 6, rowH = 22;
+  const int kRows = 19, kVisible = 6, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
   g.setFont(&F_MED);
@@ -833,8 +838,9 @@ void SceneManager::draw(UiCtx &ui) {
       notifSeeded_ = true;
       lastNotifSeq_ = nt.seq;
     } else if (nt.seq != lastNotifSeq_) {
-      lastNotifSeq_ = nt.seq;
-      if (nt.seq > 0 && (nt.title.length() || nt.body.length())) {
+      lastNotifSeq_ = nt.seq; /* consume even when off, so re-enabling won't replay */
+      if (ui.st.settings.notifShow && nt.seq > 0 &&
+          (nt.title.length() || nt.body.length())) {
         notifAt_ = ui.now;
         notifUntil_ = ui.now + 7000;
         if (d_.led) d_.led->flash(40, 150, 170, 600); /* cyan blip on arrival */

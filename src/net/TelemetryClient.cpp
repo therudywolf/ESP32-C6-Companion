@@ -55,14 +55,14 @@ void TelemetryClient::sendCfg(const Settings &s) {
   if (!tcpConnected_) return;
   /* one CSV the panel reads back so its controls show the board's live state.
    * order: petllm,wchat,wtone,led,flip,bglight,bright,carousel,timeout,
-   *        bgstyle,theme,uielem,scenemask  (carousel/theme use -1 sentinels) */
-  client_.printf("cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu\n",
+   *        bgstyle,theme,uielem,scenemask,notifshow (carousel/theme use -1) */
+  client_.printf("cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d\n",
                  s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone,
                  s.ledEnabled ? 1 : 0, s.flipped ? 1 : 0, s.bgLight ? 1 : 0,
                  s.brightness, s.carouselEnabled ? s.carouselIntervalSec : -1,
                  s.displayTimeoutSec, s.bgStyle,
                  s.customActive ? -1 : s.themePreset, (unsigned)s.uiElements,
-                 (unsigned long)s.sceneMask);
+                 (unsigned long)s.sceneMask, s.notifShow ? 1 : 0);
 }
 
 bool TelemetryClient::signalLost(unsigned long now) const {
@@ -345,6 +345,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcSceneMask = rc["scenemask"] | (long)-1;
       state.rcWolfChatter = rc["wchat"] | -1;
       state.rcWolfTone = rc["wtone"] | -1;
+      state.rcNotif = rc["notif"] | -1;
       state.rcUiElem = rc["uielem"] | (long)-1;
       state.rcPresetReset = rc["resetcustom"] | -1;
       state.rcColorRole = -1;
