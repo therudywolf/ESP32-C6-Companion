@@ -1,6 +1,7 @@
 #include "ui/Widgets.h"
 
 #include "core/config.h"
+#include "ui/emoji_atlas.h"
 
 using namespace theme;
 
@@ -97,6 +98,118 @@ int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
   }
   if (lines < maxLines) flush(false);
   return y;
+}
+
+/* ── inline colour-emoji text ────────────────────────────────────────────── */
+
+static int utf8Cp(const char *s, int i, uint32_t &cp) {
+  unsigned char c = (unsigned char)s[i];
+  if (c < 0x80) { cp = c; return 1; }
+  int len = (c & 0xE0) == 0xC0   ? 2
+            : (c & 0xF0) == 0xE0 ? 3
+            : (c & 0xF8) == 0xF0 ? 4
+                                 : 1;
+  /* stop at the NUL or a bad continuation byte so we never read past the end */
+  for (int k = 1; k < len; k++)
+    if (((unsigned char)s[i + k] & 0xC0) != 0x80) { cp = c; return 1; }
+  if (len == 2)
+    cp = ((c & 0x1F) << 6) | (s[i + 1] & 0x3F);
+  else if (len == 3)
+    cp = ((c & 0x0F) << 12) | ((s[i + 1] & 0x3F) << 6) | (s[i + 2] & 0x3F);
+  else if (len == 4)
+    cp = ((uint32_t)(c & 0x07) << 18) | ((s[i + 1] & 0x3F) << 12) |
+         ((s[i + 2] & 0x3F) << 6) | (s[i + 3] & 0x3F);
+  else
+    cp = c;
+  return len;
+}
+
+static int emojiIdx(uint32_t cp) {
+  for (int i = 0; i < emoji::COUNT; i++)
+    if (emoji::CP[i] == cp) return i;
+  return -1;
+}
+
+/* pixel width of s[start..end), counting emoji as W+1 and glyph runs via the
+ * current font (non-emoji, non-glyph codepoints contribute nothing). */
+static int runWidth(LGFX_Sprite &g, const char *s, int start, int end) {
+  int wpx = 0, i = start;
+  String txt;
+  while (i < end) {
+    uint32_t cp;
+    int b = utf8Cp(s, i, cp);
+    if (emojiIdx(cp) >= 0) {
+      if (txt.length()) { wpx += g.textWidth(txt.c_str()); txt = ""; }
+      wpx += emoji::W + 1;
+    } else if (cp < 0x2000 || cp == 0x2014) { /* ASCII / Cyrillic / em-dash */
+      for (int k = 0; k < b; k++) txt += s[i + k]; /* no per-cp String copy */
+    }
+    i += b;
+  }
+  if (txt.length()) wpx += g.textWidth(txt.c_str());
+  return wpx;
+}
+
+/* draw s[start..end) at (x,y): glyph runs via textAt, emoji blitted from atlas */
+static void drawRun(LGFX_Sprite &g, const char *s, int start, int end, int x,
+                    int y, uint16_t color) {
+  int i = start;
+  String txt;
+  auto flush = [&]() {
+    if (txt.length()) {
+      textAt(g, x, y, txt.c_str(), color);
+      x += g.textWidth(txt.c_str());
+      txt = "";
+    }
+  };
+  while (i < end) {
+    uint32_t cp;
+    int b = utf8Cp(s, i, cp);
+    int ei = emojiIdx(cp);
+    if (ei >= 0) {
+      flush();
+      bool sw = g.getSwapBytes();
+      g.setSwapBytes(true); /* atlas is RGB565 LE, like the album cover */
+      g.pushImage(x, y + 1, emoji::W, emoji::H, emoji::BMP[ei]);
+      g.setSwapBytes(sw);
+      x += emoji::W + 1;
+    } else if (cp < 0x2000 || cp == 0x2014) { /* ASCII / Cyrillic / em-dash */
+      for (int k = 0; k < b; k++) txt += s[i + k]; /* no per-cp String copy */
+    }
+    i += b;
+  }
+  flush();
+}
+
+int drawEmojiText(LGFX_Sprite &g, const char *s, int x0, int y, int w,
+                  int lineH, int maxLines, uint16_t color) {
+  int n = (int)strlen(s);
+  int lines = 0, spaceW = g.textWidth(" ");
+  int curStart = -1, curEnd = -1, curW = 0, i = 0;
+  while (i <= n && lines < maxLines) {
+    while (i < n && s[i] == ' ') i++; /* skip spaces between words */
+    if (i >= n) break;
+    int ws = i;
+    while (i < n && s[i] != ' ') {     /* span one word */
+      uint32_t cp;
+      i += utf8Cp(s, i, cp);
+    }
+    int wW = runWidth(g, s, ws, i);
+    if (curStart < 0) { /* first word on the line */
+      curStart = ws; curEnd = i; curW = wW;
+    } else if (curW + spaceW + wW <= w) { /* fits → extend the line */
+      curEnd = i; curW += spaceW + wW;
+    } else { /* wrap */
+      drawRun(g, s, curStart, curEnd, x0, y, color);
+      y += lineH; lines++;
+      curStart = ws; curEnd = i; curW = wW;
+    }
+  }
+  if (curStart >= 0 && lines < maxLines) {
+    drawRun(g, s, curStart, curEnd, x0, y, color);
+    lines++;
+  }
+  return lines;
 }
 
 void statusBar(UiCtx &ui, const char *title, int scene, int sceneCount) {
