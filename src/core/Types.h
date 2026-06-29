@@ -173,6 +173,7 @@ struct LinkState {
   bool sdOk = false;
   bool llmBusy = false;    /* request in flight (status bar spark) */
   bool llmOk = false;      /* last LLM call succeeded */
+  bool liteActive = false; /* PC down but the fallback endpoint is feeding data */
 };
 
 /** Single app state, filled by TelemetryClient from the server payload. */

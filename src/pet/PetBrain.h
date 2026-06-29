@@ -39,11 +39,21 @@ public:
   int reactionKind() const { return reactionKind_; }
   unsigned long reactionAt() const { return reactionAt_; }
 
+  /* emotional tone of the latest utterance, consumed once by main to tint the
+   * LED (-1 = nothing new). Derived from the trigger bucket, no extra model out. */
+  enum { TONE_NEUTRAL = 0, TONE_HAPPY, TONE_TENSE, TONE_LOW };
+  int takeSpeechTone() {
+    int t = speechTone_;
+    speechTone_ = -1;
+    return t;
+  }
+
 private:
   void trigger(const char *bucket, const char *eventRu, unsigned long now,
                AppState &st, bool urgent, bool forceLlm = false,
                bool solicited = false);
-  void show(const String &p, unsigned long now);
+  void show(const String &p, unsigned long now, int tone = TONE_NEUTRAL);
+  static int toneForBucket(const char *bucket);
   String buildContext(const char *eventRu, AppState &st);
   void diary(const char *ev);
 
@@ -64,6 +74,7 @@ private:
   bool bootGreetPending_ = true;
   int reactionKind_ = -1;          /* DEN particle burst kind */
   unsigned long reactionAt_ = 0;   /* when the last action fired */
+  int speechTone_ = -1;            /* tone of the latest utterance (main → LED) */
   const char *viewSceneName_ = nullptr; /* scene the owner is viewing */
 
   /* edge detection */

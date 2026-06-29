@@ -28,10 +28,12 @@ private:
   String token_;
   volatile bool pending_ = false;
   volatile bool ready_ = false;
+  volatile bool ok_ = false; /* last fetch succeeded */
   String payload_;
   unsigned long lastReq_ = 0;
   TaskHandle_t task_ = nullptr;
   static const unsigned long kIntervalMs = 30000; /* refresh cadence when PC off */
+  static const unsigned long kRetryMs = 8000;     /* faster retry after a failure */
 };
 
 #endif

@@ -14,8 +14,9 @@ void LiteClient::begin(const char *url, const char *token) {
 
 void LiteClient::tick(unsigned long now, bool pcDown) {
   if (!url_.length() || !pcDown) return;
-  /* one in flight at a time; refresh no more than every kIntervalMs */
-  if (!pending_ && !ready_ && now - lastReq_ >= kIntervalMs) {
+  /* one in flight at a time; steady cadence when healthy, faster after a fail */
+  unsigned long iv = ok_ ? kIntervalMs : kRetryMs;
+  if (!pending_ && !ready_ && now - lastReq_ >= iv) {
     lastReq_ = now;
     pending_ = true;
   }
@@ -38,7 +39,9 @@ void LiteClient::taskLoop() {
     if (pending_ && WiFi.status() == WL_CONNECTED) {
       pending_ = false;
       String body;
-      if (fetch(body) && body.length()) {
+      bool good = fetch(body) && body.length();
+      ok_ = good;
+      if (good) {
         payload_ = body;
         ready_ = true;
         Serial.printf("[LITE] fallback payload %d B\n", (int)body.length());
@@ -61,6 +64,7 @@ bool LiteClient::fetch(String &out) {
     http.addHeader("Authorization", String("Bearer ") + token_);
   int code = http.GET();
   if (code == 200) out = http.getString();
+  else Serial.printf("[LITE] fetch HTTP %d\n", code); /* 401 token vs <0 network */
   http.end();
   return code == 200;
 }
