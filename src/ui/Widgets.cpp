@@ -228,6 +228,18 @@ void statusBar(UiCtx &ui, const char *title, int scene, int sceneCount) {
   /* 12px corner inset: the physical panel corners are rounded */
   textAt(g, 12, 0, title, ORANGE);
 
+  /* data-source badge so frozen numbers aren't mistaken for live ones:
+   *   "резерв"  — PC off but the fallback endpoint is feeding (data is real)
+   *   "устарело" — data is going stale and no fallback is covering it */
+  {
+    int bx = 12 + g.textWidth(title) + 10;
+    if (ui.st.link.liteActive)
+      textAt(g, bx, 0, "резерв", INFO);
+    else if ((!ui.st.link.tcpConnected || ui.st.link.signalLost) &&
+             !ui.st.link.dataDead)
+      textAt(g, bx, 0, "устарело", WARN);
+  }
+
   int x = NOCT_W - 12;
 
   /* clock from server payload */

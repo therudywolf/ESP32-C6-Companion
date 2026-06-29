@@ -11,6 +11,7 @@ void WifiManager::begin(const WifiCred *nets, size_t count, int forcedIdx) {
   forced_ = (forcedIdx >= 0 && forcedIdx < (int)count_) ? forcedIdx : -1;
   WiFi.mode(WIFI_STA);
   WiFi.persistent(false);
+  WiFi.setHostname("nocturne-c6"); /* friendly name on the router's client list */
   WiFi.setAutoReconnect(false); /* we own the reconnect policy */
   startScan(millis());
 }

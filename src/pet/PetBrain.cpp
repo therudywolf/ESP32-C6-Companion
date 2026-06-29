@@ -100,13 +100,26 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
   return c;
 }
 
-void PetBrain::show(const String &p, unsigned long now) {
+int PetBrain::toneForBucket(const char *b) {
+  if (!b) return TONE_NEUTRAL;
+  if (!strcmp(b, "alert") || !strcmp(b, "faint") || !strcmp(b, "event"))
+    return TONE_TENSE;
+  if (!strcmp(b, "fed") || !strcmp(b, "played") || !strcmp(b, "pet") ||
+      !strcmp(b, "wake") || !strcmp(b, "revive"))
+    return TONE_HAPPY;
+  if (!strcmp(b, "hunger") || !strcmp(b, "bored") || !strcmp(b, "sleepy"))
+    return TONE_LOW;
+  return TONE_NEUTRAL;
+}
+
+void PetBrain::show(const String &p, unsigned long now, int tone) {
   phrase_ = p;
   speechStart_ = now;
   /* hold long enough to read: 8 s + 60 ms/char */
   speechHold_ = 8000UL + (unsigned long)p.length() * 60UL;
   thinking_ = false;
   lastSpeech_ = now;
+  speechTone_ = tone;
 }
 
 void PetBrain::trigger(const char *bucket, const char *eventRu,
@@ -136,7 +149,7 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
     lastSpeech_ = now;
     st.link.llmBusy = true;
   } else {
-    show(cache_->pick(bucket), now);
+    show(cache_->pick(bucket), now, toneForBucket(bucket));
   }
 }
 
@@ -172,18 +185,19 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     String reply;
     bool ok = false;
     if (llm_->takeReply(reply, ok)) {
+      int tone = toneForBucket(pendingBucket_);
       if (ok) {
         llmFailStreak_ = 0; /* LLM is healthy again */
         cache_->remember(pendingBucket_, reply);
-        show(reply, now);
+        show(reply, now, tone);
       } else {
         if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
-        show(cache_->pick(pendingBucket_), now);
+        show(cache_->pick(pendingBucket_), now, tone);
       }
     } else if (now - speechStart_ > NOCT_LLM_TIMEOUT_MS + 4000UL) {
       if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
       thinking_ = false; /* belt & braces: task wedged — fall back */
-      show(cache_->pick(pendingBucket_), now);
+      show(cache_->pick(pendingBucket_), now, toneForBucket(pendingBucket_));
     }
   }
 
@@ -275,6 +289,7 @@ void PetBrain::tick(unsigned long now, AppState &st) {
         String ev = "новое событие на сервере: " + String(st.events.top) +
                     " (" + st.events.severity + ") — отреагируй";
         trigger("event", ev.c_str(), now, st, false);
+        diary(("событие " + String(st.events.top)).c_str());
       }
       lastAlertSig_ = sig;
     }
@@ -318,6 +333,7 @@ void PetBrain::tick(unsigned long now, AppState &st) {
                 "хозяин уже минуту гоняет видеокарту на полную — похоже, "
                 "играет; прокомментируй",
                 now, st, false);
+        diary("долго играл");
       }
     } else if (st.hw.gl < 50) {
       gpuHighSince_ = 0;
@@ -369,7 +385,10 @@ void PetBrain::tick(unsigned long now, AppState &st) {
       if (low.indexOf("forza") >= 0 || low.indexOf("game") >= 0 ||
           low.indexOf("steam") >= 0)
         ev = "хозяин запустил игру " + app + " — пожелай удачной катки";
-      if (lastApp_.length()) trigger("app", ev.c_str(), now, st, false);
+      if (lastApp_.length()) {
+        trigger("app", ev.c_str(), now, st, false);
+        diary(("запуск " + app).c_str()); /* remember the owner's habits */
+      }
       lastApp_ = app;
       lastAppAt_ = now;
     } else if (app == lastApp_) {

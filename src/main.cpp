@@ -176,10 +176,16 @@ void loop() {
    * parser, so those scenes stay alive with the PC off */
   bool pcDown = wifi.connected() && (!tcp.connected() || state.link.signalLost);
   liteClient.tick(now, pcDown);
+  static unsigned long liteOkMs = 0;
   if (pcDown) {
     String lite;
-    if (liteClient.take(lite)) tcp.feedExternal(lite.c_str(), state, graphs);
+    if (liteClient.take(lite)) {
+      tcp.feedExternal(lite.c_str(), state, graphs);
+      liteOkMs = now;
+    }
   }
+  /* "running on the fallback" if the PC is down but lite fed us recently */
+  state.link.liteActive = pcDown && liteOkMs && (now - liteOkMs < 90000UL);
   if (tcp.connected() && !prevTcpConnected) led.setMode(StatusLed::BLIP_OK);
   prevTcpConnected = tcp.connected();
 
@@ -341,6 +347,15 @@ void loop() {
 
   pet.tick(now);
   brain.tick(now, state);
+
+  /* tint the LED with the emotional tone of a fresh utterance — a brief accent
+   * over the SPEAK glow (derived from the bucket, no extra model output) */
+  switch (brain.takeSpeechTone()) {
+  case PetBrain::TONE_HAPPY: led.flash(0, 90, 30, 350); break;  /* green */
+  case PetBrain::TONE_TENSE: led.flash(160, 35, 0, 350); break; /* red */
+  case PetBrain::TONE_LOW:   led.flash(0, 0, 110, 350); break;  /* blue */
+  default: break;                                               /* neutral: none */
+  }
 
   /* mood light: alert > forza > thinking > speaking > offline > warm > mood */
   if (state.alertActive) {
