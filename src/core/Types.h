@@ -65,6 +65,16 @@ struct MediaData {
   unsigned long posStamp = 0; /* millis() at parse, to interpolate while playing */
 };
 
+/** A Windows notification relayed by the server ("notif" block) — flies in over
+ *  any scene. seq bumps per notification shown; pending = how many still queued. */
+struct NotifData {
+  long seq = 0;
+  String app = "";   /* source app, e.g. "Telegram" */
+  String title = ""; /* sender / headline */
+  String body = "";  /* message text (may be empty in sender-only mode) */
+  int pending = 0;   /* extra notifications still waiting behind this one */
+};
+
 /** External events from Prometheus Alertmanager (server "events" block). */
 struct EventsData {
   static const int kMaxList = 4;
@@ -166,6 +176,7 @@ struct AppState {
   HardwareData hw;
   WeatherData weather;
   MediaData media;
+  NotifData notif;
   ProcessData process;
   ClaudeData claude;
   EventsData events;

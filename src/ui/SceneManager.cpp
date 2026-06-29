@@ -55,6 +55,11 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     d_.disp->setBrightness(ui.st.settings.brightness);
     return;
   }
+  /* a button dismisses the notification flyover (and doesn't also navigate) */
+  if (notifUntil_) {
+    notifUntil_ = 0;
+    return;
+  }
   /* a button during a media peek cancels the auto-return — you take over */
   if (mediaPeekUntil_) {
     mediaPeekUntil_ = 0;
@@ -687,6 +692,77 @@ void SceneManager::drawScreensaver(UiCtx &ui) {
   /* framebuffer is pushed by the main loop after draw() returns */
 }
 
+void SceneManager::drawNotifCard(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  NotifData &n = ui.st.notif;
+  const int dur = 7000;
+  unsigned long age = ui.now - notifAt_;
+  long leftL = (long)(notifUntil_ - ui.now);
+  int left = leftL > 0 ? (int)leftL : 0;
+
+  /* slide in from the top: ease-out over the first 220 ms */
+  const int mx = 6, cw = NOCT_W - 2 * mx, ch = 116;
+  float env = age < 220 ? (float)age / 220.0f : 1.0f;
+  float e = 1.0f - powf(1.0f - env, 3.0f);
+  int cy = -ch + (int)(e * (ch + 4)); /* from off-top up to y=4 */
+
+  /* card: drop shadow, panel body, accent frame */
+  g.fillRoundRect(mx + 2, cy + 3, cw, ch, 10, BG);
+  g.fillRoundRect(mx, cy, cw, ch, 10, PANEL);
+  g.drawRoundRect(mx, cy, cw, ch, 10, ACCENT);
+  g.drawRoundRect(mx + 1, cy + 1, cw - 2, ch - 2, 9, lerp565(PANEL, ACCENT, 90));
+
+  /* header: bell + app name (cyan) + optional "+N" queue badge */
+  g.fillCircle(mx + 16, cy + 17, 3, INFO);
+  g.drawCircle(mx + 16, cy + 17, 5, lerp565(PANEL, INFO, 120));
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  /* clip the app name so a long one can't run into the +N badge */
+  int appRight = mx + cw - (n.pending > 0 ? 44 : 10);
+  g.setClipRect(mx + 28, cy + 6, appRight - (mx + 28), 18);
+  textAt(g, mx + 28, cy + 10, n.app.length() ? n.app.c_str() : "Уведомление",
+         INFO);
+  g.clearClipRect();
+  if (n.pending > 0) {
+    char b[10];
+    snprintf(b, sizeof(b), "+%d", n.pending);
+    int bw = g.textWidth(b) + 12, bx = mx + cw - bw - 8;
+    g.fillRoundRect(bx, cy + 8, bw, 16, 8, lerp565(BG, ACCENT, 70));
+    g.drawRoundRect(bx, cy + 8, bw, 16, 8, ACCENT);
+    textAt(g, bx + 6, cy + 11, b, ACCENT);
+  }
+  g.drawFastHLine(mx + 10, cy + 30, cw - 20, lerp565(PANEL, ACCENT, 70));
+
+  /* sender / title — marquee if it doesn't fit */
+  g.setFont(&F_MED);
+  g.setTextSize(1);
+  const char *t = n.title.length() ? n.title.c_str() : "-";
+  int tx = mx + 10, tcw = cw - 20, tw = g.textWidth(t);
+  g.setClipRect(tx, cy + 37, tcw, 22); /* full F_MED cell incl. descenders */
+  if (tw > tcw) {
+    int span = tw + 40, off = (int)((ui.now / 35) % span);
+    textAt(g, tx - off, cy + 38, t, TEXT);
+    textAt(g, tx - off + span, cy + 38, t, TEXT);
+  } else {
+    textAt(g, tx, cy + 38, t, TEXT);
+  }
+  g.clearClipRect();
+
+  /* body — wrapped to up to 3 lines (empty in sender-only mode) */
+  if (n.body.length()) {
+    g.setFont(&F_TEXT);
+    widgets::textWrap(g, n.body.c_str(), mx + 10, cy + 58, cw - 20, 15, 3,
+                      lerp565(TEXT, BG, 50));
+  }
+
+  /* auto-dismiss countdown bar */
+  int barW = cw - 20, rem = (int)((long)barW * left / dur);
+  if (rem < 0) rem = 0;
+  if (rem > barW) rem = barW;
+  g.fillRoundRect(mx + 10, cy + ch - 10, barW, 4, 2, lerp565(BG, PANEL, 200));
+  g.fillRoundRect(mx + 10, cy + ch - 10, rem, 4, 2, ACCENT);
+}
+
 void SceneManager::draw(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
@@ -744,6 +820,26 @@ void SceneManager::draw(UiCtx &ui) {
         gotoScene(preMediaScene_, ui);
       preMediaScene_ = -1;
     }
+  }
+
+  /* notification flyover: a new server notification (Telegram etc.) flies in
+   * over whatever is on screen, holds ~7 s, then slides away. */
+  {
+    NotifData &nt = ui.st.notif;
+    if (!notifSeeded_ && ui.st.link.tcpConnected) {
+      /* on first connect, adopt the server's current seq as the baseline so a
+       * notification still on the server's clock isn't replayed after a reboot */
+      notifSeeded_ = true;
+      lastNotifSeq_ = nt.seq;
+    } else if (nt.seq != lastNotifSeq_) {
+      lastNotifSeq_ = nt.seq;
+      if (nt.seq > 0 && (nt.title.length() || nt.body.length())) {
+        notifAt_ = ui.now;
+        notifUntil_ = ui.now + 7000;
+        if (d_.led) d_.led->flash(40, 150, 170, 600); /* cyan blip on arrival */
+      }
+    }
+    if (notifUntil_ && (long)(ui.now - notifUntil_) >= 0) notifUntil_ = 0;
   }
 
   /* carousel — never on the wolf's home (you're interacting there: feed/play),
@@ -911,6 +1007,12 @@ void SceneManager::draw(UiCtx &ui) {
       textCenter(g, NOCT_W / 2, py + 3, nm, fc);
     }
   }
+
+  /* notification flyover — over scenes + wolf overlay, below toast; never over a
+   * modal or the alert frame (you're interacting there). */
+  if (notifUntil_ && (long)(notifUntil_ - ui.now) > 0 && !alertActive(ui) &&
+      !menuOpen_ && !editMode_ && !scenePickMode_ && !elemPickMode_ && !sysInfo_)
+    drawNotifCard(ui);
 
   /* toast */
   if ((long)(toastUntil_ - ui.now) > 0) {
