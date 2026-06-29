@@ -25,6 +25,7 @@ void CoverClient::taskLoop() {
     if (pending_ && WiFi.status() == WL_CONNECTED) {
       pending_ = false;
       long want = wantTok_;
+      ready_ = false; /* UI must not read buf_ while fetch() overwrites it */
       if (fetch()) {
         haveTok_ = want;
         ready_ = true;

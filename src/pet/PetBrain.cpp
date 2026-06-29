@@ -59,7 +59,20 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
       c += ". ";
     }
   } else {
-    c += "Связи с компьютером хозяина сейчас нет. ";
+    /* PC off: the board still pulls weather + forest/services + alerts from the
+     * fallback endpoint, so ground the wolf in THAT instead of going blank. */
+    c += "Связи с компьютером хозяина сейчас нет — ты приглядываешь сам. ";
+    if (st.events.count > 0 && st.events.top[0]) {
+      c += "На серверах хозяина тревога: ";
+      c += st.events.top;
+      c += ". ";
+    } else if (st.forest.count > 0) {
+      c += "Лес хозяина под присмотром: в строю ";
+      c += st.forest.up;
+      c += " из ";
+      c += st.forest.count;
+      c += ". ";
+    }
   }
   if (st.weatherReceived) {
     c += "За окном ";

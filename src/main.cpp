@@ -8,6 +8,8 @@
  */
 #include <Arduino.h>
 #include <SPI.h>
+#include <esp_system.h>
+#include <esp_task_wdt.h>
 
 #include "secrets.h"
 
@@ -81,13 +83,17 @@ void setup() {
 
   /* Framebuffer — the largest single allocation (110 KB). */
   if (!display.begin(state.settings.brightness, state.settings.flipped)) {
-    for (;;) { /* keep shouting so a late-attached monitor sees it */
+    /* a transient OOM can clear on a fresh boot — shout for ~10 s so a late
+     * monitor sees it, then reboot instead of hanging forever on this
+     * always-mounted device */
+    for (int i = 0; i < 10; i++) {
       Serial.println("[BOOT] FATAL: framebuffer alloc failed");
       rgbLedWrite(NOCT_PIN_RGB, 0, 80, 0); /* red (RGB-ordered LED) */
       delay(500);
       rgbLedWrite(NOCT_PIN_RGB, 0, 0, 0);
       delay(500);
     }
+    esp_restart();
   }
   Serial.printf("[BOOT] display up, free heap %u KB\n",
                 (unsigned)(ESP.getFreeHeap() / 1024));
@@ -122,10 +128,25 @@ void setup() {
 
   Serial.printf("[BOOT] ready, free heap %u KB\n",
                 (unsigned)(ESP.getFreeHeap() / 1024));
+
+  /* Task watchdog: reboot if the main render loop ever wedges (display stall, a
+   * mutex deadlock) — this device is always mounted, so a hang must self-heal.
+   * ONLY the loop task is watched: the LLM/cover/lite net tasks legitimately
+   * block on slow fetches (a cold model load is ~25 s) and would false-trip. */
+  esp_task_wdt_config_t wdt = {};
+  wdt.timeout_ms = 15000;
+  wdt.idle_core_mask = 0;
+  wdt.trigger_panic = true;
+  if (esp_task_wdt_init(&wdt) == ESP_ERR_INVALID_STATE)
+    esp_task_wdt_reconfigure(&wdt); /* core already started it — just retune */
+  esp_task_wdt_add(NULL);
 }
 
 void loop() {
   unsigned long now = millis();
+  esp_task_wdt_reset(); /* feed the watchdog: the loop is alive */
+  static bool settingsDirty = false;
+  static unsigned long settingsDirtyAt = 0;
 
   /* background services */
   wifi.tick(now);
@@ -279,10 +300,19 @@ void loop() {
     }
     if (state.rcScreen >= 0) sceneMgr.requestScene(state.rcScreen);
     if (state.rcSay.length()) brain.sayNow(state.rcSay);
-    if (persist) settings::save(cfg);
+    /* defer the NVS write: a live-dragged panel slider fires many rc edges/s;
+     * coalesce them into one save ~1.2 s after the last change (flush below) */
+    if (persist) {
+      settingsDirty = true;
+      settingsDirtyAt = now;
+    }
     Serial.printf("[RC] seq=%ld screen=%d theme=%d action='%s' say='%s'\n",
                   state.rcSeq, state.rcScreen, state.rcTheme,
                   state.rcAction.c_str(), state.rcSay.c_str());
+  }
+  if (settingsDirty && now - settingsDirtyAt > 1200) {
+    settingsDirty = false;
+    settings::save(state.settings); /* coalesced RC settings write */
   }
 
   /* report wolf state upstream every 2 s so the companion app can show it */
