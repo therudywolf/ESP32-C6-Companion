@@ -75,6 +75,7 @@ private:
   /* notification flyover: a server "notif" event flies in over any scene */
   unsigned long notifUntil_ = 0; /* deadline; 0 = not showing */
   unsigned long notifAt_ = 0;    /* when it started (for the slide-in) */
+  unsigned long notifDurMs_ = 7000; /* this card's show duration (for countdown) */
   long lastNotifSeq_ = 0;        /* last shown notif seq, to detect new ones */
   bool notifSeeded_ = false;     /* baselined the seq once connected (no replay) */
 

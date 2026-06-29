@@ -246,6 +246,8 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     state.notif.title = stripGlyphs(nt["title"] | "");
     state.notif.body = stripGlyphs(nt["body"] | "");
     state.notif.pending = nt["pending"] | 0;
+    state.notif.durSec = nt["dur"] | 0;
+    state.notif.led = nt["led"] | true;
   }
 
   if (doc["claude"].is<JsonObject>()) {

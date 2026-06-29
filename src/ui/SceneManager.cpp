@@ -700,7 +700,7 @@ void SceneManager::drawScreensaver(UiCtx &ui) {
 void SceneManager::drawNotifCard(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   NotifData &n = ui.st.notif;
-  const int dur = 7000;
+  unsigned long dur = notifDurMs_ ? notifDurMs_ : 7000UL;
   unsigned long age = ui.now - notifAt_;
   long leftL = (long)(notifUntil_ - ui.now);
   int left = leftL > 0 ? (int)leftL : 0;
@@ -845,8 +845,10 @@ void SceneManager::draw(UiCtx &ui) {
       if (ui.st.settings.notifShow && nt.seq > 0 &&
           (nt.title.length() || nt.body.length())) {
         notifAt_ = ui.now;
-        notifUntil_ = ui.now + 7000;
-        if (d_.led) d_.led->flash(40, 150, 170, 600); /* cyan blip on arrival */
+        notifDurMs_ = nt.durSec > 0 ? (unsigned long)nt.durSec * 1000UL : 7000UL;
+        notifUntil_ = ui.now + notifDurMs_;
+        if (nt.led && d_.led)
+          d_.led->flash(40, 150, 170, 600); /* cyan blip on arrival */
       }
     }
     if (notifUntil_ && (long)(ui.now - notifUntil_) >= 0) notifUntil_ = 0;
