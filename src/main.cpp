@@ -21,6 +21,7 @@
 #include "net/ForzaManager.h"
 #include "net/LlmClient.h"
 #include "net/CoverClient.h"
+#include "net/LiteClient.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
 #include "pet/PetBrain.h"
@@ -39,6 +40,7 @@ static Display display;
 static WifiManager wifi;
 static TelemetryClient tcp;
 static CoverClient coverClient;
+static LiteClient liteClient;
 static ForzaManager forza;
 static LlmClient llm;
 static SdStore sd;
@@ -102,6 +104,9 @@ void setup() {
   wifi.begin(kWifiNets, kWifiCount, state.settings.netSel);
   tcp.setServer(PC_IP, TCP_PORT);
   coverClient.begin(PC_IP, 8899); /* album cover from the control panel */
+#ifdef LITE_URL
+  liteClient.begin(LITE_URL); /* always-on fallback when the PC is off */
+#endif
 
   SceneManager::Deps deps{};
   deps.disp = &display;
@@ -144,6 +149,16 @@ void loop() {
 
   tcp.tick(now, wifi.connected(), state, graphs);
   coverClient.update(state.media.coverTok); /* refetch cover on track change */
+
+  /* standalone fallback: when the PC is unreachable, pull weather/forest/
+   * services from the always-on lite endpoint and feed the same
+   * parser, so those scenes stay alive with the PC off */
+  bool pcDown = wifi.connected() && (!tcp.connected() || state.link.signalLost);
+  liteClient.tick(now, pcDown);
+  if (pcDown) {
+    String lite;
+    if (liteClient.take(lite)) tcp.feedExternal(lite.c_str(), state, graphs);
+  }
   if (tcp.connected() && !prevTcpConnected) led.setMode(StatusLed::BLIP_OK);
   prevTcpConnected = tcp.connected();
 

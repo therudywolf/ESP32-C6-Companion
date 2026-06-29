@@ -27,6 +27,11 @@ public:
                 bool sleeping, unsigned long ageDays);
   /* report current device settings upstream so the panel mirrors the board */
   void sendCfg(const Settings &s);
+  /* feed an externally-fetched payload (the lite fallback) through
+   * the same parser, so weather/forest/services scenes work with the PC off */
+  void feedExternal(const char *json, AppState &state, Graphs &graphs) {
+    if (json && *json) parsePayload(json, strlen(json), state, graphs);
+  }
   bool connected() const { return tcpConnected_; }
   bool signalLost(unsigned long now) const;
   bool hasData() const { return firstData_; }
