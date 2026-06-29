@@ -238,6 +238,16 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     state.media.posStamp = millis(); /* anchor for on-device interpolation */
   }
 
+  /* Windows notification relay (Telegram etc.) — flies in over any scene. */
+  if (doc["notif"].is<JsonObject>()) {
+    JsonObject nt = doc["notif"];
+    state.notif.seq = nt["seq"] | (long)0;
+    state.notif.app = stripGlyphs(nt["app"] | "");
+    state.notif.title = stripGlyphs(nt["title"] | "");
+    state.notif.body = stripGlyphs(nt["body"] | "");
+    state.notif.pending = nt["pending"] | 0;
+  }
+
   if (doc["claude"].is<JsonObject>()) {
     JsonObject c = doc["claude"];
     state.claude.available = c["ok"] | false;

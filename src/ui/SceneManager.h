@@ -43,6 +43,7 @@ private:
   void editLoadRole(); /* pull the focused role's RGB out of the live palette */
   void drawScenePicker(UiCtx &ui);
   void drawElemPicker(UiCtx &ui);
+  void drawNotifCard(UiCtx &ui); /* the notification flyover */
   /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
   int nextVisibleScene(int from, uint32_t mask, bool allowDen) const;
   void menuAction(UiCtx &ui);
@@ -70,6 +71,12 @@ private:
   int preMediaScene_ = -1;
   String lastPeekTrack_;
   bool lastPeekPlaying_ = false;
+
+  /* notification flyover: a server "notif" event flies in over any scene */
+  unsigned long notifUntil_ = 0; /* deadline; 0 = not showing */
+  unsigned long notifAt_ = 0;    /* when it started (for the slide-in) */
+  long lastNotifSeq_ = 0;        /* last shown notif seq, to detect new ones */
+  bool notifSeeded_ = false;     /* baselined the seq once connected (no replay) */
 
   /* DEN action submenu: LONG enters, SHORT cycles, LONG executes */
   bool denActionMode_ = false;
