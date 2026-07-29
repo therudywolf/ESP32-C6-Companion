@@ -887,15 +887,27 @@ void SceneManager::draw(UiCtx &ui) {
         if (nt.led && d_.led) d_.led->notify(); /* cyan blink burst on arrival */
       }
     }
-    if (notifUntil_ && (long)(ui.now - notifUntil_) >= 0) notifUntil_ = 0;
+    if (notifUntil_ && (long)(ui.now - notifUntil_) >= 0) {
+      notifUntil_ = 0;
+      /* The card was covering this scene. Give it a FULL interval now that it
+       * is readable again, instead of rotating away a moment later. */
+      lastCarousel_ = ui.now;
+    }
   }
 
-  /* carousel — never on the wolf's home (you're interacting there: feed/play),
-   * never inside his action submenu, never over the Forza HUD or a menu. */
+  /* carousel — held while a notification card is up (rotating would swap the
+   * scene out from under it and the data it covered would scroll past before
+   * it could be read), never inside the wolf's action submenu, never over the
+   * Forza HUD or a menu.
+   * The den is NOT excluded: it used to be, which meant booting into ЛОГОВО
+   * (the default home) parked the carousel forever. The idle guard below plus
+   * denActionMode_ already cover "the owner is interacting with the wolf", and
+   * nextVisibleScene(..., allowDen=false) still keeps the den out of the ring —
+   * so the carousel can leave home but never rotates back onto it. */
   if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !editMode_ &&
       !scenePickMode_ && !elemPickMode_ && !mediaPeekUntil_ && !alertActive(ui) &&
-      scene_ != SCENE_FORZA &&
-      scene_ != SCENE_DEN && !denActionMode_ && ui.now - lastInput_ > 5000 &&
+      !notifUntil_ && scene_ != SCENE_FORZA &&
+      !denActionMode_ && ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
     gotoScene(nextVisibleScene(scene_, s.sceneMask, false), ui);
@@ -904,13 +916,16 @@ void SceneManager::draw(UiCtx &ui) {
   /* screensaver: after the dim timeout, dim a little and show the ambient
    * clock+wolf scene (not a black screen). Any input wakes it. */
   if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive && !editMode_ &&
-      !menuOpen_ && !scenePickMode_ && !elemPickMode_ &&
+      !menuOpen_ && !scenePickMode_ && !elemPickMode_ && !notifUntil_ &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
     dimmed_ = true;
     d_.disp->setBrightness(s.brightness > 90 ? 90 : s.brightness);
   }
-  if (dimmed_ && alertActive(ui)) {
+  /* An arriving notification wakes the screen, exactly like an alert does.
+   * drawScreensaver() returns early, BELOW which the notification card is
+   * drawn — so a card arriving on a dimmed screen was never rendered at all. */
+  if (dimmed_ && (alertActive(ui) || notifUntil_)) {
     dimmed_ = false;
     d_.disp->setBrightness(s.brightness);
   }
