@@ -10,15 +10,38 @@ static void copyStr(char *dst, size_t cap, const char *src) {
   String s = stripGlyphs(src); /* drop tofu glyphs before they reach a panel */
   strncpy(dst, s.c_str(), cap - 1);
   dst[cap - 1] = '\0';
+  /* strncpy counts BYTES, so a Cyrillic name landing exactly on the boundary
+   * left a half-written UTF-8 sequence behind — the renderer then drew a tofu
+   * box (or mis-measured the width). Walk back off any dangling continuation
+   * bytes so the buffer always ends on a whole codepoint. */
+  size_t n = strlen(dst);
+  while (n > 0 && (dst[n - 1] & 0xC0) == 0x80) dst[--n] = '\0'; /* 10xxxxxx */
+  if (n > 0) {
+    unsigned char lead = (unsigned char)dst[n - 1];
+    /* a lead byte with nothing following it is also incomplete */
+    if (lead >= 0xC0) dst[n - 1] = '\0';
+  }
 }
 
 void TelemetryClient::tryConnect(unsigned long now) {
-  if (now - lastAttempt_ < NOCT_TCP_RECONNECT_INTERVAL_MS) return;
+  /* Exponential backoff: the base retry gap doubles per consecutive failure,
+   * capped at NOCT_TCP_RECONNECT_MAX_MS. A powered-off PC therefore stops
+   * triggering a back-to-back reconnect storm (which, with the blocking connect
+   * below, froze the render loop nearly continuously). */
+  unsigned long backoff = NOCT_TCP_RECONNECT_INTERVAL_MS
+                          << (failCount_ < 4 ? failCount_ : 4);
+  if (backoff > NOCT_TCP_RECONNECT_MAX_MS) backoff = NOCT_TCP_RECONNECT_MAX_MS;
+  if (now - lastAttempt_ < backoff) return;
   lastAttempt_ = now;
   client_.stop();
-  client_.setTimeout(NOCT_TCP_CONNECT_TIMEOUT_MS / 1000);
+  client_.setTimeout(3); /* read/stream timeout (s); connect bounded separately */
   Serial.printf("[NET] TCP connect %s:%u...\n", host_, port_);
-  if (client_.connect(host_, port_)) {
+  /* Bounded connect: on arduino-esp32 3.x setTimeout() governs only reads, so
+   * without an explicit connect timeout an unreachable host blocks this call —
+   * on the main render loop — for the lwip default (multi-second). Passing the
+   * timeout caps that stall so the UI/animation stay responsive when the PC is
+   * off (the lite fallback still supplies scene data on its own task). */
+  if (client_.connect(host_, port_, NOCT_TCP_CONNECT_TIMEOUT_MS)) {
     Serial.println("[NET] TCP connected");
     tcpConnected_ = true;
     firstData_ = false;
@@ -26,9 +49,11 @@ void TelemetryClient::tryConnect(unsigned long now) {
     lastUpdate_ = now;
     lineLen_ = 0;
     lastSentScreen_ = -1;
+    failCount_ = 0;
     client_.print("HELO\n");
   } else {
     tcpConnected_ = false;
+    if (failCount_ < 4) failCount_++;
   }
 }
 
@@ -252,17 +277,28 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
 
   if (doc["claude"].is<JsonObject>()) {
     JsonObject c = doc["claude"];
-    state.claude.available = c["ok"] | false;
-    state.claude.plan = stripGlyphs(c["plan"] | "");
-    state.claude.windowPct = c["win"] | -1;
-    state.claude.weeklyPct = c["wk"] | -1;
-    state.claude.resetsInMin = c["rst"] | -1;
-    state.claude.weeklyResetMin = c["wrst"] | -1;
-    state.claude.todayTokens = c["tok"] | 0L;
-    state.claude.todayMsgs = c["msg"] | 0;
-    state.claude.todayTools = c["tool"] | 0;
-    state.claude.date = (const char *)(c["day"] | "");
-    state.claude.stale = c["stale"] | false;
+    /* Merge, don't replace. Two producers now feed this block and neither knows
+     * every field: the PC server owns the transcript counters (tok/msg/tool/day)
+     * while the lite fallback owns the REAL quota percentages (it runs next to
+     * the only fresh OAuth token). Assigning unconditionally made whichever
+     * producer spoke last zero out the other's fields. A key that is missing OR
+     * explicitly null means "I don't know this one" -> keep what we have. */
+#define NOCT_CLAUDE_SET(key, field, expr)                                     \
+  do {                                                                        \
+    if (!c[key].isNull()) state.claude.field = expr;                          \
+  } while (0)
+    NOCT_CLAUDE_SET("ok", available, c["ok"] | false);
+    NOCT_CLAUDE_SET("plan", plan, stripGlyphs(c["plan"] | ""));
+    NOCT_CLAUDE_SET("win", windowPct, c["win"] | -1);
+    NOCT_CLAUDE_SET("wk", weeklyPct, c["wk"] | -1);
+    NOCT_CLAUDE_SET("rst", resetsInMin, c["rst"] | -1);
+    NOCT_CLAUDE_SET("wrst", weeklyResetMin, c["wrst"] | -1);
+    NOCT_CLAUDE_SET("tok", todayTokens, c["tok"] | 0L);
+    NOCT_CLAUDE_SET("msg", todayMsgs, c["msg"] | 0);
+    NOCT_CLAUDE_SET("tool", todayTools, c["tool"] | 0);
+    NOCT_CLAUDE_SET("day", date, (const char *)(c["day"] | ""));
+    NOCT_CLAUDE_SET("stale", stale, c["stale"] | false);
+#undef NOCT_CLAUDE_SET
   }
 
   if (doc["events"].is<JsonObject>()) {

@@ -307,7 +307,8 @@ void drawClaude(UiCtx &ui) {
   int win = c.windowPct < 0 ? 0 : c.windowPct;
   g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.windowPct < 0 ? "n/a" : "%d%%", win);
-  textAt(g, 14, 38, v, pctColor(win));
+  /* "n/a" in DIM, not pctColor(0) — a green "n/a" reads as a healthy 0%. */
+  textAt(g, 14, 38, v, c.windowPct < 0 ? DIM : pctColor(win));
   hBar(g, 96, 44, 98, 20, win, pctColor(win));
   g.setFont(&F_TEXT);
   if (c.resetsInMin >= 0) {
@@ -321,7 +322,7 @@ void drawClaude(UiCtx &ui) {
   int wk = c.weeklyPct < 0 ? 0 : c.weeklyPct;
   g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.weeklyPct < 0 ? "n/a" : "%d%%", wk);
-  textAt(g, 14, 110, v, pctColor(wk));
+  textAt(g, 14, 110, v, c.weeklyPct < 0 ? DIM : pctColor(wk));
   hBar(g, 96, 116, 98, 20, wk, pctColor(wk));
   g.setFont(&F_TEXT);
   if (c.weeklyResetMin >= 0) {
@@ -401,14 +402,29 @@ void drawForest(UiCtx &ui) {
     bool roomy = chh >= 50;
     for (int b = 0; b < 3; b++) {
       int bx = x + 8 + b * ((cw - 16) / 3);
-      int val = bars[b].val < 0 ? 0 : bars[b].val;
+      /* -1 means "the producer could not measure this" (SCHEMA.md), NOT zero.
+       * Printing it as "0%" claimed a healthy reading for a metric we never got
+       * — which is exactly how a missing Prometheus series read as a calm green
+       * "RAM 0%". Show a dash instead; the bar stays an empty outline (hBar with
+       * 0 draws no fill), so unknown never masquerades as measured. */
+      bool unknown = bars[b].val < 0;
+      int val = unknown ? 0 : bars[b].val;
       if (roomy) {
         g.setFont(&F_TEXT);
-        snprintf(v, sizeof(v), "%s %d%%", bars[b].l, val);
+        if (unknown)
+          snprintf(v, sizeof(v), "%s --", bars[b].l);
+        else
+          snprintf(v, sizeof(v), "%s %d%%", bars[b].l, val);
         textAt(g, bx, y + 26, v, DIM);
         hBar(g, bx, y + 37, (cw - 24) / 3 - 6, 9, val, pctColor(val));
       } else {
         hBar(g, bx, y + 26, (cw - 24) / 3 - 6, 9, val, pctColor(val));
+        /* no room for a label here (4+ nodes), so mark "unknown" with a dash
+         * across the empty bar — otherwise it is identical to a real 0%. */
+        if (unknown) {
+          int bw = (cw - 24) / 3 - 6;
+          g.drawFastHLine(bx + bw / 2 - 2, y + 30, 5, DIM);
+        }
       }
     }
   }

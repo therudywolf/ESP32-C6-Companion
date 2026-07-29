@@ -48,6 +48,7 @@ private:
   bool tcpConnected_ = false;
   bool firstData_ = false;
   unsigned long lastAttempt_ = 0;
+  unsigned int failCount_ = 0; /* consecutive failed connects -> exponential backoff */
   unsigned long connectTime_ = 0;
   unsigned long lastUpdate_ = 0;
   int lastSentScreen_ = -1;

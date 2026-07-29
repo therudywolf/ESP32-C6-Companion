@@ -66,7 +66,7 @@ bool LiteClient::fetch(String &out) {
    * it up once SNTP lands (seconds after WiFi). */
   if (time(nullptr) < 1700000000L) return false;
   WiFiClientSecure client;
-  client.setCACert(LITE_CA_ISRG_X1); /* verify the chain — no MITM, no leak */
+  client.setCACert(LITE_CA_BUNDLE); /* verify chain vs pinned ISRG Root X1+X2 — no MITM, no leak */
   HTTPClient http;
   if (!http.begin(client, url_)) return false;
   http.setTimeout(9000);
