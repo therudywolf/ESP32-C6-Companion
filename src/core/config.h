@@ -41,8 +41,9 @@
 
 /* ── Telemetry protocol (MUST match the PC server) ────────────────────── */
 #define NOCT_TCP_LINE_MAX 4096
-#define NOCT_TCP_CONNECT_TIMEOUT_MS 5000
-#define NOCT_TCP_RECONNECT_INTERVAL_MS 2000
+#define NOCT_TCP_CONNECT_TIMEOUT_MS 1500 /* bounded connect: an unreachable PC (off) stalls the render loop at most this long (was 5000) */
+#define NOCT_TCP_RECONNECT_INTERVAL_MS 2000 /* base retry gap; grows via backoff below */
+#define NOCT_TCP_RECONNECT_MAX_MS 30000 /* backoff ceiling while the PC stays offline, so the UI stops stuttering */
 #define NOCT_SIGNAL_GRACE_MS 8000  /* after connect, before "no signal" */
 #define NOCT_SIGNAL_TIMEOUT_MS 5000 /* silence after first data = stale */
 
@@ -77,6 +78,6 @@
 /* Backlight cap: at full PWM (255) this panel self-heats and the matrix blooms
  * a black blob. 210 (~82%) is bright but stays well under the thermal cliff. */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.8.5"
+#define NOCT_VERSION "1.8.6"
 
 #endif
