@@ -338,6 +338,12 @@ void drawClaude(UiCtx &ui) {
   if (c.plan.length()) {
     String p = c.plan;
     p.toUpperCase();
+    /* The plan may carry the rate-limit multiplier ("max 5x" / "max 20x") — a
+     * bare "MAX" cannot tell a 5x from a 20x, and those are very different
+     * ceilings. Uppercasing the whole string turns it into "MAX 5X", so put the
+     * multiplier's x back down where it reads as a multiplier. */
+    for (unsigned int i = 1; i < p.length(); i++)
+      if (p[i] == 'X' && p[i - 1] >= '0' && p[i - 1] <= '9') p.setCharAt(i, 'x');
     g.fillRoundRect(220, 36, g.textWidth(p.c_str()) + 12, 20, 3, ORANGE);
     textAt(g, 226, 38, p.c_str(), BG);
   }
