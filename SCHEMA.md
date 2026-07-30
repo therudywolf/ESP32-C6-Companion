@@ -85,7 +85,7 @@ block failed to populate. Ignored by the firmware, useful in logs.
 |---|---|---|
 | `win` / `wk` | lite (real), PC server (relayed from lite) | REAL 5h / 7d utilization % from Anthropic's `anthropic-ratelimit-unified-*` headers |
 | `rst` / `wrst` | same | minutes until the 5h / 7d window resets |
-| `plan` | same | subscription tier, e.g. `max` — badge on the scene |
+| `plan` | same | subscription label, e.g. `max 5x` (tier multiplier folded in from `rateLimitTier`) — badge on the scene |
 | `tok` / `msg` / `tool` / `day` | **PC server only** | Claude Code transcript counters, read from `~/.claude` on the PC |
 | `ok` / `stale` / `src` | both | `src` is `live` (real API) / `sessions` / `stats-cache` |
 
@@ -115,4 +115,4 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 - `wolf:` — pet stats (hunger/joy/energy/mood/alive/sleeping/age)
 - `cfg:` — 15-field CSV mirror of device settings (panel reflects the board)
 
-_Last synced with `parsePayload()` at firmware v1.8.6._
+_Last synced with `parsePayload()` at firmware v1.8.8._
