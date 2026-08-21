@@ -32,7 +32,7 @@ enum MenuId {
   MI_PETLLM, MI_CHATTER, MI_TONE, MI_ACH, MI_GAME,
   MI_CAROUSEL, MI_SCENES, MI_ELEMS, MI_FORZA,
   MI_LED, MI_LEDMODE, MI_NOTIF,
-  MI_WIFI, MI_SYSINFO, MI_SHOT, MI_RESET,
+  MI_WIFI, MI_SYSINFO, MI_SHOT, MI_ZBJOIN, MI_RESET,
   MI_COUNT
 };
 
@@ -71,6 +71,7 @@ const MenuItem kMenu[] = {
     {CAT_SYSTEM, MI_WIFI, "WiFi"},
     {CAT_SYSTEM, MI_SYSINFO, "Инфо системы"},
     {CAT_SYSTEM, MI_SHOT, "Снимок экрана"},
+    {CAT_SYSTEM, MI_ZBJOIN, "Подключить датчик"},
     {CAT_SYSTEM, MI_RESET, "Сброс настроек"},
 };
 const int kMenuCount = (int)(sizeof(kMenu) / sizeof(kMenu[0]));
@@ -662,6 +663,13 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
     menuOpen_ = false;
     menuCat_ = -1;
     break;
+  case MI_ZBJOIN:
+    /* main owns the radio; it consumes this the way it consumes the
+     * screenshot request. */
+    menuOpen_ = false;
+    menuCat_ = -1;
+    zbJoinRequested_ = true;
+    return; /* nothing persisted */
   case MI_SHOT:
     /* Close the menu first: the point is a picture of the SCENE, not of the
      * menu covering it. main() takes it on the next frame. */

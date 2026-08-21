@@ -30,7 +30,7 @@
 #include "net/LlmClient.h"
 #include "net/CoverClient.h"
 #include "net/LiteClient.h"
-#include "net/OtaManager.h"
+#include "net/ZbHub.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
 #include "pet/Achievements.h"
@@ -43,6 +43,7 @@
 #include "storage/SdStore.h"
 #include "ui/Display.h"
 #include "ui/SceneManager.h"
+
 
 static const WifiCred kWifiNets[] = WIFI_NETWORKS;
 static const int kWifiCount = sizeof(kWifiNets) / sizeof(kWifiNets[0]);
@@ -65,7 +66,7 @@ static Graphs graphs;
 static Histories histories;
 static AppState state;
 static SceneManager sceneMgr;
-static OtaManager ota;
+static ZbHub zb;
 static CardConfig cardCfg;
 static Archive archive;
 static Achievements ach;
@@ -332,6 +333,7 @@ static void consoleHelp() {
       "  say <text>      make the wolf say something\n"
       "  feed|play|pet|talk\n"
       "  shot            screenshot to the card\n"
+      "  zb [join|reset]  Zigbee coordinator\n"
       "  reboot"));
 }
 
@@ -425,6 +427,24 @@ static void consoleExec(String line) {
                       state.zb.list[i].temp10 / 10.0f, state.zb.list[i].humidity,
                       state.zb.list[i].battery, state.zb.list[i].ageSec);
       Serial.println();
+    }
+  } else if (cmd == "zb") {
+    if (arg == "join") {
+      zb.permitJoin(NOCT_ZB_JOIN_SEC);
+      Serial.printf("network open %d s - press pair on the sensor\n",
+                    NOCT_ZB_JOIN_SEC);
+    } else if (arg == "reset") {
+      zb.factoryReset();
+    } else {
+      Serial.printf("coordinator %s, %d sensor(s), %s\n",
+                    zb.running() ? "up" : "down", zb.deviceCount(),
+                    zb.joining(millis()) ? "OPEN for joining" : "closed");
+      for (int i = 0; i < state.zb.count; i++) {
+        const ZbSensor &z = state.zb.list[i];
+        Serial.printf("  %s: %.1fC rh %d%% bat %d%% age %ds\n", z.name,
+                      z.temp10 / 10.0f, z.humidity, z.battery, z.ageSec);
+      }
+      Serial.println("  zb join | zb reset");
     }
   } else if (cmd == "shot") {
     Serial.println(saveScreenshot() ? "saved" : "failed");
@@ -585,19 +605,10 @@ void setup() {
 
   wifi.begin(activeNets, activeNetCount, state.settings.netSel);
   tcp.setServer(activeHost, activePort);
-#ifdef OTA_PASSWORD
-  ota.begin(NOCT_OTA_HOSTNAME, OTA_PASSWORD, activeHost);
-#else
-  ota.begin(NOCT_OTA_HOSTNAME, nullptr, activeHost);
-#endif
-  /* Flash is being written while this runs, so the normal frame loop is stalled:
-   * the callback draws + pushes the panel itself and feeds the watchdog. */
-  ota.setUiCallback([](int pct, const char *msg) {
-    state.otaPct = pct;
-    esp_task_wdt_reset();
-    UiCtx ui{display.fb, state, graphs, pet, brain, millis()};
-    sceneMgr.drawOtaScreen(ui, pct, msg);
-  });
+  /* Zigbee starts LATER, from the loop, once WiFi has associated. Espressif's
+   * own WiFi+Zigbee gateway example brings WiFi up first, and starting the
+   * 802.15.4 stack ahead of it left WiFi unable to associate at all on this
+   * board. See ZbHub. */
   coverClient.begin(activeHost,
                     cardCfg.panelPort() ? cardCfg.panelPort() : 8899);
 #if defined(LITE_URL) && defined(LITE_TOKEN)
@@ -618,7 +629,6 @@ void setup() {
    * just died is copied off before anything can overwrite it, and only then do
    * we consider replacing the firmware. */
   saveCoreDump();
-  ota.installFromCard(&sd); /* reboots on success; returns on any failure */
 
   UiCtx ui{display.fb, state, graphs, pet, brain, millis()};
   sceneMgr.bootAnimation(ui);
@@ -678,8 +688,7 @@ void loop() {
     ntpInit = true;
     /* the address you point `--upload-port` at — also on the СИСТЕМА screen,
      * but having it in the boot log means OTA never needs the panel first */
-    Serial.printf("[NET] ip %s — OTA on :%d\n",
-                  WiFi.localIP().toString().c_str(), NOCT_OTA_PORT);
+    Serial.printf("[NET] ip %s\n", WiFi.localIP().toString().c_str());
   }
   /* The boot record needs a real clock, so it waits for SNTP rather than being
    * written in setup(). One attempt: if the clock never arrives, no record. */
@@ -796,12 +805,6 @@ void loop() {
     if (state.rcNightTo >= 0 && state.rcNightTo <= 23) {
       cfg.nightTo = state.rcNightTo;
       persist = true;
-    }
-    if (state.rcOtaUrl.length()) {
-      /* the URL is validated inside (private/trusted hosts only) — telemetry is
-       * an unauthenticated LAN channel, so this must never be taken on faith */
-      if (!ota.requestPull(state.rcOtaUrl)) sceneMgr.toast(ota.message());
-      state.rcOtaUrl = "";
     }
     if (state.rcTimeout >= 0) {
       cfg.displayTimeoutSec = state.rcTimeout;
@@ -1054,7 +1057,14 @@ void loop() {
   }
 
   serviceConsole();
-  ota.tick(wifi.connected());
+  /* Bring the coordinator up only after WiFi has a link: with both stacks on
+   * one radio, whichever starts first appears to keep it. */
+  static bool zbStarted = false;
+  if (!zbStarted && wifi.connected()) {
+    zbStarted = true;
+    zb.begin(&sd, &cardCfg);
+  }
+  zb.tick(now, state);
 
   /* input */
   input->setRepeatEnabled(sceneMgr.wantsButtonRepeat());
@@ -1079,6 +1089,10 @@ void loop() {
     display.push();
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
      * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
+    if (sceneMgr.takeZbJoinRequest()) {
+      zb.permitJoin(NOCT_ZB_JOIN_SEC);
+      sceneMgr.toast(zb.running() ? "жду датчик 3 мин" : "zigbee не запущен");
+    }
     if (sceneMgr.takeShotRequest()) {
       bool okShot = saveScreenshot();
       if (okShot) ach.bump(Achievements::ACH_SHOT);
