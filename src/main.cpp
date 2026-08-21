@@ -12,6 +12,7 @@
 #include <esp_core_dump.h>
 #include <esp_log.h>
 #include <esp_partition.h>
+#include <esp_phy_init.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <time.h>
@@ -427,6 +428,17 @@ static void consoleExec(String line) {
     }
   } else if (cmd == "shot") {
     Serial.println(saveScreenshot() ? "saved" : "failed");
+  } else if (cmd == "phy") {
+    /* RF calibration lives in NVS and is shared ground between WiFi and
+     * 802.15.4. Running the Zigbee stack rewrote it, after which WiFi could
+     * still SCAN but never associate — different PHY paths. Erasing it forces
+     * a full recalibration on the next boot and touches nothing else, unlike
+     * wiping NVS (which would take the wolf with it). */
+    esp_err_t e = esp_phy_erase_cal_data_in_nvs();
+    Serial.printf("phy calibration erased: %s - rebooting\n",
+                  e == ESP_OK ? "ok" : esp_err_to_name(e));
+    delay(200);
+    esp_restart();
   } else if (cmd == "reboot") {
     Serial.println("restarting");
     delay(100);
