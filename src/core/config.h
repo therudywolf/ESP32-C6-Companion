@@ -104,7 +104,12 @@
 /* ── Storage caps (SD is optional; rotate, never freeze) ──────────────── */
 #define NOCT_SD_PHRASE_MAX 8192   /* per phrase-cache bucket, bytes */
 #define NOCT_SD_DIARY_MAX 32768   /* /wolf/memory.jsonl */
-#define NOCT_HIST_SAVE_MS 300000UL /* flush the history snapshot every 5 min */
+/* Flush the history snapshot once a minute, right after a sample is committed.
+ * It must stay well under HourHistory's 5-minute freshness window: at the old
+ * 5-minute cadence a reboot landed anywhere between 0 and 300 s after the last
+ * save, so restoring the minute series was a coin flip. 1332 B/min is nothing
+ * for an SD card. */
+#define NOCT_HIST_SAVE_MS 60000UL
 
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 #define NOCT_SD_SPI_HZ 25000000
@@ -114,6 +119,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.9.0"
+#define NOCT_VERSION "1.9.1"
 
 #endif

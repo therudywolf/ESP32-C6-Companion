@@ -21,6 +21,17 @@ bool SdStore::begin() {
   }
   if (ok_) {
     ensureDirs();
+    /* Write once here, before the display exists and the bus is contended. If
+     * this succeeds and later writes fail, the card is fine and the problem is
+     * arbitration, not the media - which is exactly the distinction that cost
+     * an evening. */
+    const char *probe = "/logs/.wtest";
+    File wt = SD.open(probe, FILE_WRITE);
+    bool wok = wt && wt.print("ok") == 2;
+    if (wt) wt.close();
+    if (wok) SD.remove(probe);
+    Serial.printf("[SD] write test on a quiet bus: %s\n",
+                  wok ? "ok" : "FAILED");
     Serial.printf("[SD] mounted, %llu MB used / %llu MB\n",
                   SD.usedBytes() / (1024ULL * 1024ULL),
                   SD.totalBytes() / (1024ULL * 1024ULL));
@@ -32,9 +43,11 @@ bool SdStore::begin() {
 
 void SdStore::ensureDirs() {
   if (!ok_) return;
-  SD.mkdir("/wolf");
-  SD.mkdir("/wolf/cache");
-  SD.mkdir("/logs");
+  static const char *dirs[] = {"/wolf", "/wolf/cache", "/logs"};
+  for (const char *d : dirs) {
+    if (SD.exists(d)) continue;
+    if (!SD.mkdir(d)) Serial.printf("[SD] mkdir %s FAILED\n", d);
+  }
 }
 
 void SdStore::enqueueAppend(const char *path, const String &line,
@@ -58,6 +71,7 @@ void SdStore::enqueueAppend(const char *path, const String &line,
 
 void SdStore::flush() {
   if (!ok_) return;
+  sync();
   while (qTail_ != qHead_) {
     PendingWrite &w = queue_[qTail_];
     if (w.cap) rotate(w.path.c_str(), w.cap);
@@ -70,6 +84,7 @@ void SdStore::flush() {
 
 bool SdStore::appendLine(const char *path, const String &line) {
   if (!ok_) return false;
+  sync();
   File f = SD.open(path, FILE_APPEND);
   if (!f) return false;
   f.println(line);
@@ -79,6 +94,7 @@ bool SdStore::appendLine(const char *path, const String &line) {
 
 bool SdStore::readAll(const char *path, String &out, size_t maxBytes) {
   if (!ok_) return false;
+  sync();
   File f = SD.open(path, FILE_READ);
   if (!f) return false;
   size_t size = f.size();
@@ -104,6 +120,7 @@ bool SdStore::readLastLines(const char *path, int n, String &out) {
 
 bool SdStore::rotate(const char *path, size_t maxBytes) {
   if (!ok_ || maxBytes == 0) return false;
+  sync();
   File f = SD.open(path, FILE_READ);
   if (!f) return false;
   size_t size = f.size();
@@ -133,15 +150,30 @@ bool SdStore::rotate(const char *path, size_t maxBytes) {
 
 bool SdStore::writeBlob(const char *path, const void *data, size_t len) {
   if (!ok_ || !data || !len) return false;
+  sync();
   File f = SD.open(path, FILE_WRITE); /* FILE_WRITE truncates */
-  if (!f) return false;
+  if (!f) {
+    /* The usual cause is a missing parent directory - a card formatted while
+     * the board was running, or an mkdir that quietly failed at mount. Rebuild
+     * the tree and try once more before giving up. */
+    ensureDirs();
+    f = SD.open(path, FILE_WRITE);
+    if (!f) {
+      Serial.printf("[SD] open %s for write FAILED\n", path);
+      return false;
+    }
+  }
   size_t n = f.write((const uint8_t *)data, len);
   f.close();
+  if (n != len)
+    Serial.printf("[SD] short write %s: %u/%u B\n", path, (unsigned)n,
+                  (unsigned)len);
   return n == len;
 }
 
 bool SdStore::readBlob(const char *path, void *data, size_t len) {
   if (!ok_ || !data || !len) return false;
+  sync();
   File f = SD.open(path, FILE_READ);
   if (!f) return false;
   bool good = (f.size() == len) && (f.read((uint8_t *)data, len) == (int)len);

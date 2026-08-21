@@ -83,6 +83,7 @@ private:
   unsigned long lastSave = 0;
   SdStore *sd_ = nullptr;
   bool restored_ = false;          /* restore is attempted exactly once */
+  bool savedOnce_ = false;         /* log the first successful save, then hush */
 };
 
 #endif

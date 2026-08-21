@@ -34,7 +34,15 @@ public:
       cfg.dma_channel = SPI_DMA_CH_AUTO;
       cfg.pin_sclk = NOCT_PIN_LCD_SCLK;
       cfg.pin_mosi = NOCT_PIN_LCD_MOSI;
-      cfg.pin_miso = -1;
+      /* The panel itself has no MISO — but the TF slot on this shared bus does,
+       * and it is this pin. Declaring -1 here makes LovyanGFX leave the
+       * peripheral's MISO signal unbound when it configures the bus, so every
+       * SD access after display init waits forever for a reply that can no
+       * longer reach it ("sdSelectCard(): Select Failed"): the card mounts on
+       * the virgin bus at boot and then looks read-only for the rest of the
+       * run. Name the real pin; readable=false still keeps LGFX from ever
+       * reading from the panel. */
+      cfg.pin_miso = NOCT_PIN_SD_MISO;
       cfg.pin_dc = NOCT_PIN_LCD_DC;
       bus_.config(cfg);
       panel_.setBus(&bus_);
@@ -90,6 +98,16 @@ public:
   }
 
   void push() { fb.pushSprite(0, 0); }
+  /* The framebuffer push is a DMA transfer: pushSprite() returns while the bus
+   * is still shifting out 110 KB. The SD card shares SPI2, and the Arduino SD
+   * driver knows nothing about LovyanGFX's transaction — so asserting the
+   * card's CS mid-transfer fails with "sdSelectCard(): Select Failed", which is
+   * why the card mounts on the virgin bus at boot and then goes read-only the
+   * moment the display comes up. Every SD access has to drain the DMA first. */
+  void syncBus() {
+    tft.waitDMA();
+    tft.endWrite();
+  }
   /* single chokepoint: never let any path (menu, rc, boot) drive the backlight
    * past the thermal cap — protects the panel from the black-blob bloom. */
   void setBrightness(uint8_t b) {

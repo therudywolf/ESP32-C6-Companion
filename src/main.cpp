@@ -155,6 +155,12 @@ void setup() {
   Serial.printf("[BOOT] display up, free heap %u KB\n",
                 (unsigned)(ESP.getFreeHeap() / 1024));
 
+  /* From here on the LCD shares SPI2 with the card, and its framebuffer push is
+   * a DMA transfer that outlives the call. Every SD access must drain it first
+   * or the card's chip-select lands mid-transfer ("Select Failed") and the card
+   * behaves as if it were read-only. */
+  sd.setBusSync([] { display.syncBus(); });
+
   led.begin();
   led.setEnabled(state.settings.ledEnabled);
   input = new InputSystem(NOCT_PIN_BUTTON);
