@@ -24,7 +24,10 @@ struct UiCtx {
   bool forzaLive = false; /* packets within the timeout window */
   const Histories *hist = nullptr; /* on-device hour history */
   const uint16_t *cover = nullptr; /* album cover RGB565 (CoverClient), or null */
-  bool histDay = false;            /* ИСТОРИЯ scale: false = 60 min, true = 24 h */
+  /* ИСТОРИЯ scale: 0 = last hour, 1 = last 24 h, 2 = the SD archive by day. */
+  int histMode = 0;
+  const GraphSet *archive = nullptr; /* daily series, only in mode 2 */
+  int archiveDays = 0;
 };
 
 namespace widgets {

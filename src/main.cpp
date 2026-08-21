@@ -7,8 +7,11 @@
  * network only. WiFi/lwIP run in their own IDF tasks.
  */
 #include <Arduino.h>
+#include <SD.h>
 #include <SPI.h>
+#include <esp_core_dump.h>
 #include <esp_log.h>
+#include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <time.h>
@@ -32,6 +35,9 @@
 #include "pet/PetBrain.h"
 #include "pet/PhraseCache.h"
 #include "pet/WolfPet.h"
+#include "pet/wolf_sprites.h"
+#include "storage/Archive.h"
+#include "storage/CardConfig.h"
 #include "storage/SdStore.h"
 #include "ui/Display.h"
 #include "ui/SceneManager.h"
@@ -58,6 +64,17 @@ static Histories histories;
 static AppState state;
 static SceneManager sceneMgr;
 static OtaManager ota;
+static CardConfig cardCfg;
+static Archive archive;
+
+/* What the board actually uses, after /nocturne.ini has had its say. secrets.h
+ * supplies the defaults; the card overrides key by key. */
+static const WifiCred *activeNets = kWifiNets;
+static int activeNetCount = kWifiCount;
+static const char *activeHost = PC_IP;
+static uint16_t activePort = TCP_PORT;
+static const char *llmEps[8];
+static int llmEpCount = 0;
 static InputSystem *input = nullptr;
 static IntervalTimer frameTimer(NOCT_FRAME_MS);
 static bool prevTcpConnected = false;
@@ -104,6 +121,9 @@ static void logTelemetryRow(int ct, int gt, int cl, int gl, int ram) {
   char row[48];
   snprintf(row, sizeof(row), "%s,%d,%d,%d,%d,%d", hm, ct, gt, cl, gl, ram);
   sd.enqueueAppend(path, row);
+  /* Same sample, second consumer: the rollup that turns a month of rows into
+   * "your GPU idles hotter than it used to". */
+  archive.onMinute(date, ct, gt, cl, gl, ram);
 }
 
 /* One line per boot in /logs/boot.jsonl. The reset reason and the counters
@@ -124,6 +144,152 @@ static void logBootRecord() {
            (unsigned)(ESP.getFreeHeap() / 1024),
            (unsigned long)sd.clockHz());
   sd.enqueueAppend("/logs/boot.jsonl", line, NOCT_SD_DIARY_MAX);
+}
+
+/* Dump the framebuffer to /shots/NNN.bmp. A 16-bit BI_BITFIELDS BMP opens on
+ * any machine with no conversion step, which is the whole point — the board is
+ * usually the only thing that can see its own screen, and "what does it look
+ * like right now" was previously unanswerable without a camera.
+ *
+ * Pixels come out through readPixel() rather than straight off the sprite
+ * buffer: LovyanGFX stores 16-bit sprites in the panel's byte order, and
+ * readPixel normalises that. 55k calls is slow, but this is a one-shot the
+ * owner asked for, not something in the frame path. */
+static bool saveScreenshot() {
+  if (!sd.ok()) return false;
+  char path[32];
+  int idx = 0;
+  do {
+    snprintf(path, sizeof(path), "/shots/%03d.bmp", ++idx);
+  } while (idx < 999 && sd.exists(path));
+
+  const int W = NOCT_W, H = NOCT_H;
+  const uint32_t rowBytes = (uint32_t)W * 2;      /* 640, already 4-aligned */
+  const uint32_t pixBytes = rowBytes * H;
+  const uint32_t offBits = 14 + 40 + 12;          /* file + info + RGB masks */
+  uint8_t hdr[offBits] = {0};
+  auto put16 = [&](int o, uint16_t v) { hdr[o] = v; hdr[o + 1] = v >> 8; };
+  auto put32 = [&](int o, uint32_t v) {
+    hdr[o] = v; hdr[o + 1] = v >> 8; hdr[o + 2] = v >> 16; hdr[o + 3] = v >> 24;
+  };
+  hdr[0] = 'B'; hdr[1] = 'M';
+  put32(2, offBits + pixBytes);
+  put32(10, offBits);
+  put32(14, 40);                 /* BITMAPINFOHEADER */
+  put32(18, W);
+  put32(22, H);                  /* positive = bottom-up rows */
+  put16(26, 1);
+  put16(28, 16);
+  put32(30, 3);                  /* BI_BITFIELDS */
+  put32(34, pixBytes);
+  put32(54, 0xF800);             /* R mask */
+  put32(58, 0x07E0);             /* G */
+  put32(62, 0x001F);             /* B */
+
+  sd.syncBusNow();
+  File f = SD.open(path, FILE_WRITE);
+  if (!f) {
+    Serial.printf("[SHOT] cannot create %s\n", path);
+    return false;
+  }
+  f.write(hdr, sizeof(hdr));
+  static uint16_t row[NOCT_W];   /* 640 B, static: the heap is tight */
+  for (int y = H - 1; y >= 0; y--) {
+    for (int x = 0; x < W; x++) row[x] = display.fb.readPixel(x, y);
+    f.write((const uint8_t *)row, rowBytes);
+  }
+  f.close();
+  Serial.printf("[SHOT] %s (%lu B)\n", path, (unsigned long)(offBits + pixBytes));
+  return true;
+}
+
+/* Every track the owner plays, once, in /logs/media.csv. The data is already
+ * arriving every second; keeping it costs a line and turns into "what did I
+ * listen to this week". */
+static void logTrack(const String &artist, const String &track) {
+  if (!sd.ok() || !track.length()) return;
+  char date[12], hm[8];
+  if (!clockParts(date, sizeof(date), hm, sizeof(hm))) return;
+  String line = String(date) + "," + hm + ",\"" + artist + "\",\"" + track + "\"";
+  if (!sd.exists("/logs/media.csv"))
+    sd.enqueueAppend("/logs/media.csv", "date,time,artist,track");
+  sd.enqueueAppend("/logs/media.csv", line);
+}
+
+/* Forza laps. The game streams at 60 Hz and every lap time was thrown away
+ * when the session ended — the summary card was computed live and lost. One
+ * row per completed lap makes a personal best that outlives the session, which
+ * is the thing a racing HUD is actually for. */
+static float forzaBest = 0; /* seconds, 0 = unknown */
+
+static void loadForzaBest() {
+  if (!sd.ok()) return;
+  String txt;
+  if (sd.readAll("/forza/best.txt", txt, 32)) forzaBest = txt.toFloat();
+  if (forzaBest > 0) Serial.printf("[FORZA] personal best %.3f s\n", forzaBest);
+}
+
+static void logForzaLap(float seconds) {
+  if (!sd.ok() || seconds <= 0.5f) return;
+  char date[12], hm[8];
+  if (!clockParts(date, sizeof(date), hm, sizeof(hm))) return;
+  char line[64];
+  snprintf(line, sizeof(line), "%s,%s,%.3f", date, hm, seconds);
+  if (!sd.exists("/forza/laps.csv"))
+    sd.enqueueAppend("/forza/laps.csv", "date,time,lap_seconds");
+  sd.enqueueAppend("/forza/laps.csv", line);
+  if (forzaBest <= 0 || seconds < forzaBest) {
+    forzaBest = seconds;
+    char best[16];
+    snprintf(best, sizeof(best), "%.3f", seconds);
+    sd.writeBlob("/forza/best.txt", best, strlen(best));
+    Serial.printf("[FORZA] new personal best %.3f s\n", seconds);
+  }
+}
+
+/* A panic leaves an ELF core dump in the coredump partition (the partition
+ * table has always had one; nothing ever read it). Copy it to the card and
+ * erase it, so a crash can be decoded later with
+ *   esp-coredump info_corefile -c <file> .pio/build/nocturne-c6/firmware.elf
+ * without anyone having been holding a serial cable at the time. This board
+ * reboots itself to heal, so crashes happen when nobody is watching by
+ * definition. */
+static void saveCoreDump() {
+  if (!sd.ok()) return;
+  size_t addr = 0, size = 0;
+  if (esp_core_dump_image_get(&addr, &size) != ESP_OK || size == 0) return;
+  const esp_partition_t *part = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, nullptr);
+  if (!part) return;
+
+  char path[40];
+  int idx = 0;
+  do {
+    snprintf(path, sizeof(path), "/logs/core%02d.elf", ++idx);
+  } while (idx < 99 && sd.exists(path));
+
+  sd.syncBusNow();
+  File f = SD.open(path, FILE_WRITE);
+  if (!f) return;
+  uint8_t buf[512];
+  size_t off = 0;
+  bool good = true;
+  while (off < size) {
+    size_t n = size - off > sizeof(buf) ? sizeof(buf) : size - off;
+    if (esp_partition_read(part, off, buf, n) != ESP_OK) { good = false; break; }
+    if (f.write(buf, n) != n) { good = false; break; }
+    off += n;
+  }
+  f.close();
+  if (good) {
+    Serial.printf("[CORE] crash dump saved to %s (%u B)\n", path,
+                  (unsigned)size);
+    /* Erase it: leaving it would copy the same crash again on every boot. */
+    esp_core_dump_image_erase();
+  } else {
+    Serial.println("[CORE] dump copy failed - left in flash for next time");
+    sd.remove(path);
+  }
 }
 
 /* Quiet hours, from our own NTP clock. `from > to` wraps past midnight
@@ -185,6 +351,28 @@ void setup() {
   /* SD first, on a virgin bus — card init (CMD0 at 400 kHz) is the touchy
    * part; once initialised it tolerates the shared-bus traffic. */
   state.link.sdOk = sd.begin();
+  /* Card overrides before anything reads a network or a host. */
+  cardCfg.load(&sd);
+  if (cardCfg.wifiCount() > 0) {
+    activeNets = cardCfg.wifiNets();
+    activeNetCount = cardCfg.wifiCount();
+  }
+  loadForzaBest();
+  archive.begin(&sd);
+  if (cardCfg.skin()[0]) wolfLoadSkin(&sd, cardCfg.skin());
+  /* Card themes must exist before the stored preset index is applied, or a
+   * board set to a file theme would fall back to preset 0 on every boot. */
+  theme::loadCardThemes(&sd);
+  theme::applyPreset(state.settings.themePreset);
+  if (state.settings.customActive) theme::applyPalette(state.settings.custom);
+  if (cardCfg.host()[0]) activeHost = cardCfg.host();
+  if (cardCfg.port()) activePort = cardCfg.port();
+  /* A card endpoint goes FIRST and the compiled ones stay as fallbacks, so a
+   * wrong line in the ini degrades to the old behaviour instead of muting the
+   * wolf. */
+  if (cardCfg.llmEndpoint()[0]) llmEps[llmEpCount++] = cardCfg.llmEndpoint();
+  for (int i = 0; i < kLlmCount && llmEpCount < (int)(sizeof(llmEps) / sizeof(llmEps[0])); i++)
+    llmEps[llmEpCount++] = kLlmEndpoints[i];
   Serial.println("[BOOT] sd phase done");
 
   /* Framebuffer — the largest single allocation (110 KB). */
@@ -218,15 +406,17 @@ void setup() {
   histories.attach(&sd); /* graphs survive a reboot when the card is present */
   histories.setOnCommit(logTelemetryRow); /* ...and the card keeps the archive */
   phrases.begin(&sd);
-  llm.begin(kLlmEndpoints, kLlmCount, LLM_API_KEY, LLM_MODEL, LLM_MODEL_BIG);
+  llm.begin(llmEps, llmEpCount, cardCfg.llmKey()[0] ? cardCfg.llmKey() : LLM_API_KEY,
+            cardCfg.llmModel()[0] ? cardCfg.llmModel() : LLM_MODEL,
+            cardCfg.llmModel()[0] ? cardCfg.llmModel() : LLM_MODEL_BIG);
   brain.begin(&pet, &llm, &phrases, &sd);
 
-  wifi.begin(kWifiNets, kWifiCount, state.settings.netSel);
-  tcp.setServer(PC_IP, TCP_PORT);
+  wifi.begin(activeNets, activeNetCount, state.settings.netSel);
+  tcp.setServer(activeHost, activePort);
 #ifdef OTA_PASSWORD
-  ota.begin(NOCT_OTA_HOSTNAME, OTA_PASSWORD, PC_IP);
+  ota.begin(NOCT_OTA_HOSTNAME, OTA_PASSWORD, activeHost);
 #else
-  ota.begin(NOCT_OTA_HOSTNAME, nullptr, PC_IP);
+  ota.begin(NOCT_OTA_HOSTNAME, nullptr, activeHost);
 #endif
   /* Flash is being written while this runs, so the normal frame loop is stalled:
    * the callback draws + pushes the panel itself and feeds the watchdog. */
@@ -236,7 +426,8 @@ void setup() {
     UiCtx ui{display.fb, state, graphs, pet, brain, millis()};
     sceneMgr.drawOtaScreen(ui, pct, msg);
   });
-  coverClient.begin(PC_IP, 8899); /* album cover from the control panel */
+  coverClient.begin(activeHost,
+                    cardCfg.panelPort() ? cardCfg.panelPort() : 8899);
 #if defined(LITE_URL) && defined(LITE_TOKEN)
   liteClient.begin(LITE_URL, LITE_TOKEN); /* always-on fallback when PC is off */
 #endif
@@ -246,9 +437,16 @@ void setup() {
   deps.wifi = &wifi;
   deps.tcp = &tcp;
   deps.led = &led;
-  for (int i = 0; i < kWifiCount; i++) deps.wifiNames[i] = kWifiNets[i].ssid;
-  deps.wifiCount = kWifiCount;
+  for (int i = 0; i < activeNetCount && i < NOCT_WIFI_MAX_NETS; i++)
+    deps.wifiNames[i] = activeNets[i].ssid;
+  deps.wifiCount = activeNetCount;
   sceneMgr.begin(deps);
+
+  /* Card recovery, in the order that matters: a crash dump from the run that
+   * just died is copied off before anything can overwrite it, and only then do
+   * we consider replacing the firmware. */
+  saveCoreDump();
+  ota.installFromCard(&sd); /* reboots on success; returns on any failure */
 
   UiCtx ui{display.fb, state, graphs, pet, brain, millis()};
   sceneMgr.bootAnimation(ui);
@@ -517,7 +715,20 @@ void loop() {
     tcp.sendCfg(state.settings); /* mirror live settings to the web panel */
   }
 
+  /* new track -> one row in the media log */
+  static String lastLoggedTrack;
+  if (state.media.track.length() && state.media.track != lastLoggedTrack) {
+    lastLoggedTrack = state.media.track;
+    logTrack(state.media.artist, state.media.track);
+  }
+
   forza.tick(now, wifi.connected());
+  /* a completed lap shows up as a change in lastLap */
+  static float lastLoggedLap = 0;
+  if (forza.state().lastLap > 0 && forza.state().lastLap != lastLoggedLap) {
+    lastLoggedLap = forza.state().lastLap;
+    logForzaLap(lastLoggedLap);
+  }
   bool forzaLive = forza.connected(now);
   state.forzaLive = forzaLive;
 
@@ -541,6 +752,21 @@ void loop() {
 
   pet.tick(now);
   brain.tick(now, state);
+
+  /* The archive closed a day: hand any finding to the wolf to phrase, and ask
+   * it to write the day up. Both fire once a day, so the whole thing costs one
+   * extra LLM call and one small file. */
+  {
+    String finding;
+    if (archive.takeFinding(finding)) brain.notice(finding);
+    static String journaledDay;
+    const String &closed = archive.lastDate();
+    if (archive.lastSummary().length() && closed.length() &&
+        closed != journaledDay && !brain.journalBusy()) {
+      journaledDay = closed;
+      brain.writeJournal(closed, archive.lastSummary());
+    }
+  }
 
   /* tint the LED with the emotional tone of a fresh utterance — a brief accent
    * over the SPEAK glow (derived from the bucket, no extra model output) */
@@ -593,6 +819,15 @@ void loop() {
   led.tick(now);
   applyBacklight(sceneMgr.screenDimmed(), night && !state.alertActive);
 
+  /* Opening the archive view reads the card once, not every frame; leaving and
+   * returning re-reads so a day that closed meanwhile shows up. */
+  {
+    static int lastHistMode = -1;
+    int m = sceneMgr.historyMode();
+    if (m == 2 && lastHistMode != 2) archive.loadSeries();
+    lastHistMode = m;
+  }
+
   ota.tick(wifi.connected());
 
   /* input */
@@ -602,7 +837,7 @@ void loop() {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
              coverClient.ready() ? coverClient.data() : nullptr,
-             sceneMgr.historyDay()};
+             sceneMgr.historyMode(), &archive.series(), archive.seriesDays()};
     sceneMgr.handleInput(ev, ui);
   }
 
@@ -611,11 +846,16 @@ void loop() {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
              coverClient.ready() ? coverClient.data() : nullptr,
-             sceneMgr.historyDay()};
+             sceneMgr.historyMode(), &archive.series(), archive.seriesDays()};
     sceneMgr.draw(ui);
     display.push();
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
      * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
+    if (sceneMgr.takeShotRequest()) {
+      bool okShot = saveScreenshot();
+      sceneMgr.toast(okShot ? "снимок сохранён" : "снимок: нет карты");
+    }
+
     static unsigned long lastFlush = 0;
     if (now - lastFlush > 500) {
       sd.flush(); /* bounded to NOCT_SD_FLUSH_MAX entries per call */

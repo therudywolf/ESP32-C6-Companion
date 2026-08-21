@@ -30,7 +30,7 @@ enum MenuId {
   MI_PETLLM, MI_CHATTER, MI_TONE,
   MI_CAROUSEL, MI_SCENES, MI_ELEMS, MI_FORZA,
   MI_LED, MI_LEDMODE, MI_NOTIF,
-  MI_WIFI, MI_SYSINFO, MI_RESET,
+  MI_WIFI, MI_SYSINFO, MI_SHOT, MI_RESET,
   MI_COUNT
 };
 
@@ -66,6 +66,7 @@ const MenuItem kMenu[] = {
 
     {CAT_SYSTEM, MI_WIFI, "WiFi"},
     {CAT_SYSTEM, MI_SYSINFO, "Инфо системы"},
+    {CAT_SYSTEM, MI_SHOT, "Снимок экрана"},
     {CAT_SYSTEM, MI_RESET, "Сброс настроек"},
 };
 const int kMenuCount = (int)(sizeof(kMenu) / sizeof(kMenu[0]));
@@ -390,8 +391,12 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
       d_.tcp->sendCmd("status");
       toast("обновляю...");
     } else if (scene_ == SCENE_HISTORY) {
-      histDay_ = !histDay_; /* 60 min <-> 24 h */
-      toast(histDay_ ? "история: сутки" : "история: час");
+      /* hour -> day -> archive -> hour. The archive rung only appears with a
+       * card in, because that is the only place the daily rows live. */
+      histMode_ = (histMode_ + 1) % (ui.st.link.sdOk ? 3 : 2);
+      toast(histMode_ == 0   ? "история: час"
+            : histMode_ == 1 ? "история: сутки"
+                             : "история: архив с карты");
     } else if (scene_ != SCENE_FORZA) {
       /* pin / unpin this scene as the TRIPLE-press "home" (reversible) */
       Settings &s = ui.st.settings;
@@ -566,7 +571,7 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
     d_.disp->setFlipped(s.flipped);
     break;
   case MI_THEME: /* theme preset (cycling drops any custom palette) */
-    s.themePreset = (s.themePreset + 1) % theme::THEME_PRESETS;
+    s.themePreset = (s.themePreset + 1) % theme::presetTotal();
     s.customActive = false;
     theme::applyPreset(s.themePreset);
     theme::setBgLight(s.bgLight);
@@ -623,6 +628,13 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
     menuOpen_ = false;
     menuCat_ = -1;
     break;
+  case MI_SHOT:
+    /* Close the menu first: the point is a picture of the SCENE, not of the
+     * menu covering it. main() takes it on the next frame. */
+    menuOpen_ = false;
+    menuCat_ = -1;
+    shotRequested_ = true;
+    return; /* nothing persisted - don't spend an NVS write */
   case MI_CHATTER: {
     s.wolfChatter = (s.wolfChatter + 1) % 4;
     static const char *n[] = {"болтливость: выкл", "болтливость: редко",
@@ -779,7 +791,7 @@ void SceneManager::drawOtaScreen(UiCtx &ui, int pct, const char *msg) {
   g.setFont(&F_MED);
   g.setTextSize(1);
   textCenter(g, NOCT_W / 2, 26, "ОБНОВЛЕНИЕ", ORANGE);
-  xbmScaled(g, (NOCT_W - 64) / 2, 46, wolf_idle, 32, 32, 2, ORANGE);
+  xbmScaled(g, (NOCT_W - 64) / 2, 46, wolfFrame(WOLF_IDLE), 32, 32, 2, ORANGE);
 
   int bx = 40, by = 118, bw = NOCT_W - 80;
   g.drawRect(bx - 2, by - 2, bw + 4, 16, ORANGE_DIM);
@@ -991,8 +1003,8 @@ void SceneManager::drawScreensaver(UiCtx &ui) {
     widgets::pawPrint(g, pwx + 32, 150 + (k & 1) * 6,
                       lerp565(BG, ORANGE_DIM, 150 - k * 30));
   }
-  const unsigned char *frame = ((now / 200) & 3) == 0 ? wolf_blink : wolf_idle;
-  if (!ui.st.link.tcpConnected) frame = wolf_idle;
+  const unsigned char *frame = ((now / 200) & 3) == 0 ? wolfFrame(WOLF_BLINK) : wolfFrame(WOLF_IDLE);
+  if (!ui.st.link.tcpConnected) frame = wolfFrame(WOLF_IDLE);
   widgets::xbmScaled(g, wx, wy, frame, 32, 32, 2, ORANGE);
 
   /* tiny ambient PC line + hint */
@@ -1268,7 +1280,7 @@ void SceneManager::draw(UiCtx &ui) {
     snprintf(buf, sizeof(buf), "!! %s !!", m);
     textCenter(g, NOCT_W / 2, 1, buf, on ? BG : CRIT);
     g.setTextSize(1);
-    xbmScaled(g, 4, NOCT_H - 38, wolf_aggressive, 32, 32, 1, on ? CRIT : DIM);
+    xbmScaled(g, 4, NOCT_H - 38, wolfFrame(WOLF_AGGRO), 32, 32, 1, on ? CRIT : DIM);
   }
 
   /* wolf speech overlay — the wolf "lives in the background": its comment
@@ -1295,7 +1307,7 @@ void SceneManager::draw(UiCtx &ui) {
                         lerp565(PANEL, ORANGE, 90));
         /* speaking wolf, framed and vertically centred in the taller card */
         g.fillRoundRect(mx + 4, oy + 4, 42, oh - 8, 6, BG);
-        const unsigned char *fr = ((ui.now / 150) & 1) ? wolf_funny : wolf_idle;
+        const unsigned char *fr = ((ui.now / 150) & 1) ? wolfFrame(WOLF_FUNNY) : wolfFrame(WOLF_IDLE);
         xbmScaled(g, mx + 9, oy + (oh - 32) / 2, fr, 32, 32, 1, ORANGE);
         /* name tag + text */
         g.setFont(&theme::F_TEXT);
@@ -1416,7 +1428,7 @@ void SceneManager::bootAnimation(UiCtx &ui) {
   for (int reveal = 8; reveal <= 96; reveal += 8) {
     g.fillSprite(BG);
     g.setClipRect(0, 0, NOCT_W, 30 + reveal);
-    xbmScaled(g, (NOCT_W - 96) / 2, 30, wolf_idle, 32, 32, 3, ORANGE);
+    xbmScaled(g, (NOCT_W - 96) / 2, 30, wolfFrame(WOLF_IDLE), 32, 32, 3, ORANGE);
     g.clearClipRect();
     d_.disp->push();
     delay(30);

@@ -23,6 +23,14 @@ public:
   void tick(unsigned long now, AppState &st);
   /* remote: make the wolf say a literal line right now (companion app). */
   void sayNow(const String &text) { show(text, millis()); }
+  /* Something the board worked out on its own (a baseline drift from the SD
+   * archive). Queued rather than spoken directly, so the wolf phrases it in
+   * character instead of reciting a number. */
+  void notice(const String &eventRu) { pendingNotice_ = eventRu; }
+  /* Ask the model, once a day, to write the day up in the wolf's own voice and
+   * file it on the card. Tagged so the answer is filed, not spoken. */
+  void writeJournal(const String &dayDate, const String &summary);
+  bool journalBusy() const { return journalPending_; }
   /* the scene the owner is currently looking at (nullptr = DEN/Forza/none);
    * lets idle chatter occasionally comment on what's on screen. */
   void setViewScene(const char *name) { viewSceneName_ = name; }
@@ -72,6 +80,11 @@ private:
   int actionPending_ = -1;
   unsigned long actionPendingAt_ = 0;
   bool bootGreetPending_ = true;
+  String pendingNotice_;           /* an archive finding waiting to be voiced */
+  String journalDate_;             /* day the in-flight journal entry covers */
+  String lastJournal_;             /* newest entry, folded into every prompt */
+  bool journalPending_ = false;
+  static const int kTagSpeech = 0, kTagJournal = 1;
   int reactionKind_ = -1;          /* DEN particle burst kind */
   unsigned long reactionAt_ = 0;   /* when the last action fired */
   int speechTone_ = -1;            /* tone of the latest utterance (main → LED) */

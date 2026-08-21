@@ -1,5 +1,7 @@
 #include "ui/Theme.h"
 
+#include "storage/SdStore.h"
+
 #include <U8g2lib.h> /* font data only */
 
 namespace theme {
@@ -141,8 +143,28 @@ static void applyBgLight() {
   ACCENT = scale565(ACCENT, 70, 100);
 }
 
+/* Card themes: a name plus the same ten roles the on-device colour editor
+ * edits, so the format is exactly what the board already understands. */
+struct CardTheme {
+  char name[20];
+  uint16_t role[COLOR_ROLES];
+};
+static CardTheme gCardThemes[CARD_THEMES_MAX];
+static int gCardThemeCount = 0;
+
+int cardThemeCount() { return gCardThemeCount; }
+int presetTotal() { return THEME_PRESETS + gCardThemeCount; }
+
 void applyPreset(int idx) {
-  if (idx < 0 || idx >= THEME_PRESETS) idx = 0;
+  if (idx < 0 || idx >= presetTotal()) idx = 0;
+  if (idx >= THEME_PRESETS) {
+    /* A file theme is a full palette, so it goes in wholesale — no chroma
+     * boost, because whoever wrote the file already chose the colours. */
+    currentPreset = idx;
+    applyPalette(gCardThemes[idx - THEME_PRESETS].role);
+    applyBgLight();
+    return;
+  }
   currentPreset = idx;
   const Preset &p = kPresets[idx];
   BG = p.bg;
@@ -217,8 +239,66 @@ void applyPalette(const uint16_t pal[COLOR_ROLES]) {
 }
 
 const char *presetName(int idx) {
-  if (idx < 0 || idx >= THEME_PRESETS) idx = 0;
+  if (idx < 0 || idx >= presetTotal()) idx = 0;
+  if (idx >= THEME_PRESETS) return gCardThemes[idx - THEME_PRESETS].name;
   return kPresets[idx].name;
+}
+
+/* Parse one "key = RRGGBB" line into the role table. */
+static bool themeRole(const String &key, const String &val, CardTheme &t) {
+  static const char *kKeys[COLOR_ROLES] = {"bg",   "chrome", "text", "dim",
+                                           "panel", "good",  "warn", "crit",
+                                           "info", "accent"};
+  for (int i = 0; i < COLOR_ROLES; i++) {
+    if (key != kKeys[i]) continue;
+    long v = strtol(val.c_str(), nullptr, 16);
+    t.role[i] = rgb((uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v);
+    return true;
+  }
+  return false;
+}
+
+int loadCardThemes(::SdStore *sd) {
+  gCardThemeCount = 0;
+  if (!sd || !sd->ok()) return 0;
+  for (int slot = 0; slot < CARD_THEMES_MAX; slot++) {
+    char path[40];
+    snprintf(path, sizeof(path), "/themes/%d.thm", slot + 1);
+    String text;
+    if (!sd->readAll(path, text, 1024) || !text.length()) continue;
+    CardTheme t{};
+    snprintf(t.name, sizeof(t.name), "файл %d", slot + 1);
+    int roles = 0, start = 0;
+    while (start < text.length()) {
+      int nl = text.indexOf('\n', start);
+      String line = (nl < 0) ? text.substring(start) : text.substring(start, nl);
+      start = (nl < 0) ? text.length() : nl + 1;
+      line.replace("\r", "");
+      line.trim();
+      if (!line.length() || line.startsWith("#")) continue;
+      int eq = line.indexOf('=');
+      if (eq <= 0) continue;
+      String key = line.substring(0, eq), val = line.substring(eq + 1);
+      key.trim();
+      key.toLowerCase();
+      val.trim();
+      if (key == "name") {
+        snprintf(t.name, sizeof(t.name), "%s", val.c_str());
+        continue;
+      }
+      if (themeRole(key, val, t)) roles++;
+    }
+    /* All ten or none: a half-specified palette would leave roles black and
+     * look like a broken screen rather than a theme. */
+    if (roles != COLOR_ROLES) {
+      Serial.printf("[THEME] %s: %d/%d roles - skipped\n", path, roles,
+                    COLOR_ROLES);
+      continue;
+    }
+    gCardThemes[gCardThemeCount++] = t;
+    Serial.printf("[THEME] loaded '%s' from %s\n", t.name, path);
+  }
+  return gCardThemeCount;
 }
 
 void backdrop(LGFX_Sprite &g, int y0, int y1) {

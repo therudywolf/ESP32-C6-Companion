@@ -5,7 +5,10 @@
 #include <Update.h>
 #include <WiFi.h>
 
+#include <SD.h>
+
 #include "core/config.h"
+#include "storage/SdStore.h"
 
 /* RFC1918 / loopback literal? Same rule the LLM client uses for its bearer
  * token — a firmware image is even more sensitive than a token. */
@@ -95,6 +98,61 @@ bool OtaManager::requestPull(const String &url) {
     return false;
   }
   pendingUrl_ = url; /* executed from tick(), i.e. on the loop task */
+  return true;
+}
+
+bool OtaManager::installFromCard(SdStore *sd) {
+  const char *kSrc = "/firmware.bin";
+  if (!sd || !sd->ok() || !sd->exists(kSrc)) return false;
+  sd->syncBusNow();
+  File f = SD.open(kSrc, FILE_READ);
+  if (!f) return false;
+  size_t len = f.size();
+  /* An image smaller than the bootloader header cannot be one; refuse rather
+   * than hand nonsense to Update. */
+  if (len < 64 * 1024) {
+    Serial.printf("[OTA] %s is only %u B - ignoring\n", kSrc, (unsigned)len);
+    f.close();
+    return false;
+  }
+  Serial.printf("[OTA] installing %s (%u B) from the card\n", kSrc,
+                (unsigned)len);
+  active_ = true;
+  progress(0, "прошивка с карты");
+  if (!Update.begin(len)) {
+    f.close();
+    active_ = false;
+    pct_ = -1;
+    msg_ = "OTA: мало места";
+    return false;
+  }
+  uint8_t buf[1024];
+  size_t done = 0;
+  while (done < len) {
+    int n = f.read(buf, sizeof(buf));
+    if (n <= 0) break;
+    if (Update.write(buf, n) != (size_t)n) break;
+    done += n;
+    progress((int)((uint64_t)done * 100 / len), "прошивка с карты");
+  }
+  f.close();
+  if (done != len || !Update.end(true)) {
+    Update.abort();
+    active_ = false;
+    pct_ = -1;
+    msg_ = "OTA: образ с карты повреждён";
+    Serial.printf("[OTA] card image failed at %u/%u\n", (unsigned)done,
+                  (unsigned)len);
+    return false;
+  }
+  /* Rename BEFORE restarting: a board that reboots into the same file would
+   * reflash itself forever. */
+  SD.remove("/firmware.installed.bin");
+  SD.rename(kSrc, "/firmware.installed.bin");
+  progress(100, "готово, перезапуск");
+  Serial.println("[OTA] card image installed - restarting");
+  delay(400);
+  esp_restart();
   return true;
 }
 

@@ -86,7 +86,8 @@ bool SdStore::track(const char *what, unsigned long t0, bool good) {
 
 void SdStore::ensureDirs() {
   if (!ok_) return;
-  static const char *dirs[] = {"/wolf", "/wolf/cache", "/logs", "/covers"};
+  static const char *dirs[] = {"/wolf", "/wolf/cache", "/logs", "/covers", "/shots", "/forza",
+                                "/wolf/journal"};
   for (const char *d : dirs) {
     if (SD.exists(d)) continue;
     if (!SD.mkdir(d)) Serial.printf("[SD] mkdir %s FAILED\n", d);

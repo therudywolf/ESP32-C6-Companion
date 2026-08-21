@@ -34,11 +34,12 @@ void LlmClient::begin(const char *const *endpoints, int endpointCount,
   xTaskCreate(taskEntry, "llm", 8192, this, 1, &task_);
 }
 
-bool LlmClient::request(const String &context, bool big) {
+bool LlmClient::request(const String &context, bool big, int tag) {
   if (!task_ || busy_) return false;
   xSemaphoreTake(mux_, portMAX_DELAY);
   pendingCtx_ = context;
   pendingBig_ = big;
+  pendingTag_ = tag;
   hasPending_ = true;
   /* drop any stale reply still in the mailbox (e.g. a timed-out call that the
    * caller stopped waiting for) so it can't be mis-attributed to THIS request */
@@ -49,11 +50,12 @@ bool LlmClient::request(const String &context, bool big) {
   return true;
 }
 
-bool LlmClient::takeReply(String &phrase, bool &ok) {
+bool LlmClient::takeReply(String &phrase, bool &ok, int *tag) {
   if (!hasReply_) return false;
   xSemaphoreTake(mux_, portMAX_DELAY);
   phrase = reply_;
   ok = replyOk_;
+  if (tag) *tag = replyTag_;
   hasReply_ = false;
   xSemaphoreGive(mux_);
   return true;
@@ -68,10 +70,12 @@ void LlmClient::taskLoop() {
     String ctx;
     bool big = false;
     bool work = false;
+    int tag = 0;
     xSemaphoreTake(mux_, portMAX_DELAY);
     if (hasPending_) {
       ctx = pendingCtx_;
       big = pendingBig_;
+      tag = pendingTag_;
       hasPending_ = false;
       work = true;
     }
@@ -97,6 +101,7 @@ void LlmClient::taskLoop() {
     xSemaphoreTake(mux_, portMAX_DELAY);
     reply_ = phrase;
     replyOk_ = ok;
+    replyTag_ = tag;
     hasReply_ = true;
     xSemaphoreGive(mux_);
     lastOk_ = ok;

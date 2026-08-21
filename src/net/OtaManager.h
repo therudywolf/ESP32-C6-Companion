@@ -33,6 +33,15 @@ public:
    * rejected — the caller should surface that, not retry. */
   bool requestPull(const String &url);
 
+  /* Recovery path: flash /firmware.bin straight off the card at boot, then
+   * rename it so it cannot loop. This is the door that still works when WiFi
+   * is broken and the board is nowhere near a USB port — copy a file onto the
+   * card from any machine and power-cycle. Update() writes to the INACTIVE
+   * slot and only switches partitions once esp_ota_end validates the image, so
+   * a truncated or foreign file leaves the running firmware untouched.
+   * Returns true if an image was installed (the board reboots immediately). */
+  bool installFromCard(class SdStore *sd);
+
   bool active() const { return active_; }
   int pct() const { return pct_; }
   const char *message() const { return msg_.c_str(); }

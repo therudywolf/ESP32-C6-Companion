@@ -26,13 +26,16 @@ public:
   /* Fire a speech request (drops if one is already in flight). `context`
    * becomes the user message; `big` picks the heavier model (use it when the
    * PC is idle and the GPU is free). Returns false if busy/not started. */
-  bool request(const String &context, bool big);
+  /* `tag` comes back with the reply so one mailbox can serve more than one
+   * caller. Speech is tag 0; the wolf's nightly journal is tag 1, and without
+   * this its answer would surface as a spoken line. */
+  bool request(const String &context, bool big, int tag = 0);
 
   bool busy() const { return busy_; }
   bool lastOk() const { return lastOk_; }
 
   /* Poll: true once per finished request; phrase is UTF-8, sanitized. */
-  bool takeReply(String &phrase, bool &ok);
+  bool takeReply(String &phrase, bool &ok, int *tag = nullptr);
 
 private:
   static void taskEntry(void *self);
@@ -52,6 +55,7 @@ private:
   SemaphoreHandle_t mux_ = nullptr;
   String pendingCtx_;
   bool pendingBig_ = false;
+  int pendingTag_ = 0, replyTag_ = 0;
   bool hasPending_ = false;
   String reply_;
   bool replyOk_ = false;
