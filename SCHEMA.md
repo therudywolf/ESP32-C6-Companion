@@ -56,6 +56,29 @@ node: `{id, name, st, cpu, ram, disk, extra}`
 | `cpu`,`ram`,`disk` | int | | percent, **rounded** (not truncated), `-1` = unknown → the board draws `--`, never `0%` |
 | `extra` | string | ≤16 | free badge text |
 
+### `zb` — smart-home sensors `{n, list:[…]}` (≤4)
+Whatever owns the Zigbee radio forwards readings here. The **board is
+deliberately not that coordinator**: measured, the stack costs 380 KB of flash
+(a bare WiFi + coordinator sketch already overflows Espressif's own 1.25 MB
+Zigbee app slot) and Yandex Smart Home needs a cloud skill — OAuth 2.0 plus a
+public HTTPS endpoint that Yandex calls — which a device on a LAN cannot be. A
+server has to sit in the chain either way, so the coordinator belongs there.
+This block is source-agnostic: Zigbee2MQTT, Home Assistant or a poller against a
+Yandex hub's API all fill it the same.
+
+entry: `{name, t, h, b, age}`
+| key | type | size | meaning |
+|---|---|---|---|
+| `name` | string | ≤16 | room / sensor label, shown on the ПОГОДА tile |
+| `t` | int | | temperature **×10** (23.6 °C → `236`); omit when unknown |
+| `h` | int | | relative humidity %, -1 = unknown |
+| `b` | int | | battery %, -1 = unknown; under 20 the bar turns red |
+| `age` | int | | seconds since the sensor last reported, -1 = unknown |
+
+> `age` is not optional in spirit. Battery Zigbee sensors go quiet for hours;
+> a last-known reading presented as current is the same lie the "no signal"
+> handling exists to prevent. Over an hour old and the whole tile dims.
+
 ### `svc` — `{n, up, list:[…]}`
 entry: `{name (≤18), st (up/down), ms (int, -1 = unknown)}`
 

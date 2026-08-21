@@ -294,6 +294,28 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
 #undef NOCT_CLAUDE_SET
   }
 
+  /* Smart-home sensors from whoever owns the Zigbee radio. Absent block =
+   * leave what we had; an explicitly empty list = the coordinator is there and
+   * has nothing, which is different and worth showing differently. */
+  if (doc["zb"].is<JsonObject>()) {
+    JsonObject z = doc["zb"];
+    state.zb.count = z["n"] | 0;
+    if (state.zb.count > ZigbeeData::kMax) state.zb.count = ZigbeeData::kMax;
+    JsonArray list = z["list"];
+    for (int i = 0; i < ZigbeeData::kMax; i++) {
+      ZbSensor &e = state.zb.list[i];
+      if (i < (int)list.size()) {
+        copyStr(e.name, sizeof(e.name), list[i]["name"] | "");
+        e.temp10 = list[i]["t"] | -32768;
+        e.humidity = list[i]["h"] | -1;
+        e.battery = list[i]["b"] | -1;
+        e.ageSec = list[i]["age"] | -1;
+      } else {
+        e = ZbSensor();
+      }
+    }
+  }
+
   if (doc["events"].is<JsonObject>()) {
     JsonObject e = doc["events"];
     state.events.count = e["n"] | 0;

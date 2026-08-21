@@ -270,11 +270,18 @@ void drawWeather(UiCtx &ui) {
     textWrap(g, d.c_str(), dx, y0, bw, 20, 2, ORANGE);
   }
 
-  /* forecast — CENTRED so it isn't lopsided when fewer than 5 days arrive */
+  /* Forecast, CENTRED so it isn't lopsided when fewer than 5 days arrive.
+   * Indoor sensors, when a coordinator is feeding them, take the last tile in
+   * the same row: "за окном" and "дома" belong side by side, and reusing the
+   * forecast tile means no new layout and no scene-id surgery (adding a scene
+   * would shift FORZA's index and desync the web panel). */
   static const char *dayNames[] = {"сег", "+1", "+2", "+3", "+4"};
+  int indoor = ui.st.zb.count > 0 ? 1 : 0;
   int nd = w.wfDays < 5 ? w.wfDays : 5;
-  if (nd > 0) {
-    int totalW = nd * 62 - 6; /* 56-wide tiles, 6 px gaps */
+  if (indoor && nd > 4) nd = 4; /* give the last slot to the room */
+  if (nd > 0 || indoor) {
+    int tiles = nd + indoor;
+    int totalW = tiles * 62 - 6; /* 56-wide tiles, 6 px gaps */
     int x0 = (NOCT_W - totalW) / 2;
     for (int i = 0; i < nd; i++) {
       int x = x0 + i * 62;
@@ -286,6 +293,43 @@ void drawWeather(UiCtx &ui) {
       g.setFont(&F_TEXT);
       snprintf(v, sizeof(v), "%d", w.wfMin[i]);
       textCenter(g, x + 28, 152, v, INFO); /* lo, inside y164 */
+    }
+
+    if (indoor) {
+      const ZbSensor &z = ui.st.zb.list[0];
+      int x = x0 + nd * 62;
+      /* A battery sensor that has gone quiet still has a last reading, and
+       * showing it as if it were current is the same lie the "no signal"
+       * handling exists to prevent. Over an hour old -> everything dims. */
+      bool stale = z.ageSec >= 0 && z.ageSec > 3600;
+      char tab[18];
+      clipW(g, z.name[0] ? z.name : "дома", tab, sizeof(tab), 50);
+      panel(g, x, 92, 56, 72, tab, stale ? DIM : ORANGE_DIM,
+            stale ? DIM : ORANGE);
+      g.setFont(&F_MED);
+      if (z.temp10 != -32768) {
+        snprintf(v, sizeof(v), "%d", (z.temp10 + (z.temp10 < 0 ? -5 : 5)) / 10);
+        textCenter(g, x + 28, 112, v, stale ? DIM : WARN);
+      } else {
+        textCenter(g, x + 28, 112, "--", DIM);
+      }
+      g.setFont(&F_TEXT);
+      if (z.humidity >= 0) {
+        snprintf(v, sizeof(v), "%d%%", z.humidity);
+        textCenter(g, x + 28, 132, v, stale ? DIM : INFO);
+      }
+      /* battery as a tiny bar: the number matters far less than "is it dying" */
+      if (z.battery >= 0) {
+        int bw2 = 34, bx = x + 11, by = 148;
+        g.drawRect(bx, by, bw2, 7, stale ? DIM : ORANGE_DIM);
+        g.fillRect(bx + bw2, by + 2, 2, 3, stale ? DIM : ORANGE_DIM);
+        int fill = (bw2 - 2) * z.battery / 100;
+        if (fill > 0)
+          g.fillRect(bx + 1, by + 1, fill, 5,
+                     z.battery < 20 ? CRIT : (stale ? DIM : GOOD));
+      } else if (stale) {
+        textCenter(g, x + 28, 150, "молчит", DIM);
+      }
     }
   }
 }
