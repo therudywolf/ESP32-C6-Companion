@@ -70,7 +70,31 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   editor. The menu is grouped into five categories (Экран / Волк / Состав /
   Сигналы / Система) so nothing is more than a few presses deep. Direction-aware
   scene transitions.
-- **WS2812 mood light** + **multi-WiFi** (ranks known SSIDs by RSSI).
+- **WS2812 mood light** + **multi-WiFi** (ranks known SSIDs by RSSI). While
+  music plays the LED wears the **dominant colour of the album art** (chroma-
+  weighted, because the plain average of a cover is always mud).
+- **It knows its own temperature.** `temperatureRead()` on the C6 die, measured
+  at 49 °C steady on this board — so the backlight cap stopped being a guess made
+  once at room temperature and became a guard that reacts. Shown on СИСТЕМА.
+- **The wolf grows up.** A pup is brighter and more restless, an adult is the
+  wolf you know, an elder greys toward the text colour and blinks slowly. Its
+  age and stage go into every prompt, so it talks like what it is.
+- **It knows what time it is.** The NTP clock had been there since 1.7.7 and was
+  never used to say anything — which is odd for something that watches you work
+  at three in the morning. Now it comments, once a night, and greets you in the
+  morning.
+- **Weather on the glass.** Rain streaks or drifting snow behind the content,
+  driven by the real WMO code already in the payload.
+- **Достижения** (Меню → Волк) — meals, laps, tracks, days survived, faints
+  lived through, each with milestones. Kept in their own NVS namespace, so a
+  factory reset cannot erase a month of living with the thing.
+- **A game.** One button means press-to-jump, so: the wolf runs, fences come at
+  it, the high score is on the board for good. Меню → Волк → Игра.
+- **An alarm clock**, because the board has a clock, a light and something that
+  talks — `[alarm] at = 07:30` in `nocturne.ini`.
+- **A USB console.** `help`, `info`, `ls`, `cat`, `ach`, `say`, `feed`, `shot`,
+  `theme`, `bright`, `reboot` on the same serial port as the logs. Most of a
+  debugging session is asking the board questions it could simply answer.
 
 ## Companion web panel 🎛️
 

@@ -614,6 +614,57 @@ void drawHistory(UiCtx &ui) {
   textCenter(g, NOCT_W / 2, 156, buf, DIM); /* y156..169 inside */
 }
 
+/* ── ACHIEVEMENTS (overlay from menu) ────────────────────────────────── */
+
+/* Ten counters in two columns, each with how far it is to the next milestone.
+ * The point is not gamification — it is that a month of living with the thing
+ * leaves a trace you can look at. */
+void drawAchievements(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  if (!ui.ach) return;
+  panel(g, 8, 26, 304, 122, "ДОСТИЖЕНИЯ");
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  const int rows = Achievements::ACH_COUNT / 2; /* 5 rows, 2 columns */
+  for (int i = 0; i < Achievements::ACH_COUNT; i++) {
+    Achievements::Id id = (Achievements::Id)i;
+    int col = i / rows, r = i % rows;
+    int x = 16 + col * 150, y = 36 + r * 21;
+    uint32_t have = ui.ach->get(id);
+    uint32_t next = Achievements::nextTier(id, have);
+    int lvl = Achievements::level(id, have);
+
+    /* level pips: filled for each milestone passed */
+    for (int p = 0; p < 4; p++) {
+      uint16_t c = p < lvl ? ORANGE : PANEL;
+      g.fillRect(x + 118 + p * 6, y + 1, 4, 4, c);
+    }
+    char lbl[40];
+    snprintf(lbl, sizeof(lbl), "%s", Achievements::name(id));
+    textAt(g, x, y, lbl, lvl > 0 ? TEXT : DIM);
+    char val[24];
+    if (next)
+      snprintf(val, sizeof(val), "%lu/%lu", (unsigned long)have,
+               (unsigned long)next);
+    else
+      snprintf(val, sizeof(val), "%lu MAX", (unsigned long)have);
+    textRight(g, x + 112, y, val, next ? (lvl > 0 ? ORANGE : DIM) : GOOD);
+    /* progress toward the next milestone */
+    if (next) {
+      uint32_t prev = 0;
+      for (int p = 0; p < lvl; p++) prev = Achievements::nextTier(id, prev);
+      int span = (int)(next - prev), got = (int)(have - prev);
+      int w = span > 0 ? 112 * got / span : 0;
+      if (w > 0) g.drawFastHLine(x, y + 13, w, ORANGE_DIM);
+    }
+  }
+  g.setFont(&F_TEXT);
+  char foot[64];
+  snprintf(foot, sizeof(foot), "%s, %lu дн - любая кнопка закрывает",
+           ui.pet.stageName(), (unsigned long)ui.pet.ageDays());
+  textCenter(g, NOCT_W / 2, 152, foot, DIM);
+}
+
 /* ── SYSINFO (overlay from menu) ─────────────────────────────────────── */
 
 void drawSysInfo(UiCtx &ui) {
@@ -626,10 +677,13 @@ void drawSysInfo(UiCtx &ui) {
   snprintf(v, sizeof(v), "Nocturne C6 v%s", NOCT_VERSION);
   textAt(g, 18, y, v, ORANGE);
   y += rowH;
-  snprintf(v, sizeof(v), "heap: %u KB (min %u)",
+  snprintf(v, sizeof(v), "heap: %u KB (min %u)   плата: %.0fC (пик %.0f)",
            (unsigned)(ESP.getFreeHeap() / 1024),
-           (unsigned)(ESP.getMinFreeHeap() / 1024));
-  textAt(g, 18, y, v, TEXT);
+           (unsigned)(ESP.getMinFreeHeap() / 1024), ui.st.boardTemp,
+           ui.st.boardTempMax);
+  /* the board's own temperature turns amber once the backlight guard engages */
+  textAt(g, 18, y, v,
+         ui.st.boardTemp >= NOCT_BOARD_WARM_C ? WARN : TEXT);
   y += rowH;
   unsigned long up = ui.now / 1000;
   snprintf(v, sizeof(v), "uptime: %luч %02luм %02luс", up / 3600,

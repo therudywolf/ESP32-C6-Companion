@@ -39,6 +39,12 @@ public:
    * user setting into ONE value per frame, so no path can fight another. */
   bool screenDimmed() const { return dimmed_; }
   unsigned long lastInputMs() const { return lastInput_; }
+  /* Something outside asked for attention (the alarm): drop the screensaver
+   * and restart the idle clock so the panel is bright when you look at it. */
+  void wakeScreen() {
+    dimmed_ = false;
+    lastInput_ = millis();
+  }
   /* Should a held button auto-repeat right now? True only in list-like modes
    * (menu, pickers, colour editor) — see Button.h. */
   bool wantsButtonRepeat() const;
@@ -63,6 +69,8 @@ private:
   void drawScenePicker(UiCtx &ui);
   void drawElemPicker(UiCtx &ui);
   void drawNotifCard(UiCtx &ui); /* the notification flyover */
+  void drawGame(UiCtx &ui);      /* the one-button runner */
+  void gameReset();
   /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
   int nextVisibleScene(int from, uint32_t mask, bool allowDen) const;
   void menuAction(UiCtx &ui, int itemId);
@@ -84,6 +92,19 @@ private:
   int menuSel_ = 0;
   int menuCat_ = -1; /* -1 = category list, else the category being browsed */
   bool sysInfo_ = false;
+  bool achView_ = false;
+  /* ── The runner ───────────────────────────────────────────────────────
+   * One button, so: press = jump, and that is the entire control scheme.
+   * The wolf runs, fences come at it, the score is distance. High score goes
+   * to NVS so it means something. */
+  bool gameMode_ = false;
+  float gameY_ = 0, gameVy_ = 0;   /* wolf offset above the ground, px */
+  int gameScore_ = 0, gameBest_ = 0;
+  int gameSpeed_ = 0;
+  unsigned long gameTick_ = 0, gameOverAt_ = 0;
+  static const int kObstacles = 3;
+  int obsX_[kObstacles] = {0};
+  int obsH_[kObstacles] = {0};
   int histMode_ = 0;     /* ИСТОРИЯ: 0 hour, 1 day, 2 card archive */
   unsigned long resetArmedUntil_ = 0; /* factory reset needs a 2nd confirm */
   bool shotRequested_ = false;

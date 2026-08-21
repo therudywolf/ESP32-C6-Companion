@@ -32,10 +32,11 @@ bool SdStore::begin() {
     ok_ = true; /* provisional: ensureDirs/probe need it */
     ensureDirs();
     const char *probe = "/logs/.wtest";
+    SD.remove(probe); /* a rung that failed earlier may have left one behind */
     File wt = SD.open(probe, FILE_WRITE);
     bool wok = wt && wt.print("ok") == 2;
     if (wt) wt.close();
-    if (wok) SD.remove(probe);
+    SD.remove(probe); /* unconditionally: a half-written probe is still litter */
     if (!wok) {
       Serial.printf("[SD] %lu Hz mounts but cannot write - stepping down\n",
                     (unsigned long)f);
@@ -143,6 +144,11 @@ bool SdStore::readAll(const char *path, String &out, size_t maxBytes) {
   if (!ok_) return false;
   sync();
   unsigned long t0 = millis();
+  /* Ask first. Opening something absent is completely normal here — a phrase
+   * bucket the wolf has not learned yet, a journal on day one — but the VFS
+   * layer logs every one at ERROR level, which fills a clean boot with things
+   * that look like faults. */
+  if (!SD.exists(path)) return false;
   File f = SD.open(path, FILE_READ);
   if (!f) return false; /* a missing file is not a card failure */
   size_t size = f.size();

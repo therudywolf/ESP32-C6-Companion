@@ -26,6 +26,23 @@ public:
   bool isAlive() const { return alive_; }
   bool isSleeping() const { return sleeping_; }
   int mood() const; /* 0 = sad/fainted, 1 = ok, 2 = happy */
+  /* Life stage from age. A pet-day is a real hour, so a pup lasts a couple of
+   * days of wall time and an elder is a month of living with the thing. The
+   * wolf GROWS: that is the difference between a mascot and a companion, and
+   * it costs nothing because ageDays was already being counted. */
+  enum Stage { STAGE_PUP = 0, STAGE_ADULT, STAGE_ELDER };
+  int stage() const {
+    if (ageDays_ < 2) return STAGE_PUP;
+    if (ageDays_ < 30) return STAGE_ADULT;
+    return STAGE_ELDER;
+  }
+  const char *stageName() const {
+    switch (stage()) {
+    case STAGE_PUP: return "щенок";
+    case STAGE_ELDER: return "седой";
+    default: return "волк";
+    }
+  }
   const char *statusText() const; /* deterministic — always true, RU */
 
 private:

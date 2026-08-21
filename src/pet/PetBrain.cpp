@@ -68,7 +68,11 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
   /* Natural prose grounds the small model far better than "состояние=N". */
   String c;
   c.reserve(420);
-  c += "Сейчас происходит вот что: ";
+  c += "Ты сейчас ";
+  c += pet_->stageName();
+  c += ", тебе ";
+  c += (unsigned long)pet_->ageDays();
+  c += " дней. Сейчас происходит вот что: ";
   c += eventRu;
   c += ". Ты чувствуешь себя ";
   c += moodRu(pet_->mood());
@@ -211,6 +215,7 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
 void PetBrain::onAction(int action) {
   unsigned long now = millis();
   reactionKind_ = action; /* drives the DEN particle burst */
+  actionEvent_ = action;  /* and the achievement counter */
   reactionAt_ = now;
   switch (action) {
   case WolfPet::ACT_FEED:
@@ -250,6 +255,7 @@ void PetBrain::tick(unsigned long now, AppState &st) {
           sd_->writeBlob("/wolf/journal/last.txt", reply.c_str(),
                          reply.length());
           lastJournal_ = reply;
+          journalWritten_ = true;
           Serial.printf("[WOLF] journal %s: %s\n", journalDate_.c_str(),
                         reply.c_str());
         }
@@ -337,6 +343,35 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     trigger("sleepy", "ты очень устал и хочешь спать", now, st, false);
   } else if (pet_->energy() > 45) {
     lowEnergyFired_ = false;
+  }
+
+  /* 3.5) the wolf knows what time it is. It has had an NTP clock since 1.7.7
+   * and never once used it to say anything — which is odd for something that
+   * sits on your desk watching you work at three in the morning. */
+  {
+    time_t tnow = time(nullptr);
+    struct tm tmv;
+    if (tnow >= 1700000000L && localtime_r(&tnow, &tmv)) {
+      int h = tmv.tm_hour;
+      if (h != lastHour_) {
+        lastHour_ = h;
+        bool ownerHere = st.pcIdleSec >= 0 && st.pcIdleSec < 600;
+        if (h >= 6 && h < 11) nightScolded_ = false;
+        if (h >= 12) morningGreeted_ = false;
+        if (h >= 1 && h < 5 && ownerHere && !nightScolded_) {
+          nightScolded_ = true;
+          char ev[160]; /* Cyrillic is 2 B/char - this line is 125 B */
+          snprintf(ev, sizeof(ev),
+                   "сейчас %d часов ночи, а хозяин всё ещё за компьютером - "
+                   "поворчи и отправь спать", h);
+          trigger("latenight", ev, now, st, false);
+        } else if (h >= 6 && h < 11 && ownerHere && !morningGreeted_) {
+          morningGreeted_ = true;
+          trigger("morning", "хозяин появился утром - поздоровайся с ним",
+                  now, st, false);
+        }
+      }
+    }
   }
 
   /* 4) telemetry edges */

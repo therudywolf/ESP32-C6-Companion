@@ -1,5 +1,7 @@
 #include "ui/SceneManager.h"
 
+#include <Preferences.h>
+
 #include "pet/wolf_sprites.h"
 
 using namespace theme;
@@ -27,7 +29,7 @@ enum MenuCat {
 enum MenuId {
   MI_BRIGHT = 0, MI_BG, MI_BGLIGHT, MI_THEME, MI_SLOT, MI_COLORS, MI_FLIP,
   MI_DIM, MI_NIGHT,
-  MI_PETLLM, MI_CHATTER, MI_TONE,
+  MI_PETLLM, MI_CHATTER, MI_TONE, MI_ACH, MI_GAME,
   MI_CAROUSEL, MI_SCENES, MI_ELEMS, MI_FORZA,
   MI_LED, MI_LEDMODE, MI_NOTIF,
   MI_WIFI, MI_SYSINFO, MI_SHOT, MI_RESET,
@@ -54,6 +56,8 @@ const MenuItem kMenu[] = {
     {CAT_WOLF, MI_PETLLM, "Волк LLM"},
     {CAT_WOLF, MI_CHATTER, "Болтливость"},
     {CAT_WOLF, MI_TONE, "Характер"},
+    {CAT_WOLF, MI_ACH, "Достижения"},
+    {CAT_WOLF, MI_GAME, "Игра"},
 
     {CAT_LAYOUT, MI_CAROUSEL, "Карусель"},
     {CAT_LAYOUT, MI_SCENES, "Экраны"},
@@ -174,8 +178,9 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     return;
   }
 
-  if (sysInfo_) {
+  if (sysInfo_ || achView_) {
     sysInfo_ = false;
+    achView_ = false;
     return;
   }
 
@@ -299,6 +304,23 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     case EV_TRIPLE:
       elemPickMode_ = false;
       toast("готово");
+      break;
+    default:
+      break;
+    }
+    return;
+  }
+
+  if (gameMode_) {
+    switch (ev) {
+    case EV_SHORT:
+    case EV_REPEAT:
+      if (gameOverAt_) gameReset();      /* try again */
+      else if (gameY_ <= 0) gameVy_ = 11.0f; /* jump only from the ground */
+      break;
+    case EV_DOUBLE:
+    case EV_TRIPLE:
+      gameMode_ = false;
       break;
     default:
       break;
@@ -623,6 +645,18 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
     menuCat_ = -1;
     gotoScene(SCENE_FORZA, ui);
     break;
+  case MI_GAME:
+    menuOpen_ = false;
+    menuCat_ = -1;
+    gameMode_ = true;
+    gameTick_ = ui.now;
+    gameReset();
+    return;
+  case MI_ACH:
+    achView_ = true;
+    menuOpen_ = false;
+    menuCat_ = -1;
+    return; /* nothing persisted */
   case MI_SYSINFO:
     sysInfo_ = true;
     menuOpen_ = false;
@@ -879,6 +913,117 @@ void SceneManager::drawColorEditor(UiCtx &ui) {
     textAt(g, 8, 156, "1x +цвет / долго след.канал / 2x назад / 3x выход", DIM);
 }
 
+
+/* ── The runner ────────────────────────────────────────────────────────────
+ * A device with one button and a wolf on it was always going to end up here.
+ * Press to jump, fences scroll in, the score is how far you got. Fixed-step
+ * physics off the frame clock so it plays the same whatever the render does.
+ */
+void SceneManager::gameReset() {
+  gameY_ = 0;
+  gameVy_ = 0;
+  gameScore_ = 0;
+  gameSpeed_ = 3;
+  gameOverAt_ = 0;
+  for (int i = 0; i < kObstacles; i++) {
+    obsX_[i] = NOCT_W + 60 + i * 130;
+    obsH_[i] = 12 + (int)random(14);
+  }
+  Preferences p;
+  p.begin("wolfstat", true);
+  gameBest_ = p.getInt("game", 0);
+  p.end();
+}
+
+void SceneManager::drawGame(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  const int groundY = 132;      /* the wolf's feet */
+  const int wolfX = 40, wolfPx = 32; /* 32x32 XBM at scale 1 */
+
+  g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
+
+  bool over = gameOverAt_ != 0;
+  /* ~60 steps/s regardless of frame rate; the frame timer is 25 fps so this
+   * advances more than once per draw and the motion stays smooth. */
+  while (!over && ui.now - gameTick_ >= 16) {
+    gameTick_ += 16;
+    gameVy_ -= 1.15f;              /* gravity */
+    gameY_ += gameVy_;
+    if (gameY_ <= 0) {
+      gameY_ = 0;
+      gameVy_ = 0;
+    }
+    gameScore_++;
+    if (gameScore_ % 400 == 0 && gameSpeed_ < 9) gameSpeed_++;
+    for (int i = 0; i < kObstacles; i++) {
+      obsX_[i] -= gameSpeed_;
+      if (obsX_[i] < -14) {
+        obsX_[i] += NOCT_W + 120 + (int)random(90);
+        obsH_[i] = 12 + (int)random(14);
+      }
+      /* box overlap: the wolf is 32 wide, the fence 10 */
+      bool xHit = obsX_[i] < wolfX + wolfPx - 6 && obsX_[i] + 10 > wolfX + 6;
+      if (xHit && gameY_ < obsH_[i]) {
+        gameOverAt_ = ui.now;
+        over = true;
+        if (gameScore_ > gameBest_) {
+          gameBest_ = gameScore_;
+          Preferences pr;
+          pr.begin("wolfstat", false);
+          pr.putInt("game", gameBest_);
+          pr.end();
+        }
+        break;
+      }
+    }
+  }
+  if (over) gameTick_ = ui.now; /* don't bank up steps while the card is shown */
+
+  /* ground, with a moving texture so speed reads */
+  g.drawFastHLine(0, groundY + 2, NOCT_W, ORANGE_DIM);
+  for (int x = 0; x < NOCT_W; x += 16) {
+    int off = (int)((ui.now / 20 * gameSpeed_) % 16);
+    g.drawFastHLine((x - off + NOCT_W) % NOCT_W, groundY + 5, 7, PANEL);
+  }
+
+  /* the wolf, mid-stride or tucked up in a jump */
+  const unsigned char *fr = gameY_ > 2 ? wolfFrame(WOLF_FUNNY)
+                            : (((ui.now / 110) & 1) ? wolfFrame(WOLF_IDLE)
+                                                    : wolfFrame(WOLF_BLINK));
+  xbmScaled(g, wolfX, groundY - wolfPx - (int)gameY_, fr, WOLF_SPR_W,
+            WOLF_SPR_H, 1, over ? CRIT : ORANGE);
+
+  for (int i = 0; i < kObstacles; i++) {
+    if (obsX_[i] > NOCT_W || obsX_[i] < -12) continue;
+    g.fillRect(obsX_[i], groundY - obsH_[i], 10, obsH_[i], ACCENT);
+    g.drawRect(obsX_[i], groundY - obsH_[i], 10, obsH_[i], ORANGE);
+  }
+
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  char sc[40];
+  snprintf(sc, sizeof(sc), "%d", gameScore_ / 10);
+  textAt(g, 10, 26, sc, TEXT);
+  snprintf(sc, sizeof(sc), "рекорд %d", gameBest_ / 10);
+  textRight(g, NOCT_W - 10, 26, sc, DIM);
+
+  if (over) {
+    const int bw = 200, bh = 56, bx = (NOCT_W - bw) / 2, by = 52;
+    g.fillRoundRect(bx, by, bw, bh, 8, PANEL);
+    g.drawRoundRect(bx, by, bw, bh, 8, ORANGE);
+    g.setFont(&F_MED);
+    textCenter(g, NOCT_W / 2, by + 8, "ВОЛК СПОТКНУЛСЯ", ORANGE);
+    g.setFont(&F_TEXT);
+    snprintf(sc, sizeof(sc), "%d очков%s", gameScore_ / 10,
+             gameScore_ >= gameBest_ ? "  - рекорд!" : "");
+    textCenter(g, NOCT_W / 2, by + 28, sc, TEXT);
+    textCenter(g, NOCT_W / 2, by + 42, "1x снова / 2x выход", DIM);
+  } else {
+    g.setFont(&F_TEXT);
+    textCenter(g, NOCT_W / 2, NOCT_H - 14, "нажми - прыжок / 2x выход", DIM);
+  }
+}
+
 int SceneManager::nextVisibleScene(int from, uint32_t mask, bool allowDen) const {
   for (int k = 1; k <= SCENE_FORZA; k++) {
     int n = from + k;
@@ -1102,6 +1247,7 @@ void SceneManager::draw(UiCtx &ui) {
   theme::reactLevel = ui.st.hw.cl > ui.st.hw.gl ? ui.st.hw.cl : ui.st.hw.gl;
   theme::reactAlert = alertActive(ui);
   theme::uiElements = ui.st.settings.uiElements; /* per-element composition */
+  theme::weatherCode = ui.st.weatherReceived ? ui.st.weather.wmoCode : 0;
   g.fillSprite(BG);
 
   /* remote scene jump (companion app) */
@@ -1134,7 +1280,7 @@ void SceneManager::draw(UiCtx &ui) {
     bool playStart = md.isPlaying && !lastPeekPlaying_;
     lastPeekTrack_ = md.track;
     lastPeekPlaying_ = md.isPlaying;
-    bool free = !menuOpen_ && !sysInfo_ && !editMode_ && !scenePickMode_ &&
+    bool free = !menuOpen_ && !sysInfo_ && !achView_ && !editMode_ && !scenePickMode_ &&
                 !elemPickMode_ && !alertActive(ui);
     if ((trackNew || playStart) && md.isPlaying && free &&
         scene_ != SCENE_MEDIA) {
@@ -1189,7 +1335,7 @@ void SceneManager::draw(UiCtx &ui) {
    * denActionMode_ already cover "the owner is interacting with the wolf", and
    * nextVisibleScene(..., allowDen=false) still keeps the den out of the ring —
    * so the carousel can leave home but never rotates back onto it. */
-  if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !editMode_ &&
+  if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !achView_ && !editMode_ &&
       !scenePickMode_ && !elemPickMode_ && !mediaPeekUntil_ && !alertActive(ui) &&
       !notifUntil_ && scene_ != SCENE_FORZA &&
       !denActionMode_ && ui.now - lastInput_ > 5000 &&
@@ -1201,7 +1347,8 @@ void SceneManager::draw(UiCtx &ui) {
   /* screensaver: after the dim timeout, dim a little and show the ambient
    * clock+wolf scene (not a black screen). Any input wakes it. */
   if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive && !editMode_ &&
-      !menuOpen_ && !scenePickMode_ && !elemPickMode_ && !notifUntil_ &&
+      !menuOpen_ && !gameMode_ && !scenePickMode_ && !elemPickMode_ &&
+      !notifUntil_ &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
     dimmed_ = true; /* main() folds this into the effective backlight */
@@ -1319,6 +1466,13 @@ void SceneManager::draw(UiCtx &ui) {
     }
   }
 
+  /* the runner owns the content band outright */
+  if (gameMode_) {
+    drawGame(ui);
+    widgets::statusBar(ui, "ИГРА", -1, 0);
+    return;
+  }
+
   /* menu / sysinfo overlays */
   if (menuOpen_) drawMenu(ui);
   if (editMode_) drawColorEditor(ui);
@@ -1328,13 +1482,17 @@ void SceneManager::draw(UiCtx &ui) {
     g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_CONTENT_H, BG);
     scenes::drawSysInfo(ui);
   }
+  if (achView_) {
+    g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_CONTENT_H, BG);
+    scenes::drawAchievements(ui);
+  }
 
   /* scene-change OSD: a brief centred name pill so switches read clearly
    * (fades in/out; skipped over modals and the Forza HUD) */
   {
     unsigned long osdAge = ui.now - sceneOsdAt_;
     if (sceneOsdAt_ && osdAge < 850 && !menuOpen_ && !editMode_ &&
-        !scenePickMode_ && !elemPickMode_ && !sysInfo_ &&
+        !scenePickMode_ && !elemPickMode_ && !sysInfo_ && !achView_ &&
         scene_ != SCENE_FORZA) {
       int a = osdAge < 130     ? (int)(osdAge * 255 / 130)
               : osdAge > 700   ? (int)((850 - osdAge) * 255 / 150)
@@ -1357,7 +1515,7 @@ void SceneManager::draw(UiCtx &ui) {
   /* notification flyover — over scenes + wolf overlay, below toast; never over a
    * modal or the alert frame (you're interacting there). */
   if (notifUntil_ && (long)(notifUntil_ - ui.now) > 0 && !alertActive(ui) &&
-      !menuOpen_ && !editMode_ && !scenePickMode_ && !elemPickMode_ && !sysInfo_)
+      !menuOpen_ && !editMode_ && !scenePickMode_ && !elemPickMode_ && !sysInfo_ && !achView_)
     drawNotifCard(ui);
 
   /* toast */

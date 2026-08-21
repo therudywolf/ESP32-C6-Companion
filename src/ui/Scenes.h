@@ -32,6 +32,7 @@ void drawEvents(UiCtx &ui);
 void drawHistory(UiCtx &ui);
 void drawForza(UiCtx &ui);
 void drawSysInfo(UiCtx &ui); /* overlay via menu, not in the ring */
+void drawAchievements(UiCtx &ui); /* overlay via menu */
 
 /* "no data yet" placeholder used by telemetry scenes. */
 void noSignal(UiCtx &ui);

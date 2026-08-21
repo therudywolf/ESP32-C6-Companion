@@ -47,6 +47,9 @@ public:
   const char *llmModel() const { return llmModel_.c_str(); }
   const char *llmKey() const { return llmKey_.c_str(); }
   const char *skin() const { return skin_.c_str(); }
+  /* Minutes past midnight, or -1 when no alarm is set. The board has an NTP
+   * clock, a light and something that talks — it may as well wake you up. */
+  int alarmMinutes() const { return alarm_; }
 
 private:
   void apply(const String &section, const String &key, const String &val);
@@ -58,6 +61,7 @@ private:
   int netCount_ = 0;
   String host_, llm_, llmModel_, llmKey_, skin_;
   uint16_t port_ = 0, panelPort_ = 0;
+  int alarm_ = -1;
   bool loaded_ = false;
   int applied_ = 0;
 };

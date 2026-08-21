@@ -9,6 +9,7 @@
 #include "core/HourHistory.h"
 #include "core/Types.h"
 #include "net/ForzaManager.h"
+#include "pet/Achievements.h"
 #include "pet/PetBrain.h"
 #include "pet/WolfPet.h"
 #include "ui/Theme.h"
@@ -28,6 +29,7 @@ struct UiCtx {
   int histMode = 0;
   const GraphSet *archive = nullptr; /* daily series, only in mode 2 */
   int archiveDays = 0;
+  const Achievements *ach = nullptr;
 };
 
 namespace widgets {
