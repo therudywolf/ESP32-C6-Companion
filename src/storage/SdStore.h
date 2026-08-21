@@ -16,6 +16,12 @@ public:
   bool begin(); /* call AFTER display init (bus already configured) */
   bool ok() const { return ok_; }
 
+  /* Hook that must leave SPI2 idle before the card is selected. main() wires
+   * this to Display::syncBus(); without it the LCD's in-flight DMA collides
+   * with the card's chip-select and every access fails. Set after the display
+   * is up — begin() deliberately runs before that, on an unshared bus. */
+  void setBusSync(std::function<void()> fn) { busSync_ = fn; }
+
   /* Queue a line to append to a file (thread-safe; called from llm task).
    * maxBytes > 0 rotates the file once it grows past it (see rotate()). */
   void enqueueAppend(const char *path, const String &line, size_t maxBytes = 0);
@@ -36,6 +42,9 @@ public:
   void ensureDirs();
 
 private:
+  void sync() { if (busSync_) busSync_(); } /* drain the LCD's DMA first */
+
+  std::function<void()> busSync_;
   struct PendingWrite {
     String path;
     String line;

@@ -99,7 +99,16 @@ void Histories::save() {
   b.savedAt = (uint32_t)t;
   b.hour = hour;
   b.day = day;
-  sd_->writeBlob(kPath, &b, sizeof(b));
+  /* Say so. Persistence that fails silently is indistinguishable from
+   * persistence that was never reached, and both look like "the graphs reset
+   * again" hours later, with nothing in the log to tell them apart. */
+  bool ok = sd_->writeBlob(kPath, &b, sizeof(b));
+  if (!ok || !savedOnce_) {
+    savedOnce_ = true;
+    Serial.printf("[HIST] save %s (%u B, hour=%d day=%d)\n",
+                  ok ? "ok" : "FAILED", (unsigned)sizeof(HistBlob),
+                  hour.ct.count, day.ct.count);
+  }
 }
 
 void Histories::tryRestore() {
@@ -108,12 +117,21 @@ void Histories::tryRestore() {
   if (t < 1700000000L) return; /* wait for NTP: without it we can't age-check */
   restored_ = true;            /* one attempt, whatever the outcome */
   HistBlob b{};
-  if (!sd_->readBlob(kPath, &b, sizeof(b))) return;
-  if (b.magic != kMagic || b.version != kVersion ||
-      b.size != (uint16_t)sizeof(HistBlob))
+  if (!sd_->readBlob(kPath, &b, sizeof(b))) {
+    Serial.printf("[HIST] no usable snapshot at %s (first run, or wrong size)\n",
+                  kPath);
     return;
+  }
+  if (b.magic != kMagic || b.version != kVersion ||
+      b.size != (uint16_t)sizeof(HistBlob)) {
+    Serial.println("[HIST] snapshot from a different build - ignored");
+    return;
+  }
   long gap = (long)t - (long)b.savedAt;
-  if (gap < 0) return; /* clock went backwards — don't trust it */
+  if (gap < 0) {
+    Serial.println("[HIST] snapshot is in the future - ignored");
+    return; /* clock went backwards — don't trust it */
+  }
   if (gap <= kMaxGapDaySec) day = b.day;
   if (gap <= kMaxGapHourSec) hour = b.hour;
   Serial.printf("[HIST] restored (gap %lds): hour=%d day=%d\n", gap,
