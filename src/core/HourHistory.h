@@ -14,6 +14,8 @@
 
 #include <Arduino.h>
 
+#include <functional>
+
 struct HardwareData; /* fwd */
 class SdStore;       /* fwd */
 
@@ -64,6 +66,12 @@ struct Histories {
 
   Histories();
   void attach(SdStore *sd) { sd_ = sd; }
+  /* Fired once per committed minute with that minute's averages. main() uses it
+   * to append a row to the day's CSV — the in-RAM windows only reach back an
+   * hour and a day, while the card can hold years of it. */
+  void setOnCommit(std::function<void(int ct, int gt, int cl, int gl, int ram)> cb) {
+    onCommit_ = cb;
+  }
   /* accumulate ONE payload's values (call per payload, not per frame) */
   void accumulate(const HardwareData &hw);
   /* commit the minute/hour averages and flush the snapshot (call every loop) */
@@ -81,6 +89,7 @@ private:
   int hn = 0;                      /* minutes in the current hour */
   unsigned long lastCommit = 0;
   unsigned long lastSave = 0;
+  std::function<void(int, int, int, int, int)> onCommit_;
   SdStore *sd_ = nullptr;
   bool restored_ = false;          /* restore is attempted exactly once */
   bool savedOnce_ = false;         /* log the first successful save, then hush */

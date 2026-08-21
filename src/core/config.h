@@ -102,8 +102,30 @@
 #define NOCT_OTA_HOSTNAME "nocturne-c6"
 
 /* ── Storage caps (SD is optional; rotate, never freeze) ──────────────── */
-#define NOCT_SD_PHRASE_MAX 8192   /* per phrase-cache bucket, bytes */
-#define NOCT_SD_DIARY_MAX 32768   /* /wolf/memory.jsonl */
+/* How much of a line file's tail is ever read back. A cap ABOVE this makes the
+ * older half of a rotated file unreachable — which is exactly what happened to
+ * the phrase cache: it rotated at 8 KB while only the newest 4 KB was ever
+ * sampled. Keep every cap <= this. */
+#define NOCT_SD_READ_MAX 4096
+#define NOCT_SD_PHRASE_MAX 4096   /* per phrase-cache bucket, bytes */
+#define NOCT_SD_DIARY_MAX 32768   /* /wolf/memory.jsonl (only its tail is read) */
+/* Entries drained per flush(). ONE, because measurement says so: a 1332-byte
+ * write to this card takes 30-140 ms, and that is the card's internal program
+ * time, not the SPI clock — no bus speed makes it go away. Since all SPI lives
+ * on the render loop, each queued entry is worth up to three dropped frames, so
+ * they get spread one per flush tick (twice a second) instead of batched. */
+#define NOCT_SD_FLUSH_MAX 1
+/* Log any card operation slower than this. Measured baseline on this board at
+ * 10 MHz: reads ~80 ms, writes 30-140 ms — dominated by the card's internal
+ * program time, not the SPI clock. So the threshold sits ABOVE the normal
+ * range: set at the frame budget it fired on every single write and the
+ * diagnostic became noise, which is the exact failure it exists to prevent. */
+#define NOCT_SD_SLOW_MS 250
+/* Consecutive failures before the card is declared gone. A pulled card used to
+ * fail forever, once per call, because ok_ was decided at boot and never again. */
+#define NOCT_SD_FAIL_LIMIT 5
+/* Album covers kept on the card (18 KB each, RGB565 96x96). */
+#define NOCT_COVER_CACHE_MAX 24
 /* Flush the history snapshot once a minute, right after a sample is committed.
  * It must stay well under HourHistory's 5-minute freshness window: at the old
  * 5-minute cadence a reboot landed anywhere between 0 and 300 s after the last
@@ -119,6 +141,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.9.1"
+#define NOCT_VERSION "1.10.0"
 
 #endif

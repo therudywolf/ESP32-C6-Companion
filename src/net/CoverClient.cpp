@@ -3,6 +3,44 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 
+#include "core/config.h"
+#include "storage/SdStore.h"
+
+/* /covers/<token>.565 — raw little-endian RGB565, exactly W*H*2 bytes, so a
+ * size check is a sufficient integrity test on read. */
+static void coverPath(char *out, size_t cap, long tok) {
+  snprintf(out, cap, "/covers/%ld.565", tok);
+}
+
+bool CoverClient::serveFromCache(SdStore *sd) {
+  if (!sd || !sd->ok()) return false;
+  long want = wantTok_;
+  if (!pending_ || want <= 0 || want == haveTok_) return false;
+  char path[40];
+  coverPath(path, sizeof(path), want);
+  if (!sd->readBlob(path, buf_, sizeof(buf_))) return false;
+  /* Beat the fetch task to it: clear the request so nothing downloads what we
+   * just read off the card. */
+  pending_ = false;
+  haveTok_ = want;
+  cachedTok_ = want;
+  ready_ = true;
+  Serial.printf("[COVER] tok=%ld from card\n", want);
+  return true;
+}
+
+void CoverClient::storeToCache(SdStore *sd) {
+  if (!sd || !sd->ok() || !ready_) return;
+  long tok = haveTok_;
+  if (tok <= 0 || tok == cachedTok_) return;
+  cachedTok_ = tok; /* one attempt per token, success or not */
+  char path[40];
+  coverPath(path, sizeof(path), tok);
+  if (sd->exists(path)) return;
+  if (sd->writeBlob(path, buf_, sizeof(buf_)))
+    sd->pruneDir("/covers", NOCT_COVER_CACHE_MAX);
+}
+
 void CoverClient::begin(const char *host, int port) {
   host_ = host;
   port_ = port;

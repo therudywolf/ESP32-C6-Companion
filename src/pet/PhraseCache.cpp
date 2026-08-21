@@ -109,7 +109,11 @@ String PhraseCache::pickFromSd(const char *bucket) {
   if (!sd_ || !sd_->ok()) return "";
   String path = String("/wolf/cache/") + bucket + ".jsonl";
   String tail;
-  if (!sd_->readLastLines(path.c_str(), 50, tail) || tail.length() == 0)
+  /* Read the WHOLE cap, not an arbitrary 4 KB. The bucket rotates at
+   * NOCT_SD_PHRASE_MAX, so reading less than that made the older half of every
+   * full file unreachable — phrases were stored and then never drawn. */
+  if (!sd_->readLastLines(path.c_str(), 200, tail, NOCT_SD_PHRASE_MAX) ||
+      tail.length() == 0)
     return "";
   /* count lines, pick a random one */
   int lines = 0;
@@ -150,9 +154,17 @@ String PhraseCache::pick(const char *bucket) {
 void PhraseCache::remember(const char *bucket, const String &phrase) {
   if (!sd_ || !sd_->ok() || phrase.length() == 0) return;
   String path = String("/wolf/cache/") + bucket + ".jsonl";
+  /* Don't store a line the bucket already has. A small model asked the same
+   * question repeatedly answers it the same way, and every duplicate doubles
+   * that line's odds of being drawn — left alone, a bucket converges on one
+   * phrase and the wolf starts repeating itself. Checking costs one read per
+   * learned phrase, and phrases are learned at most once a minute. */
+  String tail;
+  if (sd_->readLastLines(path.c_str(), 200, tail, NOCT_SD_PHRASE_MAX) &&
+      tail.indexOf(phrase) >= 0)
+    return;
   /* ROTATE at the cap, don't freeze. Stopping the appends (the old behaviour)
    * pinned every bucket to the phrases it happened to learn first and never
-   * refreshed them again — and since pickFromSd only ever reads the last 4 KB,
-   * the older half of a full file was unreachable anyway. */
+   * refreshed them again. */
   sd_->enqueueAppend(path.c_str(), phrase, NOCT_SD_PHRASE_MAX);
 }

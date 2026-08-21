@@ -3,6 +3,11 @@
  * Concurrency rule: ALL SPI (LCD + SD) happens on the UI/loop task only.
  * Other tasks enqueue writes; the loop flushes them between frames.
  * The card is optional — everything degrades gracefully without it.
+ *
+ * Two rules earned the hard way. The panel bus MUST declare the card's MISO pin
+ * (see Display.h) or nothing here works past display init. And every operation
+ * runs on the render loop, so it is on the frame budget: the card is clocked as
+ * fast as it will take, work is spread across frames, and anything slow says so.
  */
 #ifndef NOCT_SD_STORE_H
 #define NOCT_SD_STORE_H
@@ -11,10 +16,13 @@
 
 #include <functional>
 
+#include "core/config.h"
+
 class SdStore {
 public:
-  bool begin(); /* call AFTER display init (bus already configured) */
+  bool begin(); /* call BEFORE display init — the bus must be quiet */
   bool ok() const { return ok_; }
+  uint32_t clockHz() const { return clockHz_; } /* what the card actually took */
 
   /* Hook that must leave SPI2 idle before the card is selected. main() wires
    * this to Display::syncBus(); without it the LCD's in-flight DMA collides
@@ -25,24 +33,39 @@ public:
   /* Queue a line to append to a file (thread-safe; called from llm task).
    * maxBytes > 0 rotates the file once it grows past it (see rotate()). */
   void enqueueAppend(const char *path, const String &line, size_t maxBytes = 0);
-  /* Flush queued writes — loop task only, after the frame is pushed. */
+  /* Drain up to NOCT_SD_FLUSH_MAX queued writes — loop task only. */
   void flush();
+  bool queueEmpty() const { return qHead_ == qTail_; }
 
   /* Direct helpers — loop task only. */
   bool appendLine(const char *path, const String &line);
-  bool readAll(const char *path, String &out, size_t maxBytes = 8192);
-  bool readLastLines(const char *path, int n, String &out);
+  bool readAll(const char *path, String &out, size_t maxBytes = NOCT_SD_READ_MAX);
+  bool readLastLines(const char *path, int n, String &out,
+                     size_t maxBytes = NOCT_SD_READ_MAX);
   /* Halve a line file once it exceeds maxBytes, keeping the NEWEST lines.
    * The old behaviour — stop appending at the cap — silently froze the phrase
    * cache on whatever it had learned first and never refreshed it again. */
   bool rotate(const char *path, size_t maxBytes);
-  /* Fixed-size binary blobs (the hour/day history snapshot). */
+  /* Fixed-size binary blobs (history snapshot, cached album covers). */
   bool writeBlob(const char *path, const void *data, size_t len);
   bool readBlob(const char *path, void *data, size_t len);
+  bool exists(const char *path);
+  bool remove(const char *path);
+  /* Keep at most `keep` files in a directory, deleting extras. Cheap LRU-ish
+   * housekeeping for the cover cache; order is whatever the FS lists. */
+  int pruneDir(const char *dir, int keep);
+  /* Print a directory listing with sizes. The archive is written by a board
+   * that is usually nowhere near a card reader, so "is it actually recording?"
+   * has to be answerable from the serial log alone. */
+  void logDir(const char *dir);
   void ensureDirs();
 
 private:
   void sync() { if (busSync_) busSync_(); } /* drain the LCD's DMA first */
+  /* Wrap one card operation: times it, whinges if it eats the frame budget,
+   * and counts failures so a pulled card is noticed instead of retried
+   * forever. */
+  bool track(const char *what, unsigned long t0, bool good);
 
   std::function<void()> busSync_;
   struct PendingWrite {
@@ -55,6 +78,8 @@ private:
   volatile int qHead_ = 0, qTail_ = 0;
   portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
   bool ok_ = false;
+  uint32_t clockHz_ = 0;
+  int failStreak_ = 0;
 };
 
 #endif

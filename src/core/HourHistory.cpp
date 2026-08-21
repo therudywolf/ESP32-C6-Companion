@@ -61,6 +61,7 @@ void Histories::commitMinute() {
   hgl += mgl;
   hram += mram;
   if (++hn >= 60) commitHour();
+  if (onCommit_) onCommit_(mct, mgt, mcl, mgl, mram);
 }
 
 void Histories::commitHour() {
