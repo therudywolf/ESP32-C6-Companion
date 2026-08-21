@@ -747,8 +747,8 @@ void drawSysInfo(UiCtx &ui) {
            ui.st.link.rssi);
   textAt(g, 18, y, v, TEXT);
   y += rowH;
-  snprintf(v, sizeof(v), "IP: %s   OTA: %d", WiFi.localIP().toString().c_str(),
-           NOCT_OTA_PORT);
+  snprintf(v, sizeof(v), "IP: %s   zigbee: %d", WiFi.localIP().toString().c_str(),
+           ui.st.zb.count);
   textAt(g, 18, y, v, TEXT);
   y += rowH;
   snprintf(v, sizeof(v), "SD: %s   LLM: %s", ui.st.link.sdOk ? "GOOD" : "—",
