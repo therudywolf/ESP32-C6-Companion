@@ -105,6 +105,26 @@ void setup() {
   theme::bgLight = state.settings.bgLight;
   theme::applyPreset(state.settings.themePreset);
   if (state.settings.customActive) theme::applyPalette(state.settings.custom);
+  /* What state is this board actually in? A hand-tuned palette whose TEXT role
+   * collapsed onto BG, an emptied scene mask or a cleared element mask all look
+   * like "the screen shows nothing" while the telemetry underneath is perfectly
+   * healthy — and none of it is visible from the outside. Dump it once. */
+  {
+    const Settings &s = state.settings;
+    uint16_t pal[theme::COLOR_ROLES];
+    theme::getPalette(pal);
+    Serial.printf("[BOOT] cfg: bright=%d theme=%d custom=%d slot=%d "
+                  "bg=%d light=%d scnMask=%08lX uiElem=%04X night=%d(%02d-%02d)\n",
+                  s.brightness, s.themePreset, s.customActive ? 1 : 0,
+                  s.activeSlot, s.bgStyle, s.bgLight ? 1 : 0,
+                  (unsigned long)s.sceneMask, (unsigned)s.uiElements,
+                  s.nightMode ? 1 : 0, s.nightFrom, s.nightTo);
+    Serial.printf("[BOOT] palette BG=%04X chrome=%04X TEXT=%04X DIM=%04X "
+                  "PANEL=%04X%s\n",
+                  pal[0], pal[1], pal[2], pal[3], pal[4],
+                  pal[2] == pal[0] ? "  <-- TEXT == BG, nothing will be legible"
+                                   : "");
+  }
   Serial.println("[BOOT] settings loaded");
 
   /* Shared SPI2: claim it through the Arduino driver FIRST so both
@@ -537,11 +557,21 @@ void loop() {
     unsigned long logEvery = now < 120000 ? 10000 : 60000;
     if (now - lastHeapLog > logEvery) {
       lastHeapLog = now;
-      Serial.printf("[SYS] heap %u KB (min %u), scene %d, tcp %d, llm %d\n",
-                    (unsigned)(ESP.getFreeHeap() / 1024),
-                    (unsigned)(ESP.getMinFreeHeap() / 1024),
-                    sceneMgr.currentScene(), tcp.connected(),
-                    state.link.llmBusy);
+      /* "tcp 1" only means the socket is open — it says nothing about whether
+       * payloads are still arriving, which is what actually blanks the scenes
+       * (dataDead). Log the age of the last payload and a couple of parsed
+       * values so "no data on the screen" can be diagnosed from the log alone:
+       * fresh age + real numbers = a render problem, stale age = a feed one. */
+      unsigned long age = tcp.hasData() ? (now - tcp.lastPayloadMs()) : 0;
+      Serial.printf(
+          "[SYS] heap %u KB (min %u), scene %d, tcp %d, llm %d | payload %lus "
+          "ago, lost %d, dead %d | ct=%d gt=%d cl=%d gl=%d ram=%.1f/%.1f\n",
+          (unsigned)(ESP.getFreeHeap() / 1024),
+          (unsigned)(ESP.getMinFreeHeap() / 1024), sceneMgr.currentScene(),
+          tcp.connected(), state.link.llmBusy,
+          tcp.hasData() ? age / 1000UL : 9999UL, state.link.signalLost,
+          state.link.dataDead, state.hw.ct, state.hw.gt, state.hw.cl,
+          state.hw.gl, state.hw.ru, state.hw.ra);
     }
   }
 
