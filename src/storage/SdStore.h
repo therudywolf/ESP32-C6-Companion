@@ -59,6 +59,9 @@ public:
    * has to be answerable from the serial log alone. */
   void logDir(const char *dir);
   void ensureDirs();
+  /* Let a caller that opens SD:: directly (the screenshot writer streams rows
+   * rather than buffering 110 KB) drain the LCD's DMA the same way we do. */
+  void syncBusNow() { sync(); }
 
 private:
   void sync() { if (busSync_) busSync_(); } /* drain the LCD's DMA first */

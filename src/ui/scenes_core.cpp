@@ -66,16 +66,19 @@ void noSignal(UiCtx &ui) {
 
 /* ── DEN — the wolf's home ───────────────────────────────────────────── */
 
-static const unsigned char *wolfFrame(UiCtx &ui) {
+/* Which frame the wolf shows right now. Named apart from the global
+ * wolfFrame(id) it calls: an overload inside namespace scenes only resolved
+ * through ADL on the enum, which is far too clever to leave lying around. */
+static const unsigned char *currentWolfFrame(UiCtx &ui) {
   unsigned long now = ui.now;
-  if (!ui.pet.isAlive()) return wolf_blink;
-  if (ui.st.alertActive) return wolf_aggressive;
+  if (!ui.pet.isAlive()) return wolfFrame(WOLF_BLINK);
+  if (ui.st.alertActive) return wolfFrame(WOLF_AGGRO);
   if (ui.brain.talkingAnim(now))
-    return ((now / 160) & 1) ? wolf_funny : wolf_idle;
-  if (ui.pet.isSleeping()) return wolf_blink;
-  if (ui.pet.mood() == 2 && (now % 6400) < 1300) return wolf_funny;
-  if ((now % 3200) < 220) return wolf_blink; /* natural blink */
-  return wolf_idle;
+    return ((now / 160) & 1) ? wolfFrame(WOLF_FUNNY) : wolfFrame(WOLF_IDLE);
+  if (ui.pet.isSleeping()) return wolfFrame(WOLF_BLINK);
+  if (ui.pet.mood() == 2 && (now % 6400) < 1300) return wolfFrame(WOLF_FUNNY);
+  if ((now % 3200) < 220) return wolfFrame(WOLF_BLINK); /* natural blink */
+  return wolfFrame(WOLF_IDLE);
 }
 
 void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
@@ -99,7 +102,7 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   uint16_t wc = !ui.pet.isAlive() ? DIM
                 : ui.st.alertActive ? CRIT
                                     : ORANGE;
-  xbmScaled(g, wx, wy, wolfFrame(ui), WOLF_SPR_W, WOLF_SPR_H, 2, wc);
+  xbmScaled(g, wx, wy, currentWolfFrame(ui), WOLF_SPR_W, WOLF_SPR_H, 2, wc);
 
   /* reaction burst: hearts (feed) / sparks (play) / notes (talk) float up */
   if (rAt && now - rAt < 1500) {

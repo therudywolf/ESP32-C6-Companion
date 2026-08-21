@@ -60,4 +60,23 @@ static const unsigned char wolf_funny[] = {
     0xc0, 0x25, 0x84, 0x03, 0x00, 0x1c, 0xf0, 0x00, 0x00, 0x10, 0x0c, 0x00,
     0x00, 0xe0, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00};
 
+/* ── Skins ────────────────────────────────────────────────────────────────
+ * The four frames above are the built-in wolf. A skin on the card replaces
+ * them: /skins/<name>.wolf is 512 raw bytes — four 128-byte XBM frames in the
+ * order idle, blink, aggressive, funny, exactly the layout above. 128 bytes a
+ * frame is nothing, so a skin costs no flash at all and needs no reflash to
+ * change; pick one with `skin = winter` under [wolf] in /nocturne.ini.
+ *
+ * Draw code asks for wolfFrame(WOLF_IDLE) rather than naming an array, so the
+ * whole swap is one pointer table. */
+enum WolfFrameId { WOLF_IDLE = 0, WOLF_BLINK, WOLF_AGGRO, WOLF_FUNNY,
+                   WOLF_FRAME_COUNT };
+
+const unsigned char *wolfFrame(int id);
+/* Load /skins/<name>.wolf; false (and the built-in wolf) if it is missing or
+ * not exactly 512 bytes. */
+bool wolfLoadSkin(class SdStore *sd, const char *name);
+/* Name of the skin in use, "" when it is the built-in one. */
+const char *wolfSkinName();
+
 #endif

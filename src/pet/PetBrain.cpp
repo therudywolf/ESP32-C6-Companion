@@ -19,6 +19,29 @@ void PetBrain::begin(WolfPet *pet, LlmClient *llm, PhraseCache *cache,
       now + NOCT_LLM_IDLE_CHATTER_MIN_MS + random(NOCT_LLM_IDLE_CHATTER_RND_MS);
   lastSleeping_ = pet->isSleeping();
   lastAlive_ = pet->isAlive();
+  /* The wolf's long memory: last night's entry, kept alongside the dated
+   * archive so it can be reloaded in one read after any reboot. */
+  if (sd_ && sd_->ok()) sd_->readAll("/wolf/journal/last.txt", lastJournal_, 512);
+}
+
+void PetBrain::writeJournal(const String &dayDate, const String &summary) {
+  if (journalPending_ || !llm_ || llm_->busy()) return;
+  if (!sd_ || !sd_->ok()) return;
+  String prompt = "Заверши день. Вот сводка по компьютеру хозяина, " + summary +
+                  ". ";
+  String mem;
+  if (sd_->readLastLines("/wolf/memory.jsonl", 12, mem) && mem.length()) {
+    mem.replace("\r", "");
+    mem.replace("\n", "; ");
+    prompt += "Что было в твоём дневнике: " + mem + ". ";
+  }
+  prompt += "Напиши 2-3 предложения от первого лица — что за день запомнилось "
+            "и что ты думаешь о хозяине. Это запись в дневник, не реплика.";
+  if (llm_->request(prompt, /*big=*/true, kTagJournal)) {
+    journalPending_ = true;
+    journalDate_ = dayDate;
+    Serial.printf("[WOLF] journal for %s requested\n", dayDate.c_str());
+  }
 }
 
 void PetBrain::diary(const char *ev) {
@@ -112,6 +135,15 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
       c += ". ";
     }
   }
+  if (lastJournal_.length()) {
+    String j = lastJournal_;
+    j.replace("\r", " ");
+    j.replace("\n", " ");
+    j.trim();
+    c += "Из твоей последней записи в дневнике: ";
+    c += j;
+    c += " ";
+  }
   /* tone follows the "Характер" setting */
   switch (st.settings.wolfTone) {
   case 1: c += "Будь тёплым, ласковым и заботливым. "; break;
@@ -203,21 +235,36 @@ void PetBrain::tick(unsigned long now, AppState &st) {
   st.link.llmBusy = llm_ && llm_->busy();
   st.link.llmOk = llm_ && llm_->lastOk();
 
-  /* 1) pump finished LLM replies */
-  if (thinking_ && llm_) {
+  /* 1) pump finished LLM replies. The mailbox now serves two callers, so the
+   * tag decides: speech goes on screen, a journal entry goes on the card. */
+  if (llm_) {
     String reply;
     bool ok = false;
-    if (llm_->takeReply(reply, ok)) {
-      int tone = toneForBucket(pendingBucket_);
-      if (ok) {
-        llmFailStreak_ = 0; /* LLM is healthy again */
-        cache_->remember(pendingBucket_, reply);
-        show(reply, now, tone);
-      } else {
-        if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
-        show(cache_->pick(pendingBucket_), now, tone);
+    int tag = kTagSpeech;
+    if (llm_->takeReply(reply, ok, &tag)) {
+      if (tag == kTagJournal) {
+        journalPending_ = false;
+        if (ok && reply.length() && sd_ && sd_->ok()) {
+          String path = "/wolf/journal/" + journalDate_ + ".txt";
+          sd_->enqueueAppend(path.c_str(), reply);
+          sd_->writeBlob("/wolf/journal/last.txt", reply.c_str(),
+                         reply.length());
+          lastJournal_ = reply;
+          Serial.printf("[WOLF] journal %s: %s\n", journalDate_.c_str(),
+                        reply.c_str());
+        }
+      } else if (thinking_) {
+        int tone = toneForBucket(pendingBucket_);
+        if (ok) {
+          llmFailStreak_ = 0; /* LLM is healthy again */
+          cache_->remember(pendingBucket_, reply);
+          show(reply, now, tone);
+        } else {
+          if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
+          show(cache_->pick(pendingBucket_), now, tone);
+        }
       }
-    } else if (now - speechStart_ > NOCT_LLM_TIMEOUT_MS + 4000UL) {
+    } else if (thinking_ && now - speechStart_ > NOCT_LLM_TIMEOUT_MS + 4000UL) {
       if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
       thinking_ = false; /* belt & braces: task wedged — fall back */
       show(cache_->pick(pendingBucket_), now, toneForBucket(pendingBucket_));
@@ -255,6 +302,13 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     }
   } else {
     actionPending_ = -1;
+  }
+
+  /* 2.5) something the board noticed on its own, from the SD archive */
+  if (pendingNotice_.length() && !thinking_) {
+    String ev = pendingNotice_;
+    pendingNotice_ = "";
+    trigger("notice", ev.c_str(), now, st, true);
   }
 
   /* 3) pet state edges */

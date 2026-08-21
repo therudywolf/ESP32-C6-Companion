@@ -588,18 +588,25 @@ static void hourGraph(LGFX_Sprite &g, int x, int y, int w, int h,
 void drawHistory(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   if (!ui.hist) return;
-  /* LONG press on this scene swaps the scale (see SceneManager::handleInput). */
-  const GraphSet &s = ui.histDay ? ui.hist->day : ui.hist->hour;
+  /* LONG press on this scene swaps the scale (see SceneManager::handleInput).
+   * Mode 2 is not in RAM at all — it is the card's daily rows, loaded once by
+   * main when the view is opened. */
+  const GraphSet &s = (ui.histMode == 2 && ui.archive) ? *ui.archive
+                      : ui.histMode == 1               ? ui.hist->day
+                                                       : ui.hist->hour;
   int span = s.ct.count;
   /* graphs fill the freed band; footer label stays inside the screen */
-  hourGraph(g, 4, 26, 154, 60, "CPU C", s.ct, "", INFO, 60);
-  hourGraph(g, 162, 26, 154, 60, "GPU C", s.gt, "", GOOD, 60);
+  bool arc = (ui.histMode == 2);
+  hourGraph(g, 4, 26, 154, 60, arc ? "CPU C /дн" : "CPU C", s.ct, "", INFO, 60);
+  hourGraph(g, 162, 26, 154, 60, arc ? "GPU C /дн" : "GPU C", s.gt, "", GOOD, 60);
   hourGraph(g, 4, 90, 154, 58, "CPU %", s.cl, "", WARN, 100);
   hourGraph(g, 162, 90, 154, 58, "RAM %", s.ram, "", ACCENT, 100);
   g.setFont(&F_TEXT);
   char buf[80]; /* 2 B/char: the longer footer below is 53 B of UTF-8 */
-  if (ui.histDay)
-    snprintf(buf, sizeof(buf), "история за %d ч (долго - минуты)",
+  if (ui.histMode == 2)
+    snprintf(buf, sizeof(buf), "архив с карты: %d дн (долго - час)", span);
+  else if (ui.histMode == 1)
+    snprintf(buf, sizeof(buf), "история за %d ч (долго - архив)",
              span < 24 ? span : 24);
   else
     snprintf(buf, sizeof(buf), "история за %d мин (долго - сутки)",

@@ -32,8 +32,9 @@ public:
   int currentScene() const { return scene_; }
   /* remote-control: jump to a scene on the next draw (companion app). */
   void requestScene(int s) { pendingScene_ = s; }
-  /* ИСТОРИЯ scale, read into UiCtx by main so the scene can pick a series. */
-  bool historyDay() const { return histDay_; }
+  /* ИСТОРИЯ scale, read into UiCtx by main so the scene can pick a series.
+   * 0 = hour, 1 = day, 2 = the card archive. */
+  int historyMode() const { return histMode_; }
   /* Backlight is owned by main(): it folds the dim state, quiet hours and the
    * user setting into ONE value per frame, so no path can fight another. */
   bool screenDimmed() const { return dimmed_; }
@@ -41,6 +42,12 @@ public:
   /* Should a held button auto-repeat right now? True only in list-like modes
    * (menu, pickers, colour editor) — see Button.h. */
   bool wantsButtonRepeat() const;
+  /* Menu asked for a screenshot; main() owns the card, so it consumes this. */
+  bool takeShotRequest() {
+    bool r = shotRequested_;
+    shotRequested_ = false;
+    return r;
+  }
   /* Full-screen OTA takeover: drawn straight to the panel from the update
    * callback, because the normal frame loop is blocked while flash is written. */
   void drawOtaScreen(UiCtx &ui, int pct, const char *msg);
@@ -77,8 +84,9 @@ private:
   int menuSel_ = 0;
   int menuCat_ = -1; /* -1 = category list, else the category being browsed */
   bool sysInfo_ = false;
-  bool histDay_ = false; /* ИСТОРИЯ: false = 60 min, true = 24 h */
+  int histMode_ = 0;     /* ИСТОРИЯ: 0 hour, 1 day, 2 card archive */
   unsigned long resetArmedUntil_ = 0; /* factory reset needs a 2nd confirm */
+  bool shotRequested_ = false;
 
   unsigned long alertSnoozeUntil_ = 0;
   int preAlertScene_ = -1;

@@ -9,6 +9,9 @@
 
 #include "ui/Display.h"
 
+class SdStore; /* global scope: declaring it inside the namespace would
+                  make a distinct theme::SdStore that never matches */
+
 namespace theme {
 
 constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
@@ -34,6 +37,15 @@ extern uint16_t ACCENT;     /* secondary accent */
 /* Theme control. 12 presets (see kPresets in Theme.cpp). setChrome/setAccent
  * override individual hues on top of the active preset. */
 static const int THEME_PRESETS = 12;
+/* Themes are also FILES: 1.thm .. 8.thm under /themes on the card append to
+ * the built-in
+ * presets, so a palette can be shared, edited on a laptop and dropped in
+ * without a rebuild — and costs no flash. Cycle over presetTotal(), never over
+ * THEME_PRESETS, or the card ones are unreachable. */
+static const int CARD_THEMES_MAX = 8;
+int presetTotal();
+int cardThemeCount();
+int loadCardThemes(::SdStore *sd);
 void applyPreset(int idx);
 void setChrome(uint8_t r, uint8_t g, uint8_t b);
 void setAccent(uint8_t r, uint8_t g, uint8_t b);

@@ -29,14 +29,34 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   and lap deltas are the faithful substitute for "time to next car".)*
 - **16 telemetry scenes** + Forza: ЛОГОВО, ОБЗОР, CPU, GPU, ПАМЯТЬ, ДИСКИ,
   КУЛЕРЫ, ПЛАТА, СЕТЬ, МЕДИА, ПОГОДА, CLAUDE, ЛЕС (nodes), СЕРВИСЫ, СОБЫТИЯ
-  (alerts), ИСТОРИЯ (on-device graphs, long-press to swap **last hour ↔ last 24 h**;
-  both survive a reboot when an SD card is present). Trend carets, reactive
+  (alerts), ИСТОРИЯ (on-device graphs; long-press cycles **last hour → last
+  24 h → the card's archive by day**, and the first two survive a reboot).
+  Trend carets, reactive
   backgrounds that speed up under load and turn red on alerts.
 - **A real archive** — with a card in, every minute is appended to
   `/logs/YYYY-MM-DD.csv`: ~43 KB a day, 16 MB a year against 7.4 GB of card. The
-  on-screen graphs reach back an hour and a day; the card reaches back as far as
-  you keep it. `/logs/boot.jsonl` records every restart with its reason, which
-  is what tells a one-off self-heal apart from a reboot loop.
+  ИСТОРИЯ screen has a third scale that reads the card back, so a month of days
+  is browsable on the device itself. `/logs/boot.jsonl` records every restart
+  with its reason, and a panic is copied out of flash to `/logs/coreNN.elf` for
+  `esp-coredump` — crashes on a self-healing device happen when nobody is
+  watching, by definition.
+- **The board notices things.** `daily.csv` keeps the average **idle**
+  temperature per day. Load temperature says what you were doing; idle
+  temperature says what the cooling can still do, and it creeps up as dust
+  collects. After two weeks the board has its own baseline and the wolf will
+  tell you, in its own words, that the GPU idles six degrees hotter than it used
+  to — months before anything throttles.
+- **The wolf keeps a journal.** Once a day it asks the model to write the day up
+  in its own voice and files it under `/wolf/journal/`. The newest entry rides in
+  every later prompt, so its memory is measured in days rather than in the last
+  six things that happened.
+- **The card is a two-way channel.** `/nocturne.ini` overrides WiFi, the server
+  address and the LM Studio endpoint without a rebuild — take the board
+  somewhere else, edit a text file on any laptop, put the card back.
+  `/themes/*.thm` add palettes, `/skins/*.wolf` change what the wolf looks like,
+  and a `/firmware.bin` in the root is installed at the next boot: the recovery
+  path when WiFi is down and USB is far away. See
+  [`examples/card/`](examples/card/).
 - **Deep customisation** — 12 themes **plus** an on-device colour editor
   (per-element R/G/B), 3 saved theme slots, animated/light backgrounds,
   **screen composition** (which scenes ride the ring) and **element composition**
@@ -126,7 +146,8 @@ render as tofu boxes.
   and the last `esp_reset_reason()` live there too, and show up on the СИСТЕМА
   screen — the watchdog reboots this device to heal it, and a silent heal is
   indistinguishable from a reboot loop without them.
-- SD layout: `/wolf/cache/*.jsonl` (phrase cache, de-duplicated),
+- SD layout (see [`examples/card/README.md`](examples/card/README.md) for the
+  full map): `/wolf/cache/*.jsonl` (phrase cache, de-duplicated),
   `/wolf/memory.jsonl` (dated diary → prompt memory), `/logs/hist.bin` (graph
   snapshot), `/logs/YYYY-MM-DD.csv` (one telemetry row per minute),
   `/logs/boot.jsonl` (one record per boot), `/covers/*.565` (cached album art).

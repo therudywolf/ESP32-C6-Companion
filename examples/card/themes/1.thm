@@ -1,0 +1,18 @@
+# Nocturne C6 — a theme as a file. Drop this at /themes/1.thm (through 8.thm)
+# and it appears after the 12 built-in presets in Меню -> Экран -> Тема.
+#
+# Ten roles, all of them required: a half-specified palette is skipped rather
+# than left with black holes in it. Colours are plain RRGGBB hex.
+
+name   = Мох
+
+bg     = 0A140A
+chrome = 7FBF5F
+text   = E8F0E0
+dim    = 6E7A66
+panel  = 121C12
+good   = 5FD07F
+warn   = D9B44A
+crit   = D45A4A
+info   = 6FA8D0
+accent = A0D060
