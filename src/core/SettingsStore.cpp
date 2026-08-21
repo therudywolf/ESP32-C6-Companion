@@ -1,6 +1,7 @@
 #include "core/SettingsStore.h"
 
 #include <Preferences.h>
+#include <esp_system.h>
 
 #include "core/config.h"
 
@@ -12,7 +13,7 @@ void load(Settings &s) {
   s.ledEnabled = p.getBool("led", true);
   s.carouselEnabled = p.getBool("carousel", false);
   s.carouselIntervalSec = p.getInt("carouselSec", 10);
-  s.brightness = p.getInt("bright", 200);
+  s.brightness = p.getInt("bright", 170);
   s.displayTimeoutSec = p.getInt("dispTimeout", 0);
   s.pinnedScene = p.getInt("pinScene", -1);
   s.netSel = p.getInt("netSel", -1);
@@ -40,7 +41,15 @@ void load(Settings &s) {
   p.getBytes("slot1", s.slot[1], sizeof(s.slot[1]));
   p.getBytes("slot2", s.slot[2], sizeof(s.slot[2]));
   s.sceneMask = p.getUInt("scnMask", 0xFFFFFFFFu) | 1u; /* DEN always on */
+  s.nightMode = p.getBool("night", false);
+  s.nightFrom = p.getInt("nightF", 23);
+  s.nightTo = p.getInt("nightT", 8);
   p.end();
+  if (s.nightFrom < 0 || s.nightFrom > 23) s.nightFrom = 23;
+  if (s.nightTo < 0 || s.nightTo > 23) s.nightTo = 8;
+  if (s.pinnedScene < -1) s.pinnedScene = -1;
+  /* Clamp to the same window the menu and the RC path use, so a stored value
+   * always round-trips (see main.cpp's rcBright handling). */
   if (s.brightness < 30) s.brightness = 30;
   if (s.brightness > NOCT_BRIGHT_MAX) s.brightness = NOCT_BRIGHT_MAX;
 }
@@ -76,7 +85,58 @@ void save(const Settings &s) {
   p.putBytes("slot1", s.slot[1], sizeof(s.slot[1]));
   p.putBytes("slot2", s.slot[2], sizeof(s.slot[2]));
   p.putUInt("scnMask", s.sceneMask | 1u);
+  p.putBool("night", s.nightMode);
+  p.putInt("nightF", s.nightFrom);
+  p.putInt("nightT", s.nightTo);
   p.end();
+}
+
+void factoryReset(Settings &s) {
+  Preferences p;
+  p.begin("nocturne", false);
+  p.clear(); /* only this namespace — "wolfpet" (the pet) is a separate one */
+  p.end();
+  s = Settings(); /* compiled defaults */
+  load(s);        /* re-apply the same clamps a normal boot would */
+}
+
+/* ── Boot diagnostics ────────────────────────────────────────────────────
+ * The watchdog in main.cpp panics-and-reboots on a wedged render loop, and the
+ * board is always mounted, so a self-heal is silent by design. Persisting the
+ * reason turns "it looks fine now" into "it rebooted 3 times, on the watchdog".
+ */
+static const char *reasonText(esp_reset_reason_t r) {
+  switch (r) {
+  case ESP_RST_POWERON: return "питание";
+  case ESP_RST_EXT: return "сброс";
+  case ESP_RST_SW: return "перезапуск";
+  case ESP_RST_PANIC: return "паника";
+  case ESP_RST_INT_WDT: return "wdt (int)";
+  case ESP_RST_TASK_WDT: return "wdt (задача)";
+  case ESP_RST_WDT: return "wdt";
+  case ESP_RST_DEEPSLEEP: return "сон";
+  case ESP_RST_BROWNOUT: return "просадка";
+  case ESP_RST_SDIO: return "sdio";
+  default: return "неизвестно";
+  }
+}
+
+void readBootInfo(BootInfo &b) {
+  esp_reset_reason_t r = esp_reset_reason();
+  b.reason = (int)r;
+  b.reasonText = reasonText(r);
+  b.lastWasFault = (r == ESP_RST_PANIC || r == ESP_RST_INT_WDT ||
+                    r == ESP_RST_TASK_WDT || r == ESP_RST_WDT ||
+                    r == ESP_RST_BROWNOUT);
+  Preferences p;
+  p.begin("nocturne", false);
+  b.bootCount = p.getUInt("bootN", 0) + 1;
+  b.faultCount = p.getUInt("faultN", 0) + (b.lastWasFault ? 1 : 0);
+  p.putUInt("bootN", b.bootCount);
+  if (b.lastWasFault) p.putUInt("faultN", b.faultCount);
+  p.end();
+  Serial.printf("[BOOT] reset=%s boot#%lu faults=%lu\n", b.reasonText,
+                (unsigned long)b.bootCount, (unsigned long)b.faultCount);
 }
 
 } // namespace settings

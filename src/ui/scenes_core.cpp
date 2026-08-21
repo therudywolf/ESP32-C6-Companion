@@ -42,6 +42,7 @@ const char *actionHint(int scene, UiCtx &ui) {
   case SCENE_CLAUDE: return "—обновить";
   case SCENE_FOREST:
   case SCENE_SERVICES: return "—обновить";
+  case SCENE_HISTORY: return "—час/сутки";
   default: return nullptr;
   }
 }
@@ -238,10 +239,12 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   if (!actionMode && uiOn(UI_STRIPS)) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
-    char vb[48];
+    char vb[64];
     unsigned long upm = now / 60000UL;
-    snprintf(vb, sizeof(vb), "возраст %d дн     в сети %luч %02luм",
-             ui.pet.ageDays(), upm / 60, upm % 60);
+    /* ageDays() is uint32_t: %d was a format mismatch, and the widest case
+     * overran vb[48] by a few bytes. */
+    snprintf(vb, sizeof(vb), "возраст %lu дн     в сети %luч %02luм",
+             (unsigned long)ui.pet.ageDays(), upm / 60, upm % 60);
     textAt(g, 10, 160, vb, DIM);
   }
 }

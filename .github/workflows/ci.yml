@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      # The real secrets.h is gitignored and the binary bakes it in, so CI
+      # builds against the committed example. This proves the tree compiles;
+      # it is not a flashable image.
+      - name: Stub secrets
+        run: cp include/secrets.h.example include/secrets.h
+
+      - name: Wire schema check
+        run: python tools/check_schema.py
+
+      - name: Host unit tests
+        run: pio test -e native
+
+      - name: Build firmware
+        run: pio run -e nocturne-c6
+
+      # min_spiffs.csv gives 1.875 MB per OTA slot. Fail loudly BEFORE the
+      # image stops fitting, not when a flash aborts on the desk.
+      - name: Check OTA headroom
+        run: |
+          size=$(stat -c%s .pio/build/nocturne-c6/firmware.bin)
+          limit=$((1966080))
+          pct=$((size * 100 / limit))
+          echo "firmware $size B = ${pct}% of a $limit B app slot"
+          if [ "$pct" -gt 90 ]; then
+            echo "::error::firmware is ${pct}% of the OTA partition - shrink it or repartition"
+            exit 1
+          fi

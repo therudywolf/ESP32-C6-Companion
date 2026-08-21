@@ -1,6 +1,6 @@
 #include "pet/PhraseCache.h"
 
-#include <SD.h>
+#include "core/config.h"
 
 struct FallbackEntry {
   const char *bucket;
@@ -150,12 +150,9 @@ String PhraseCache::pick(const char *bucket) {
 void PhraseCache::remember(const char *bucket, const String &phrase) {
   if (!sd_ || !sd_->ok() || phrase.length() == 0) return;
   String path = String("/wolf/cache/") + bucket + ".jsonl";
-  /* soft cap: stop growing past ~8 KB per bucket */
-  File f = SD.open(path.c_str(), FILE_READ);
-  if (f) {
-    size_t sz = f.size();
-    f.close();
-    if (sz > 8192) return;
-  }
-  sd_->enqueueAppend(path.c_str(), phrase);
+  /* ROTATE at the cap, don't freeze. Stopping the appends (the old behaviour)
+   * pinned every bucket to the phrases it happened to learn first and never
+   * refreshed them again — and since pickFromSd only ever reads the last 4 KB,
+   * the older half of a full file was unreachable anyway. */
+  sd_->enqueueAppend(path.c_str(), phrase, NOCT_SD_PHRASE_MAX);
 }

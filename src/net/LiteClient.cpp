@@ -9,17 +9,23 @@
 void LiteClient::begin(const char *url, const char *token) {
   url_ = url ? url : "";
   token_ = token ? token : "";
-  if (url_.length()) xTaskCreate(taskEntry, "lite", 12288, this, 1, &task_);
+  if (!url_.length()) return;
+  mux_ = xSemaphoreCreateMutex();
+  xTaskCreate(taskEntry, "lite", 12288, this, 1, &task_);
 }
 
 void LiteClient::tick(unsigned long now, bool pcDown) {
-  if (!url_.length()) return;
+  if (!url_.length() || !mux_) return;
   if (!pcDown) {
-    /* PC is back: drop any unconsumed/in-flight fallback so a later PC-down
-     * can't be served a stale payload, and a fresh fetch starts clean */
+    /* PC is back: drop any unconsumed fallback so a later PC-down can't be
+     * served a stale payload. gen_ also invalidates a fetch already in flight —
+     * we must NOT reassign payload_ here if the task is about to write it. */
+    gen_ = gen_ + 1; /* not gen_++: ++ on a volatile is deprecated in C++20 */
+    pending_ = false;
+    xSemaphoreTake(mux_, portMAX_DELAY);
     ready_ = false;
     payload_ = "";
-    pending_ = false;
+    xSemaphoreGive(mux_);
     return;
   }
   /* one in flight at a time; steady cadence when healthy, faster after a fail */
@@ -31,11 +37,16 @@ void LiteClient::tick(unsigned long now, bool pcDown) {
 }
 
 bool LiteClient::take(String &out) {
-  if (!ready_) return false;
-  out = payload_;
-  payload_ = "";
-  ready_ = false;
-  return true;
+  if (!ready_ || !mux_) return false;
+  xSemaphoreTake(mux_, portMAX_DELAY);
+  bool got = ready_;
+  if (got) {
+    out = payload_;
+    payload_ = "";
+    ready_ = false;
+  }
+  xSemaphoreGive(mux_);
+  return got;
 }
 
 void LiteClient::taskEntry(void *self) {
@@ -46,12 +57,15 @@ void LiteClient::taskLoop() {
   for (;;) {
     if (pending_ && WiFi.status() == WL_CONNECTED) {
       pending_ = false;
+      uint32_t myGen = gen_; /* snapshot: a cancel while we fetch voids this run */
       String body;
       bool good = fetch(body) && body.length();
       ok_ = good;
-      if (good) {
+      if (good && myGen == gen_) {
+        xSemaphoreTake(mux_, portMAX_DELAY);
         payload_ = body;
         ready_ = true;
+        xSemaphoreGive(mux_);
         Serial.printf("[LITE] fallback payload %d B\n", (int)body.length());
       }
     }

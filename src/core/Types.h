@@ -160,6 +160,12 @@ struct Settings {
   /* Which scenes appear in the nav ring / carousel (bit i = SceneId i). DEN
    * (bit 0) is forced on. Default: everything visible. */
   uint32_t sceneMask = 0xFFFFFFFFu; /* "scnMask" */
+  /* Quiet hours: between nightFrom:00 and nightTo:00 the panel drops to
+   * NOCT_NIGHT_BRIGHT and the mood LED goes dark. Needs the NTP clock; a
+   * button press suspends it briefly. Alerts always override. */
+  bool nightMode = false;        /* "night"  */
+  int nightFrom = 23;            /* "nightF" hour 0..23 */
+  int nightTo = 8;               /* "nightT" hour 0..23 */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
@@ -174,6 +180,19 @@ struct LinkState {
   bool llmBusy = false;    /* request in flight (status bar spark) */
   bool llmOk = false;      /* last LLM call succeeded */
   bool liteActive = false; /* PC down but the fallback endpoint is feeding data */
+  bool nightActive = false; /* quiet hours in force right now */
+};
+
+/** Why the board last restarted, read once at boot from esp_reset_reason().
+ *  An always-mounted device with a panic-triggering watchdog must be able to
+ *  say what happened after it heals itself — otherwise a reboot loop is
+ *  invisible. Persisted in NVS "nocturne" so the count survives the reset. */
+struct BootInfo {
+  const char *reasonText = "?"; /* human label, e.g. "watchdog" */
+  int reason = 0;               /* raw esp_reset_reason() */
+  uint32_t bootCount = 0;       /* total boots ever */
+  uint32_t faultCount = 0;      /* boots after panic/watchdog/brownout */
+  bool lastWasFault = false;    /* THIS boot followed an abnormal reset */
 };
 
 /** Single app state, filled by TelemetryClient from the server payload. */
@@ -189,6 +208,11 @@ struct AppState {
   ServiceData services;
   Settings settings;
   LinkState link;
+  BootInfo boot;
+  /* OTA in progress: -1 idle, 0..100 percent. Drawn as a takeover screen so a
+   * flash-in-progress is never mistaken for a hang. */
+  int otaPct = -1;
+  String otaError;
   bool weatherReceived = false;
   bool forzaLive = false; /* Forza telemetry within timeout window */
   bool alertActive = false;
@@ -226,6 +250,11 @@ struct AppState {
   bool rcHasPalette = false;    /* full 10-role palette in rcPalette */
   uint16_t rcPalette[10] = {0};
   int rcPresetReset = -1;       /* 1 = drop custom, back to preset */
+  int rcPin = -2;               /* pinned "home" scene; -1 = DEN, -2 = none */
+  int rcSlot = -1;              /* active theme slot 0..2, -1 = none */
+  int rcNight = -1;             /* quiet hours 0/1, -1 = none */
+  int rcNightFrom = -1, rcNightTo = -1; /* quiet-hour bounds, -1 = none */
+  String rcOtaUrl;              /* pull-OTA image URL, "" = none */
 };
 
 #endif

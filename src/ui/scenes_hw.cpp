@@ -130,8 +130,11 @@ void drawGpu(UiCtx &ui) {
   bigVal(g, 306, 124, v, "C", tempColor(hw.gh, 85, 95), true);
   g.setFont(&F_TEXT);
   g.setTextSize(1);
-  snprintf(v, sizeof(v), "кулер %d RPM      память %d MHz", hw.gf, hw.vclock);
-  textAt(g, 14, 153, v, DIM);
+  /* the literal alone is 38 B of UTF-8, so this needs its own wider buffer */
+  char foot[64];
+  snprintf(foot, sizeof(foot), "кулер %d RPM      память %d MHz", hw.gf,
+           hw.vclock);
+  textAt(g, 14, 153, foot, DIM);
 }
 
 void drawRam(UiCtx &ui) {
@@ -253,9 +256,10 @@ void drawFans(UiCtx &ui) {
     g.drawFastHLine(8, 152, NOCT_W - 16, ORANGE_DIM);
     g.setFont(&F_TEXT);
     g.setTextSize(1);
-    snprintf(v, sizeof(v), "среднее %d%%      максимум %d%%",
+    char sum2[64]; /* "среднее ..." + "максимум ..." is 42 B before the numbers */
+    snprintf(sum2, sizeof(sum2), "среднее %d%%      максимум %d%%",
              sum / NOCT_FAN_COUNT, mx);
-    textCenter(g, NOCT_W / 2, 158, v, ORANGE);
+    textCenter(g, NOCT_W / 2, 158, sum2, ORANGE);
   }
 }
 

@@ -23,7 +23,9 @@ void PetBrain::diary(const char *ev) {
   if (!sd_ || !sd_->ok()) return;
   String line = String("{\"age\":") + pet_->ageDays() + ",\"up\":" +
                 (millis() / 60000UL) + ",\"ev\":\"" + ev + "\"}";
-  sd_->enqueueAppend("/wolf/memory.jsonl", line);
+  /* capped: the diary is append-only and only its tail is ever read back into
+   * the prompt, so let it rotate instead of growing on the card forever */
+  sd_->enqueueAppend("/wolf/memory.jsonl", line, NOCT_SD_DIARY_MAX);
 }
 
 String PetBrain::buildContext(const char *eventRu, AppState &st) {

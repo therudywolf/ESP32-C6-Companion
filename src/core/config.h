@@ -72,12 +72,48 @@
 #define NOCT_FORZA_SHIFT_PCT 0.95f /* strobe + SHIFT! above this rev pct */
 #define NOCT_FORZA_MAX_DRAIN 8 /* cap UDP packets parsed per tick (bound frame time) */
 
+/* ── Clock ────────────────────────────────────────────────────────────── */
+/* Own NTP clock so the time survives the PC being off. MSK is UTC+3 with no
+ * DST, hence a fixed offset and an empty DST rule. */
+#define NOCT_TZ_OFFSET_SEC (3 * 3600)
+#define NOCT_TZ_DST_SEC 0
+#define NOCT_NTP_PRIMARY "pool.ntp.org"
+#define NOCT_NTP_SECONDARY "time.google.com"
+
+/* ── Night mode (quiet hours) ─────────────────────────────────────────── */
+/* Between nightFrom:00 and nightTo:00 the panel drops to this backlight and the
+ * mood LED goes dark — a desk device must not light the room at 3 a.m. A button
+ * press suspends it for the grace window below. Needs the NTP clock. */
+#define NOCT_NIGHT_BRIGHT 35
+#define NOCT_NIGHT_WAKE_MS 30000UL
+
+/* ── Button ───────────────────────────────────────────────────────────── */
+/* Hold-to-repeat is OPT-IN per UI context (SceneManager enables it for lists
+ * and the colour editor only), so the LONG grammar is untouched everywhere
+ * else — see InputSystem::setRepeatEnabled. */
+#define NOCT_BTN_LONG_MS 500
+#define NOCT_BTN_REPEAT_DELAY_MS 900 /* hold this long before repeats start */
+#define NOCT_BTN_REPEAT_MS 160       /* gap between repeats */
+
+/* ── OTA ──────────────────────────────────────────────────────────────── */
+/* Two 1.875 MB app slots (min_spiffs.csv) — the image is ~1.5 MB. NVS keeps its
+ * offset/size from the old huge_app table, so the wolf survives the switch. */
+#define NOCT_OTA_PORT 3232
+#define NOCT_OTA_HOSTNAME "nocturne-c6"
+
+/* ── Storage caps (SD is optional; rotate, never freeze) ──────────────── */
+#define NOCT_SD_PHRASE_MAX 8192   /* per phrase-cache bucket, bytes */
+#define NOCT_SD_DIARY_MAX 32768   /* /wolf/memory.jsonl */
+#define NOCT_HIST_SAVE_MS 300000UL /* flush the history snapshot every 5 min */
+
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 #define NOCT_SD_SPI_HZ 25000000
 #define NOCT_SCREENSAVER_DEFAULT_SEC 0 /* 0 = off */
 /* Backlight cap: at full PWM (255) this panel self-heats and the matrix blooms
- * a black blob. 210 (~82%) is bright but stays well under the thermal cliff. */
+ * a black blob. 210 (~82%) is bright but stays well under the thermal cliff.
+ * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
+ * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.8.8"
+#define NOCT_VERSION "1.9.0"
 
 #endif

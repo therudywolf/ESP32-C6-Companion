@@ -16,8 +16,9 @@ public:
   bool begin(); /* call AFTER display init (bus already configured) */
   bool ok() const { return ok_; }
 
-  /* Queue a line to append to a file (thread-safe; called from llm task). */
-  void enqueueAppend(const char *path, const String &line);
+  /* Queue a line to append to a file (thread-safe; called from llm task).
+   * maxBytes > 0 rotates the file once it grows past it (see rotate()). */
+  void enqueueAppend(const char *path, const String &line, size_t maxBytes = 0);
   /* Flush queued writes — loop task only, after the frame is pushed. */
   void flush();
 
@@ -25,12 +26,20 @@ public:
   bool appendLine(const char *path, const String &line);
   bool readAll(const char *path, String &out, size_t maxBytes = 8192);
   bool readLastLines(const char *path, int n, String &out);
+  /* Halve a line file once it exceeds maxBytes, keeping the NEWEST lines.
+   * The old behaviour — stop appending at the cap — silently froze the phrase
+   * cache on whatever it had learned first and never refreshed it again. */
+  bool rotate(const char *path, size_t maxBytes);
+  /* Fixed-size binary blobs (the hour/day history snapshot). */
+  bool writeBlob(const char *path, const void *data, size_t len);
+  bool readBlob(const char *path, void *data, size_t len);
   void ensureDirs();
 
 private:
   struct PendingWrite {
     String path;
     String line;
+    size_t cap;
   };
   static const int kQueueMax = 8;
   PendingWrite queue_[kQueueMax];
