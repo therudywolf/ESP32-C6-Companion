@@ -92,8 +92,21 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   it, the high score is on the board for good. Меню → Волк → Игра.
 - **An alarm clock**, because the board has a clock, a light and something that
   talks — `[alarm] at = 07:30` in `nocturne.ini`.
+- **Smart-home sensors on the ПОГОДА screen** — "за окном" and "дома" side by
+  side, with humidity and a battery bar. The board is deliberately **not** the
+  Zigbee coordinator: measured, that stack is +380 KB of flash (a bare
+  WiFi + coordinator sketch already overflows Espressif's own 1.25 MB Zigbee app
+  slot) and it would cost OTA. Yandex Smart Home needs a cloud skill — OAuth 2.0
+  plus a public HTTPS endpoint that Yandex calls — which a device on a LAN cannot
+  be, so a server sits in the chain regardless and the coordinator belongs there.
+  The `zb` block is source-agnostic: Zigbee2MQTT, Home Assistant or a poller
+  against a Yandex hub all fill it the same. A reading older than an hour dims
+  the whole tile, because battery sensors go quiet and a stale number presented
+  as current is the same lie "no signal" exists to prevent.
 - **A USB console.** `help`, `info`, `ls`, `cat`, `ach`, `say`, `feed`, `shot`,
-  `theme`, `bright`, `reboot` on the same serial port as the logs. Most of a
+  `theme`, `bright`, `feed <json>`, `reboot` on the same serial port as the logs.
+  `feed` pushes a raw payload through the real parser, so a producer for this
+  schema can be developed against the board with no server in the middle. Most of a
   debugging session is asking the board questions it could simply answer.
 
 ## Companion web panel 🎛️

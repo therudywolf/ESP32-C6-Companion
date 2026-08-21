@@ -117,6 +117,28 @@ struct ServiceData {
   int dockUp = -1;
 };
 
+/** Zigbee / smart-home sensors, relayed by whatever owns the Zigbee radio.
+ *  The board is deliberately NOT that coordinator: measured, the stack costs
+ *  380 KB of flash and would take OTA with it, and Yandex Smart Home needs a
+ *  cloud skill (OAuth2 + public HTTPS) that a device on a LAN cannot be. So a
+ *  server holds the coordinator and forwards readings here — which works the
+ *  same whether that server runs Zigbee2MQTT, Home Assistant or polls a
+ *  Yandex hub's API. */
+struct ZbSensor {
+  char name[17] = {0};
+  int temp10 = -32768; /* temperature x10 (23.6 C -> 236); -32768 = unknown */
+  int humidity = -1;   /* % */
+  int battery = -1;    /* % */
+  int ageSec = -1;     /* since the sensor last reported; battery devices go
+                          quiet for hours, so a reading with no age is a lie */
+};
+
+struct ZigbeeData {
+  static const int kMax = 4;
+  int count = 0;
+  ZbSensor list[kMax];
+};
+
 struct ClaudeData {
   bool available = false;
   String plan = "";
@@ -203,6 +225,7 @@ struct AppState {
   NotifData notif;
   ProcessData process;
   ClaudeData claude;
+  ZigbeeData zb;
   EventsData events;
   ForestData forest;
   ServiceData services;

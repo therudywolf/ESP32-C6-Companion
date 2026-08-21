@@ -402,14 +402,29 @@ static void consoleExec(String line) {
                   theme::presetName(state.settings.themePreset));
   } else if (cmd == "say") {
     if (arg.length()) brain.sayNow(arg);
-  } else if (cmd == "feed" || cmd == "play" || cmd == "pet" || cmd == "talk") {
-    int a = cmd == "feed"   ? WolfPet::ACT_FEED
+  } else if (cmd == "eat" || cmd == "play" || cmd == "pet" || cmd == "talk") {
+    int a = cmd == "eat"    ? WolfPet::ACT_FEED
             : cmd == "play" ? WolfPet::ACT_PLAY
             : cmd == "pet"  ? WolfPet::ACT_PET
                             : WolfPet::ACT_TALK;
     pet.doAction(a);
     brain.onAction(a);
     Serial.printf("%s ok\n", cmd.c_str());
+  } else if (cmd == "feed") {
+    /* Push a raw payload line through the real parser. Anyone writing a
+     * producer for this schema — a Zigbee2MQTT bridge, a Yandex poller — can
+     * test against the board with no server in the middle, which is exactly
+     * how the lite fallback already injects its own payloads. */
+    if (arg.length()) {
+      tcp.feedExternal(arg.c_str(), state, graphs);
+      Serial.printf("fed %d B; zb.n=%d", arg.length(), state.zb.count);
+      for (int i = 0; i < state.zb.count && i < ZigbeeData::kMax; i++)
+        Serial.printf(" | %s %.1fC %d%% bat %d%% age %ds",
+                      state.zb.list[i].name,
+                      state.zb.list[i].temp10 / 10.0f, state.zb.list[i].humidity,
+                      state.zb.list[i].battery, state.zb.list[i].ageSec);
+      Serial.println();
+    }
   } else if (cmd == "shot") {
     Serial.println(saveScreenshot() ? "saved" : "failed");
   } else if (cmd == "reboot") {
@@ -432,7 +447,7 @@ static void serviceConsole() {
       consoleExec(line);
       return; /* one command per pass: never stall the frame on a paste */
     }
-    if (buf.length() < 120) buf += c;
+    if (buf.length() < 700) buf += c; /* a test payload is not a word */
   }
 }
 
