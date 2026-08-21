@@ -213,6 +213,13 @@ struct AppState {
    * flash-in-progress is never mistaken for a hang. */
   int otaPct = -1;
   String otaError;
+  /* The board's OWN die temperature (temperatureRead()). Everything else on
+   * this screen is the PC's; this is the one number about the thing you are
+   * holding. It also guards the backlight: the panel's thermal cliff is why
+   * brightness is capped at NOCT_BRIGHT_MAX, and that cap has always been a
+   * guess made once at room temperature. */
+  float boardTemp = 0;
+  float boardTempMax = 0;
   bool weatherReceived = false;
   bool forzaLive = false; /* Forza telemetry within timeout window */
   bool alertActive = false;

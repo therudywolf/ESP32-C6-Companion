@@ -31,6 +31,18 @@ public:
    * file it on the card. Tagged so the answer is filed, not spoken. */
   void writeJournal(const String &dayDate, const String &summary);
   bool journalBusy() const { return journalPending_; }
+  /* Drained by main for the achievement counters: onAction and the journal
+   * both happen in here, and both are things worth counting. */
+  int takeActionEvent() {
+    int a = actionEvent_;
+    actionEvent_ = -1;
+    return a;
+  }
+  bool takeJournalWritten() {
+    bool w = journalWritten_;
+    journalWritten_ = false;
+    return w;
+  }
   /* the scene the owner is currently looking at (nullptr = DEN/Forza/none);
    * lets idle chatter occasionally comment on what's on screen. */
   void setViewScene(const char *name) { viewSceneName_ = name; }
@@ -80,10 +92,15 @@ private:
   int actionPending_ = -1;
   unsigned long actionPendingAt_ = 0;
   bool bootGreetPending_ = true;
+  int lastHour_ = -1;              /* wall-clock hour, for time-of-day remarks */
+  bool nightScolded_ = false;      /* one "go to bed" per night, not per hour */
+  bool morningGreeted_ = false;
   String pendingNotice_;           /* an archive finding waiting to be voiced */
   String journalDate_;             /* day the in-flight journal entry covers */
   String lastJournal_;             /* newest entry, folded into every prompt */
   bool journalPending_ = false;
+  bool journalWritten_ = false;
+  int actionEvent_ = -1;
   static const int kTagSpeech = 0, kTagJournal = 1;
   int reactionKind_ = -1;          /* DEN particle burst kind */
   unsigned long reactionAt_ = 0;   /* when the last action fired */

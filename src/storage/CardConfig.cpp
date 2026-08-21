@@ -38,6 +38,20 @@ void CardConfig::apply(const String &section, const String &key,
     else if (key == "key") { llmKey_ = val; applied_++; }
     return;
   }
+  if (section == "alarm") {
+    if (key == "at") {
+      int colon = val.indexOf(':');
+      if (colon > 0) {
+        int h = val.substring(0, colon).toInt();
+        int m = val.substring(colon + 1).toInt();
+        if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+          alarm_ = h * 60 + m;
+          applied_++;
+        }
+      }
+    }
+    return;
+  }
   if (section == "wolf") {
     if (key == "skin") { skin_ = val; applied_++; }
     return;

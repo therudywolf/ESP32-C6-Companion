@@ -21,6 +21,7 @@ int bgStyle = 1;
 bool bgLight = false;
 unsigned long nowMs = 0;
 int reactLevel = 0;
+int weatherCode = 0;
 bool reactAlert = false;
 uint16_t uiElements = 0xFFFF;
 
@@ -301,6 +302,36 @@ int loadCardThemes(::SdStore *sd) {
   return gCardThemeCount;
 }
 
+/* Rain or snow drifting behind the content, driven by the real WMO code from
+ * the weather payload. Deterministic hash per particle, so there is no state to
+ * keep and nothing to allocate — the same trick the screensaver starfield uses.
+ * WMO: 51-67 drizzle/rain, 80-82 showers, 95-99 thunder; 71-77 + 85-86 snow. */
+static void weatherParticles(LGFX_Sprite &g, int y0, int y1) {
+  int w = weatherCode;
+  bool rain = (w >= 51 && w <= 67) || (w >= 80 && w <= 82) || (w >= 95);
+  bool snow = (w >= 71 && w <= 77) || w == 85 || w == 86;
+  if (!rain && !snow) return;
+  int span = y1 - y0;
+  if (span < 8) return;
+  const int kN = 26;
+  for (int i = 0; i < kN; i++) {
+    uint32_t h = (uint32_t)(i * 2246822519u) ^ 0x9E3779B9u;
+    int x = (int)((h >> 9) % 320);
+    int speed = snow ? (5 + (int)(h % 4)) : (22 + (int)(h % 12));
+    int y = y0 + (int)(((h >> 3) + nowMs / (unsigned long)(40 / speed + 1)) %
+                       (unsigned long)span);
+    if (snow) {
+      /* drift sideways so it falls like snow rather than like slow rain */
+      x = (x + (int)(8 * sinf((nowMs / 900.0f) + i))) % 320;
+      if (x < 0) x += 320;
+      g.drawPixel(x, y, lerp565(BG, TEXT, 120));
+      if ((i & 3) == 0) g.drawPixel(x + 1, y, lerp565(BG, TEXT, 70));
+    } else {
+      g.drawFastVLine(x, y, 3 + (int)(h % 3), lerp565(BG, INFO, 95));
+    }
+  }
+}
+
 void backdrop(LGFX_Sprite &g, int y0, int y1) {
   int energy = reactLevel < 0 ? 0 : (reactLevel > 100 ? 100 : reactLevel);
   if (bgStyle == 0) {
@@ -310,6 +341,7 @@ void backdrop(LGFX_Sprite &g, int y0, int y1) {
       g.drawRect(0, y0, 320, y1 - y0, lerp565(BG, CRIT, p));
       g.drawRect(1, y0 + 1, 318, y1 - y0 - 2, lerp565(BG, CRIT, p / 2));
     }
+    weatherParticles(g, y0, y1); /* weather shows even on the plain background */
     return;
   }
   /* the backdrop LIVES: busier PC sweeps faster & brighter, an alert turns it

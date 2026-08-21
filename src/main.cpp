@@ -32,6 +32,7 @@
 #include "net/OtaManager.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
+#include "pet/Achievements.h"
 #include "pet/PetBrain.h"
 #include "pet/PhraseCache.h"
 #include "pet/WolfPet.h"
@@ -66,6 +67,7 @@ static SceneManager sceneMgr;
 static OtaManager ota;
 static CardConfig cardCfg;
 static Archive archive;
+static Achievements ach;
 
 /* What the board actually uses, after /nocturne.ini has had its say. secrets.h
  * supplies the defaults; the card overrides key by key. */
@@ -87,6 +89,21 @@ static void applyBacklight(bool dimmed, bool night) {
   int b = state.settings.brightness;
   if (dimmed && b > 90) b = 90;
   if (night && b > NOCT_NIGHT_BRIGHT) b = NOCT_NIGHT_BRIGHT;
+  /* Thermal guard. The backlight is the biggest heat source on the board and
+   * the reason for the NOCT_BRIGHT_MAX cap; now that the die temperature is
+   * actually known, the cap can react instead of being a fixed guess. */
+  static bool wasWarm = false;
+  bool warm = state.boardTemp >= NOCT_BOARD_WARM_C;
+  if (state.boardTemp >= NOCT_BOARD_HOT_C) {
+    if (b > NOCT_BOARD_HOT_BRIGHT) b = NOCT_BOARD_HOT_BRIGHT;
+  } else if (warm) {
+    if (b > NOCT_BOARD_WARM_BRIGHT) b = NOCT_BOARD_WARM_BRIGHT;
+  }
+  if (warm != wasWarm) {
+    wasWarm = warm;
+    Serial.printf("[THERM] board %.1fC - backlight %s\n", state.boardTemp,
+                  warm ? "limited" : "released");
+  }
   static int applied = -1;
   if (b != applied) {
     applied = b;
@@ -214,6 +231,7 @@ static void logTrack(const String &artist, const String &track) {
   if (!sd.exists("/logs/media.csv"))
     sd.enqueueAppend("/logs/media.csv", "date,time,artist,track");
   sd.enqueueAppend("/logs/media.csv", line);
+  ach.bump(Achievements::ACH_TRACK);
 }
 
 /* Forza laps. The game streams at 60 Hz and every lap time was thrown away
@@ -238,6 +256,7 @@ static void logForzaLap(float seconds) {
   if (!sd.exists("/forza/laps.csv"))
     sd.enqueueAppend("/forza/laps.csv", "date,time,lap_seconds");
   sd.enqueueAppend("/forza/laps.csv", line);
+  ach.bump(Achievements::ACH_LAP);
   if (forzaBest <= 0 || seconds < forzaBest) {
     forzaBest = seconds;
     char best[16];
@@ -289,6 +308,131 @@ static void saveCoreDump() {
   } else {
     Serial.println("[CORE] dump copy failed - left in flash for next time");
     sd.remove(path);
+  }
+}
+
+/* ── USB console ──────────────────────────────────────────────────────────
+ * A line-oriented command shell on the same serial port the logs come out of.
+ * The board has exactly one button and one screen, so until now the only way
+ * to poke at a running device was to change the firmware and reflash — and
+ * most of a debugging session is answering questions the board could just be
+ * asked. Non-blocking: one character per loop pass at most.
+ */
+static void consoleHelp() {
+  Serial.println(F(
+      "commands:\n"
+      "  info            state summary (link, heap, temps, card)\n"
+      "  ls [dir]        list a card directory (default /logs)\n"
+      "  cat <path>      tail a file from the card\n"
+      "  ach             achievement counters\n"
+      "  scene <n>       jump to scene n\n"
+      "  bright <n>      backlight 30..210\n"
+      "  theme <n>       theme preset\n"
+      "  say <text>      make the wolf say something\n"
+      "  feed|play|pet|talk\n"
+      "  shot            screenshot to the card\n"
+      "  reboot"));
+}
+
+static void consoleExec(String line) {
+  line.trim();
+  if (!line.length()) return;
+  String cmd = line, arg = "";
+  int sp = line.indexOf(' ');
+  if (sp > 0) {
+    cmd = line.substring(0, sp);
+    arg = line.substring(sp + 1);
+    arg.trim();
+  }
+  cmd.toLowerCase();
+
+  if (cmd == "help" || cmd == "?") {
+    consoleHelp();
+  } else if (cmd == "info") {
+    Serial.printf("v%s  up %lus  heap %u KB (min %u)  board %.1fC\n",
+                  NOCT_VERSION, millis() / 1000UL,
+                  (unsigned)(ESP.getFreeHeap() / 1024),
+                  (unsigned)(ESP.getMinFreeHeap() / 1024), state.boardTemp);
+    Serial.printf("wifi %s %ddBm  ip %s  tcp %d  payload %lus ago\n",
+                  state.link.ssid, state.link.rssi, WiFi.localIP().toString().c_str(),
+                  state.link.tcpConnected,
+                  tcp.hasData() ? (millis() - tcp.lastPayloadMs()) / 1000UL : 9999UL);
+    Serial.printf("sd %d @%lu Hz  scene %d  wolf %s %lud %s\n", sd.ok(),
+                  (unsigned long)sd.clockHz(), sceneMgr.currentScene(),
+                  pet.stageName(), (unsigned long)pet.ageDays(),
+                  pet.statusText());
+    Serial.printf("pc ct=%d gt=%d cl=%d gl=%d\n", state.hw.ct, state.hw.gt,
+                  state.hw.cl, state.hw.gl);
+  } else if (cmd == "ls") {
+    sd.logDir(arg.length() ? arg.c_str() : "/logs");
+  } else if (cmd == "cat") {
+    String body;
+    if (arg.length() && sd.readAll(arg.c_str(), body, 2048))
+      Serial.printf("--- %s (tail) ---\n%s\n--- end ---\n", arg.c_str(),
+                    body.c_str());
+    else
+      Serial.println("no such file");
+  } else if (cmd == "ach") {
+    for (int i = 0; i < Achievements::ACH_COUNT; i++) {
+      Achievements::Id id = (Achievements::Id)i;
+      /* no %-16s: printf pads by BYTES and every label here is 2 B/char */
+      Serial.printf("  %s: %lu (lvl %d)\n", Achievements::name(id),
+                    (unsigned long)ach.get(id),
+                    Achievements::level(id, ach.get(id)));
+    }
+  } else if (cmd == "scene") {
+    sceneMgr.requestScene(arg.toInt());
+  } else if (cmd == "bright") {
+    int b = arg.toInt();
+    if (b >= 30 && b <= NOCT_BRIGHT_MAX) {
+      state.settings.brightness = b;
+      settings::save(state.settings);
+      Serial.printf("brightness %d\n", b);
+    } else {
+      Serial.println("range 30..210");
+    }
+  } else if (cmd == "theme") {
+    int t = arg.toInt();
+    state.settings.themePreset = t % theme::presetTotal();
+    state.settings.customActive = false;
+    theme::applyPreset(state.settings.themePreset);
+    theme::setBgLight(state.settings.bgLight);
+    settings::save(state.settings);
+    Serial.printf("theme %d (%s)\n", state.settings.themePreset,
+                  theme::presetName(state.settings.themePreset));
+  } else if (cmd == "say") {
+    if (arg.length()) brain.sayNow(arg);
+  } else if (cmd == "feed" || cmd == "play" || cmd == "pet" || cmd == "talk") {
+    int a = cmd == "feed"   ? WolfPet::ACT_FEED
+            : cmd == "play" ? WolfPet::ACT_PLAY
+            : cmd == "pet"  ? WolfPet::ACT_PET
+                            : WolfPet::ACT_TALK;
+    pet.doAction(a);
+    brain.onAction(a);
+    Serial.printf("%s ok\n", cmd.c_str());
+  } else if (cmd == "shot") {
+    Serial.println(saveScreenshot() ? "saved" : "failed");
+  } else if (cmd == "reboot") {
+    Serial.println("restarting");
+    delay(100);
+    esp_restart();
+  } else {
+    Serial.printf("unknown: %s (try help)\n", cmd.c_str());
+  }
+}
+
+static void serviceConsole() {
+  static String buf;
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n') {
+      String line = buf;
+      buf = "";
+      consoleExec(line);
+      return; /* one command per pass: never stall the frame on a paste */
+    }
+    if (buf.length() < 120) buf += c;
   }
 }
 
@@ -403,6 +547,7 @@ void setup() {
   input = new InputSystem(NOCT_PIN_BUTTON);
 
   pet.begin();
+  ach.begin();
   histories.attach(&sd); /* graphs survive a reboot when the card is present */
   histories.setOnCommit(logTelemetryRow); /* ...and the card keeps the archive */
   phrases.begin(&sd);
@@ -484,6 +629,18 @@ void loop() {
   state.link.wifiConnected = wifi.connected();
   state.link.rssi = wifi.rssi();
   strncpy(state.link.ssid, wifi.ssid(), sizeof(state.link.ssid) - 1);
+
+  /* The board's own temperature. Cheap, no wiring, and the only reading here
+   * that is about this device rather than the PC. */
+  static unsigned long lastTemp = 0;
+  if (now - lastTemp > 2000) {
+    lastTemp = now;
+    float t = temperatureRead();
+    if (t > -40 && t < 150) { /* the API returns nonsense if the sensor is busy */
+      state.boardTemp = t;
+      if (t > state.boardTempMax) state.boardTempMax = t;
+    }
+  }
 
   /* own clock via NTP (MSK) so the time survives the PC being off — overrides
    * the server's "clk" once synced; the status bar/screensaver then run standalone */
@@ -753,6 +910,21 @@ void loop() {
   pet.tick(now);
   brain.tick(now, state);
 
+  /* achievement counters: the events all pass through here anyway */
+  {
+    int act = brain.takeActionEvent();
+    if (act == WolfPet::ACT_FEED) ach.bump(Achievements::ACH_FEED);
+    else if (act == WolfPet::ACT_PLAY) ach.bump(Achievements::ACH_PLAY);
+    else if (act == WolfPet::ACT_PET) ach.bump(Achievements::ACH_PET);
+    else if (act == WolfPet::ACT_TALK) ach.bump(Achievements::ACH_TALK);
+    if (brain.takeJournalWritten()) ach.bump(Achievements::ACH_JOURNAL);
+    static bool wasAlive = true;
+    if (wasAlive && !pet.isAlive()) ach.bump(Achievements::ACH_FAINT);
+    wasAlive = pet.isAlive();
+    ach.raise(Achievements::ACH_DAYS, (uint32_t)pet.ageDays());
+    ach.tick(now);
+  }
+
   /* The archive closed a day: hand any finding to the wolf to phrase, and ask
    * it to write the day up. Both fire once a day, so the whole thing costs one
    * extra LLM call and one small file. */
@@ -799,7 +971,13 @@ void loop() {
              state.hw.gl >= 95) {
     led.setMode(StatusLed::WARNP);
   } else {
-    if (!pet.isAlive())
+    uint8_t cr, cg, cb;
+    if (state.media.isPlaying && state.settings.ledMode == 0 &&
+        coverClient.dominant(cr, cg, cb)) {
+      /* Music playing: the desk glows in the colour of the album art. The mood
+       * colours below still apply the moment the music stops. */
+      led.setMoodColor(cr, cg, cb);
+    } else if (!pet.isAlive())
       led.setMoodColor(60, 60, 60); /* gray-out */
     else if (pet.isSleeping())
       led.setMoodColor(10, 10, 80); /* deep night blue */
@@ -811,6 +989,26 @@ void loop() {
       led.setMoodColor(0, 40, 200); /* sad blue */
     led.setMode(StatusLed::BREATHE);
   }
+  /* Alarm. One shot per day, and it does all three things this board can do:
+   * wakes the screen, flashes the light and gets the wolf to say something. */
+  if (cardCfg.alarmMinutes() >= 0) {
+    time_t t = time(nullptr);
+    struct tm tmv;
+    static int firedOn = -1; /* yday, so it cannot fire twice in one day */
+    if (t >= 1700000000L && localtime_r(&t, &tmv)) {
+      int mins = tmv.tm_hour * 60 + tmv.tm_min;
+      if (mins == cardCfg.alarmMinutes() && firedOn != tmv.tm_yday) {
+        firedOn = tmv.tm_yday;
+        Serial.printf("[ALARM] %02d:%02d\n", tmv.tm_hour, tmv.tm_min);
+        sceneMgr.wakeScreen();
+        led.flash(0, 160, 40, 4000);
+        brain.notice("будильник хозяина зазвонил - подними его и не дай "
+                     "выключить");
+        sceneMgr.toast("подъём!");
+      }
+    }
+  }
+
   /* quiet hours: dark LED and a dark panel, but a hardware ALERT still wins */
   bool night = nightNow(now);
   state.link.nightActive = night;
@@ -828,6 +1026,7 @@ void loop() {
     lastHistMode = m;
   }
 
+  serviceConsole();
   ota.tick(wifi.connected());
 
   /* input */
@@ -837,7 +1036,8 @@ void loop() {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
              coverClient.ready() ? coverClient.data() : nullptr,
-             sceneMgr.historyMode(), &archive.series(), archive.seriesDays()};
+             sceneMgr.historyMode(), &archive.series(), archive.seriesDays(),
+             &ach};
     sceneMgr.handleInput(ev, ui);
   }
 
@@ -846,13 +1046,15 @@ void loop() {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
              coverClient.ready() ? coverClient.data() : nullptr,
-             sceneMgr.historyMode(), &archive.series(), archive.seriesDays()};
+             sceneMgr.historyMode(), &archive.series(), archive.seriesDays(),
+             &ach};
     sceneMgr.draw(ui);
     display.push();
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
      * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
     if (sceneMgr.takeShotRequest()) {
       bool okShot = saveScreenshot();
+      if (okShot) ach.bump(Achievements::ACH_SHOT);
       sceneMgr.toast(okShot ? "снимок сохранён" : "снимок: нет карты");
     }
 
@@ -877,13 +1079,15 @@ void loop() {
       unsigned long age = tcp.hasData() ? (now - tcp.lastPayloadMs()) : 0;
       Serial.printf(
           "[SYS] heap %u KB (min %u), scene %d, tcp %d, llm %d | payload %lus "
-          "ago, lost %d, dead %d | ct=%d gt=%d cl=%d gl=%d ram=%.1f/%.1f\n",
+          "ago, lost %d, dead %d | ct=%d gt=%d cl=%d gl=%d ram=%.1f/%.1f "
+          "| board %.1fC (max %.1f)\n",
           (unsigned)(ESP.getFreeHeap() / 1024),
           (unsigned)(ESP.getMinFreeHeap() / 1024), sceneMgr.currentScene(),
           tcp.connected(), state.link.llmBusy,
           tcp.hasData() ? age / 1000UL : 9999UL, state.link.signalLost,
           state.link.dataDead, state.hw.ct, state.hw.gt, state.hw.cl,
-          state.hw.gl, state.hw.ru, state.hw.ra);
+          state.hw.gl, state.hw.ru, state.hw.ra, state.boardTemp,
+          state.boardTempMax);
     }
   }
 

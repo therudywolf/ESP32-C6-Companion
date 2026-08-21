@@ -12,6 +12,31 @@ static void coverPath(char *out, size_t cap, long tok) {
   snprintf(out, cap, "/covers/%ld.565", tok);
 }
 
+bool CoverClient::dominant(uint8_t &dr, uint8_t &dg, uint8_t &db) const {
+  if (!ready_) return false;
+  uint32_t sr = 0, sg = 0, sb = 0, wsum = 0;
+  /* every 4th pixel is plenty for a colour average and keeps this off the
+   * frame budget: 576 samples instead of 9216 */
+  for (int i = 0; i < W * H; i += 4) {
+    uint16_t p = buf_[i];
+    uint8_t r = ((p >> 11) & 0x1F) << 3;
+    uint8_t g = ((p >> 5) & 0x3F) << 2;
+    uint8_t b = (p & 0x1F) << 3;
+    uint8_t mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    uint8_t mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    uint32_t wgt = 1 + (uint32_t)(mx - mn); /* chroma: grey counts for almost nothing */
+    sr += (uint32_t)r * wgt;
+    sg += (uint32_t)g * wgt;
+    sb += (uint32_t)b * wgt;
+    wsum += wgt;
+  }
+  if (!wsum) return false;
+  dr = (uint8_t)(sr / wsum);
+  dg = (uint8_t)(sg / wsum);
+  db = (uint8_t)(sb / wsum);
+  return true;
+}
+
 bool CoverClient::serveFromCache(SdStore *sd) {
   if (!sd || !sd->ok()) return false;
   long want = wantTok_;

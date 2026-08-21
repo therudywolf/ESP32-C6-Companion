@@ -76,8 +76,11 @@ static const unsigned char *currentWolfFrame(UiCtx &ui) {
   if (ui.brain.talkingAnim(now))
     return ((now / 160) & 1) ? wolfFrame(WOLF_FUNNY) : wolfFrame(WOLF_IDLE);
   if (ui.pet.isSleeping()) return wolfFrame(WOLF_BLINK);
-  if (ui.pet.mood() == 2 && (now % 6400) < 1300) return wolfFrame(WOLF_FUNNY);
-  if ((now % 3200) < 220) return wolfFrame(WOLF_BLINK); /* natural blink */
+  /* a pup is restless, an elder is not: same frames, different tempo */
+  unsigned long playful = ui.pet.stage() == WolfPet::STAGE_PUP ? 4200 : 6400;
+  unsigned long blinkEvery = ui.pet.stage() == WolfPet::STAGE_ELDER ? 5200 : 3200;
+  if (ui.pet.mood() == 2 && (now % playful) < 1300) return wolfFrame(WOLF_FUNNY);
+  if ((now % blinkEvery) < 220) return wolfFrame(WOLF_BLINK); /* natural blink */
   return wolfFrame(WOLF_IDLE);
 }
 
@@ -99,9 +102,15 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
     wy += ((now % 2400) < 1200) ? 0 : 1;
   if (rAt && now - rAt < 450)
     wy -= (int)(sinf((float)(now - rAt) / 450.0f * 3.14159f) * 6.0f);
+  /* Age shows in the coat: a pup is brighter and busier, an elder greys out
+   * toward TEXT. Same four frames, no new art — the wolf visibly ages. */
   uint16_t wc = !ui.pet.isAlive() ? DIM
                 : ui.st.alertActive ? CRIT
                                     : ORANGE;
+  if (ui.pet.isAlive() && !ui.st.alertActive) {
+    if (ui.pet.stage() == WolfPet::STAGE_ELDER) wc = lerp565(ORANGE, TEXT, 110);
+    else if (ui.pet.stage() == WolfPet::STAGE_PUP) wc = lerp565(ORANGE, WARN, 70);
+  }
   xbmScaled(g, wx, wy, currentWolfFrame(ui), WOLF_SPR_W, WOLF_SPR_H, 2, wc);
 
   /* reaction burst: hearts (feed) / sparks (play) / notes (talk) float up */
@@ -181,9 +190,17 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   statBar(72, "ЭНЕРГИЯ", ui.pet.energy(),
           ui.pet.energy() < 25 ? INFO : GOOD);
 
-  /* deterministic status, big */
+  /* deterministic status, big, with the life stage beside it */
   g.setFont(&F_MED);
   textAt(g, sx, 98, ui.pet.statusText(), ORANGE);
+  {
+    g.setFont(&F_TEXT);
+    char ag[32];
+    snprintf(ag, sizeof(ag), "%s - %lu дн", ui.pet.stageName(),
+             (unsigned long)ui.pet.ageDays());
+    textAt(g, sx, 118, ag, DIM);
+    g.setFont(&F_MED);
+  }
 
   /* speech bubble (covers the stats while talking) or ambient PC status */
   if (ui.brain.bubbleVisible(now)) {

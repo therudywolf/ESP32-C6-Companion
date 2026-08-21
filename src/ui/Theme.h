@@ -80,6 +80,10 @@ extern unsigned long nowMs;
  * = max(cpu,gpu) load) makes the background livelier; reactAlert tints it red. */
 extern int reactLevel;
 extern bool reactAlert;
+/* WMO weather code from the payload. The board already knows it is raining
+ * outside; letting the backdrop know costs nothing and is the sort of thing
+ * people actually notice. 0 = clear / unknown. */
+extern int weatherCode;
 
 /* Per-element UI composition: a bitmask of which optional widget classes are
  * shown across scenes. Set once per frame from Settings. */

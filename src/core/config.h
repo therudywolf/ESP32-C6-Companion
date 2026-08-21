@@ -133,6 +133,18 @@
  * for an SD card. */
 #define NOCT_HIST_SAVE_MS 60000UL
 
+/* ── Board thermals (temperatureRead(), the C6's own die sensor) ──────── */
+/* MEASURED on this board: 49.3 C steady, 51.3 C peak, at full brightness in
+ * normal operation. So "warm" starts 20 C above anything normal — it is meant
+ * to catch a real fault (blocked vent, a panel cooking itself, a sunny
+ * windowsill), not to trip on a busy afternoon. The panel's thermal cliff is
+ * why NOCT_BRIGHT_MAX exists at all; until now that cap was a single
+ * measurement made once and trusted forever. */
+#define NOCT_BOARD_WARM_C 70.0f  /* start pulling the backlight down */
+#define NOCT_BOARD_HOT_C 80.0f   /* hold it at the dim floor */
+#define NOCT_BOARD_WARM_BRIGHT 150
+#define NOCT_BOARD_HOT_BRIGHT 90
+
 /* ── Misc ─────────────────────────────────────────────────────────────── */
 #define NOCT_SD_SPI_HZ 25000000
 #define NOCT_SCREENSAVER_DEFAULT_SEC 0 /* 0 = off */
@@ -141,6 +153,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.11.0"
+#define NOCT_VERSION "1.12.0"
 
 #endif

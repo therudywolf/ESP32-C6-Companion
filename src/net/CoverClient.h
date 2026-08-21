@@ -29,6 +29,11 @@ public:
   void storeToCache(class SdStore *sd);
   /* the token the UI is currently showing, 0 = nothing */
   long haveToken() const { return haveTok_; }
+  /* Dominant colour of the current cover, as 8-bit RGB. Saturated pixels are
+   * weighted far above grey ones — album art is mostly background, and the
+   * average of everything is always mud. Feeds the mood LED so the desk glows
+   * in the colour of whatever is playing. */
+  bool dominant(uint8_t &r, uint8_t &g, uint8_t &b) const;
 
 private:
   static void taskEntry(void *self);
