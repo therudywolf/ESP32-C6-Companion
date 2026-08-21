@@ -1,0 +1,16 @@
+# Everything stored LF in the repo; the working tree keeps whatever the local
+# platform writes. The tree is already all-LF in the index, so this only stops
+# git from warning about it on every commit from a Windows checkout.
+* text=auto
+
+# Must stay LF or they will not run under sh / on CI.
+*.sh        text eol=lf
+*.py        text eol=lf
+.githooks/* text eol=lf
+
+# Firmware images and fonts: never touch a byte.
+*.bin binary
+*.elf binary
+*.map binary
+*.png binary
+*.jpg binary

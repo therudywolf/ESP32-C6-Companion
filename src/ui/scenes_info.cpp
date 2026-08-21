@@ -35,9 +35,10 @@ static void mediaTimeline(LGFX_Sprite &g, const MediaData &m, bool playing,
   if (pos < 0) pos = 0;
   if (dur > 0 && pos > (float)dur) pos = (float)dur;
 
-  char et[8], tt[8];
-  snprintf(et, sizeof(et), "%d:%02d", (int)pos / 60, (int)pos % 60);
-  if (dur > 0) snprintf(tt, sizeof(tt), "%d:%02d", dur / 60, dur % 60);
+  char et[12], tt[12];
+  unsigned ps = (unsigned)(pos < 0 ? 0 : pos), ds = (unsigned)(dur > 0 ? dur : 0);
+  snprintf(et, sizeof(et), "%u:%02u", ps / 60, ps % 60);
+  if (dur > 0) snprintf(tt, sizeof(tt), "%u:%02u", ds / 60, ds % 60);
   else         snprintf(tt, sizeof(tt), "--:--");
 
   g.setFont(&F_TEXT);
@@ -566,7 +567,7 @@ static void hourGraph(LGFX_Sprite &g, int x, int y, int w, int h,
   if (mx <= mn) mx = mn + 1;
   /* min/max ticks */
   g.setFont(&F_TEXT);
-  char t[8];
+  char t[12];
   snprintf(t, sizeof(t), "%d", mx);
   textAt(g, gx + 2, gy + 1, t, DIM);
   snprintf(t, sizeof(t), "%d", mn);
@@ -587,16 +588,22 @@ static void hourGraph(LGFX_Sprite &g, int x, int y, int w, int h,
 void drawHistory(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   if (!ui.hist) return;
-  const Histories &h = *ui.hist;
-  int span = h.ct.count;
+  /* LONG press on this scene swaps the scale (see SceneManager::handleInput). */
+  const GraphSet &s = ui.histDay ? ui.hist->day : ui.hist->hour;
+  int span = s.ct.count;
   /* graphs fill the freed band; footer label stays inside the screen */
-  hourGraph(g, 4, 26, 154, 60, "CPU C", h.ct, "", INFO, 60);
-  hourGraph(g, 162, 26, 154, 60, "GPU C", h.gt, "", GOOD, 60);
-  hourGraph(g, 4, 90, 154, 58, "CPU %", h.cl, "", WARN, 100);
-  hourGraph(g, 162, 90, 154, 58, "RAM %", h.ram, "", ACCENT, 100);
+  hourGraph(g, 4, 26, 154, 60, "CPU C", s.ct, "", INFO, 60);
+  hourGraph(g, 162, 26, 154, 60, "GPU C", s.gt, "", GOOD, 60);
+  hourGraph(g, 4, 90, 154, 58, "CPU %", s.cl, "", WARN, 100);
+  hourGraph(g, 162, 90, 154, 58, "RAM %", s.ram, "", ACCENT, 100);
   g.setFont(&F_TEXT);
-  char buf[40]; /* Cyrillic is 2 B/char: "история за 60 мин" is ~31 B */
-  snprintf(buf, sizeof(buf), "история за %d мин", span < 60 ? span : 60);
+  char buf[80]; /* 2 B/char: the longer footer below is 53 B of UTF-8 */
+  if (ui.histDay)
+    snprintf(buf, sizeof(buf), "история за %d ч (долго - минуты)",
+             span < 24 ? span : 24);
+  else
+    snprintf(buf, sizeof(buf), "история за %d мин (долго - сутки)",
+             span < 60 ? span : 60);
   textCenter(g, NOCT_W / 2, 156, buf, DIM); /* y156..169 inside */
 }
 
@@ -604,34 +611,45 @@ void drawHistory(UiCtx &ui) {
 
 void drawSysInfo(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
-  char v[48];
+  char v[64];
   panel(g, 8, 26, 304, 122, "СИСТЕМА");
   g.setFont(&F_TEXT);
-  int y = 36;
+  const int rowH = 14; /* 8 rows have to fit the 122 px panel */
+  int y = 34;
   snprintf(v, sizeof(v), "Nocturne C6 v%s", NOCT_VERSION);
   textAt(g, 18, y, v, ORANGE);
-  y += 15;
+  y += rowH;
   snprintf(v, sizeof(v), "heap: %u KB (min %u)",
            (unsigned)(ESP.getFreeHeap() / 1024),
            (unsigned)(ESP.getMinFreeHeap() / 1024));
   textAt(g, 18, y, v, TEXT);
-  y += 15;
+  y += rowH;
   unsigned long up = ui.now / 1000;
   snprintf(v, sizeof(v), "uptime: %luч %02luм %02luс", up / 3600,
            (up % 3600) / 60, up % 60);
   textAt(g, 18, y, v, TEXT);
-  y += 15;
+  y += rowH;
+  /* Why we last restarted. The watchdog panics and reboots on a wedged render
+   * loop, so without this line a self-heal — or a reboot loop — is invisible. */
+  {
+    const BootInfo &b = ui.st.boot;
+    snprintf(v, sizeof(v), "рестарт: %s  (пусков %lu, сбоев %lu)", b.reasonText,
+             (unsigned long)b.bootCount, (unsigned long)b.faultCount);
+    textAt(g, 18, y, v, b.faultCount > 0 ? WARN : TEXT);
+  }
+  y += rowH;
   snprintf(v, sizeof(v), "WiFi: %s  %d dBm", ui.st.link.ssid,
            ui.st.link.rssi);
   textAt(g, 18, y, v, TEXT);
-  y += 15;
-  snprintf(v, sizeof(v), "IP: %s", WiFi.localIP().toString().c_str());
+  y += rowH;
+  snprintf(v, sizeof(v), "IP: %s   OTA: %d", WiFi.localIP().toString().c_str(),
+           NOCT_OTA_PORT);
   textAt(g, 18, y, v, TEXT);
-  y += 15;
+  y += rowH;
   snprintf(v, sizeof(v), "SD: %s   LLM: %s", ui.st.link.sdOk ? "GOOD" : "—",
            ui.st.link.llmOk ? "GOOD" : "—");
   textAt(g, 18, y, v, TEXT);
-  y += 15;
+  y += rowH;
   snprintf(v, sizeof(v), "возраст волка: %lu дней",
            (unsigned long)ui.pet.ageDays());
   textAt(g, 18, y, v, DIM);

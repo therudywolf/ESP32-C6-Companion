@@ -32,6 +32,18 @@ public:
   int currentScene() const { return scene_; }
   /* remote-control: jump to a scene on the next draw (companion app). */
   void requestScene(int s) { pendingScene_ = s; }
+  /* ИСТОРИЯ scale, read into UiCtx by main so the scene can pick a series. */
+  bool historyDay() const { return histDay_; }
+  /* Backlight is owned by main(): it folds the dim state, quiet hours and the
+   * user setting into ONE value per frame, so no path can fight another. */
+  bool screenDimmed() const { return dimmed_; }
+  unsigned long lastInputMs() const { return lastInput_; }
+  /* Should a held button auto-repeat right now? True only in list-like modes
+   * (menu, pickers, colour editor) — see Button.h. */
+  bool wantsButtonRepeat() const;
+  /* Full-screen OTA takeover: drawn straight to the panel from the update
+   * callback, because the normal frame loop is blocked while flash is written. */
+  void drawOtaScreen(UiCtx &ui, int pct, const char *msg);
 
   void bootAnimation(UiCtx &ui); /* blocking, ~3 s, incl. panel test card */
 
@@ -46,9 +58,15 @@ private:
   void drawNotifCard(UiCtx &ui); /* the notification flyover */
   /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
   int nextVisibleScene(int from, uint32_t mask, bool allowDen) const;
-  void menuAction(UiCtx &ui);
+  void menuAction(UiCtx &ui, int itemId);
   int denActionSel(UiCtx &ui) const;
   bool alertActive(UiCtx &ui) const;
+  /* menu model: rows depend on whether we are in the category list or inside
+   * one, so every count/label/value comes from ONE table (see kMenu). */
+  int menuRowCount() const;
+  const char *menuRowName(int row) const;
+  void menuRowValue(int row, const Settings &s, char *out, size_t cap) const;
+  void menuActivateRow(UiCtx &ui, int row);
 
   Deps d_{};
   int scene_ = SCENE_DEN;
@@ -57,7 +75,10 @@ private:
 
   bool menuOpen_ = false;
   int menuSel_ = 0;
+  int menuCat_ = -1; /* -1 = category list, else the category being browsed */
   bool sysInfo_ = false;
+  bool histDay_ = false; /* ИСТОРИЯ: false = 60 min, true = 24 h */
+  unsigned long resetArmedUntil_ = 0; /* factory reset needs a 2nd confirm */
 
   unsigned long alertSnoozeUntil_ = 0;
   int preAlertScene_ = -1;

@@ -68,16 +68,91 @@ block failed to populate. Ignored by the firmware, useful in logs.
 
 ## Blocks only the **PC server** emits (no lite equivalent)
 
-- **HW**: `ct gt cl gl ru ra …` (CPU/GPU temps & loads, RAM, fans, disks, net) —
-  see `payload.py`; the device's CPU/GPU/… scenes show no-signal without them.
-- **`media`**: `{art, trk, play, idle, media_status, pos, dur, cover_tok}`; the
-  cover image is fetched separately from the control panel as RGB565.
-- **`pidle`**: seconds since the owner's last input.
-- **`rc`**: remote-control block `{seq, screen, theme, bright, led, …}` — the
-  device acts once per `seq` change.
-- **`notif`**: `{seq, app, title, body, pending, dur, led}` — Windows toast
-  mirrored to the device's notification card. **Capped** at app≤24 / title≤48 /
-  body≤160 chars: an uncapped body pushed the frame past `NOCT_TCP_LINE_MAX`.
+`tools/check_schema.py` fails the build if the firmware parses a key that is not
+named somewhere in this file — so these tables are enumerated, not summarised.
+The old "…" hid twenty-odd fields the board actually acts on.
+
+### Hardware scalars (top level, all int unless noted)
+| key | meaning | | key | meaning |
+|---|---|---|---|---|
+| `ct` | CPU temp °C | | `gt` | GPU temp °C |
+| `cl` | CPU load % | | `gl` | GPU load % |
+| `cc` | CPU clock MHz | | `pw` | CPU package power W |
+| `gh` | GPU hotspot °C | | `gv` | VRAM used % |
+| `gclock` | GPU core clock | | `vclock` | GPU memory clock |
+| `gtdp` | GPU power % of TDP | | `ch` | chipset temp °C |
+| `ru` (float) | RAM used GB | | `ra` (float) | RAM total GB |
+| `vu` (float) | VRAM used GB | | `vt` (float) | VRAM total GB |
+| `nd` | net down kb/s | | `nu` | net up kb/s |
+| `pg` / `ping` | ping ms (either key) | | `dr` / `dw` | disk read/write MB/s |
+| `cf` | CPU fan rpm | | `gf` | GPU fan rpm |
+| `s1`, `s2` | case fans rpm | | | |
+| `mb_sys` | board temp °C | | `mb_vrm` | VRM temp °C |
+| `mb_vsoc` | SoC voltage temp | | `mb_chipset` | chipset temp °C |
+| `pidle` | seconds since the owner's last input | | | |
+
+Arrays: `fans` and `fan_controls` (≤4 ints each), `hdd` (≤4 entries of
+`{n (≤2 chars), u, tot (floats, GB), t (int, °C)}`), `tp` (top CPU processes,
+≤3 × `{n, c}` = name + percent), `tr` (top RAM processes, ≤2 × `{n, r}` = name
++ MB).
+
+### `media`
+`{art, trk, mp, idle, media_status, ctok, mpos, mdur}` — artist, track,
+`mp` = is-playing bool, `idle`, `media_status` (`PLAYING`/`PAUSED`), `ctok` =
+cover token (a change triggers a refetch), `mpos`/`mdur` = position and length
+in seconds. The cover image itself is fetched separately from the control panel
+as RGB565.
+
+### Alert takeover (top level)
+`alert` (`"CRITICAL"` arms it), `target_screen` (`MAIN`/`CPU`/`GPU`/`RAM`/
+`DISKS`/`MEDIA`/`FANS`/`MOTHERBOARD`), `alert_metric`
+(`ct`/`gt`/`cl`/`gl`/`gv`/`ram`, names the banner).
+
+### `notif`
+`{seq, app, title, body, pending, dur, led}` — Windows toast mirrored to the
+device's notification card. **Capped** at app≤24 / title≤48 / body≤160 chars:
+an uncapped body pushed the frame past `NOCT_TCP_LINE_MAX`.
+
+### `rc` — remote control (the device acts once per `seq` change)
+Every field is optional; the sentinel means "no change this time".
+
+| key | type | sentinel | effect |
+|---|---|---|---|
+| `seq` | int | — | **required**; a change is what arms the whole block |
+| `screen` | int | -1 | jump to scene N |
+| `say` | string | "" | make the wolf speak this line verbatim |
+| `theme` | int | -1 | theme preset index |
+| `bright` | int | -1 | backlight, clamped to 30..210 |
+| `led` | 0/1 | -1 | mood LED on/off |
+| `ledmode` | 0..3 | -1 | idle LED style: mood / off / rainbow / candle |
+| `carousel` | int | -2 | -1 = off, else interval seconds |
+| `petllm` | 0/1 | -1 | let the wolf use the LLM |
+| `wchat` | 0..3 | -1 | chattiness: off / rare / normal / often |
+| `wtone` | 0..3 | -1 | character: normal / kind / grumpy / cheeky |
+| `flip` | 0/1 | -1 | rotate the panel 180° |
+| `timeout` | int | -1 | screen-dim seconds, 0 = off |
+| `bgstyle` | 0..2 | -1 | background: solid / animated / grid |
+| `bglight` | 0/1 | -1 | light background |
+| `notif` | 0/1 | -1 | show PC notification flyovers |
+| `scenemask` | int | -1 | bitmask of scenes in the ring (bit 0 forced on) |
+| `uielem` | int | -1 | bitmask of optional widget classes |
+| `action` | string | "" | `feed` / `play` / `pet` / `talk` |
+| `chrome` | [r,g,b] | absent | override the chrome hue |
+| `accent` | [r,g,b] | absent | override the accent hue |
+| `color` | [role,r,g,b] | absent | set one palette role (0..9) |
+| `palette` | 10 × [r,g,b] | absent | set the whole palette |
+| `resetcustom` | 1 | -1 | drop the custom palette, back to the preset |
+| `pin` | int | -2 | pinned "home" scene, -1 = the den |
+| `slot` | 0..2 | -1 | switch the active theme slot |
+| `night` | 0/1 | -1 | quiet hours on/off |
+| `nightfrom`, `nightto` | 0..23 | -1 | quiet-hour bounds (wraps past midnight) |
+| `ota` | string | "" | pull-OTA image URL — **see below** |
+
+> **`ota` is the one field that can execute code.** Telemetry is unauthenticated
+> plain TCP on the LAN, so the firmware does not take the URL on faith:
+> `OtaManager::urlAllowed()` accepts only the configured telemetry host
+> (`PC_IP`) or an RFC1918/loopback literal, and rejects any authority containing
+> `@`. Anything else is refused and surfaced as a toast.
 
 ## `claude` — emitted by BOTH producers, and they carry different halves
 
@@ -113,6 +188,15 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 ## Device → server (uplink)
 - `HELO`, `screen:N`, `cmd:claude|status`
 - `wolf:` — pet stats (hunger/joy/energy/mood/alive/sleeping/age)
-- `cfg:` — 15-field CSV mirror of device settings (panel reflects the board)
+- `cfg:` — CSV mirror of device settings, so the panel reflects the board.
+  Fields, in order:
 
-_Last synced with `parsePayload()` at firmware v1.8.8._
+  `petllm, wchat, wtone, led, flip, bglight, bright, carousel, timeout,
+  bgstyle, theme, uielem, scenemask, notifshow, ledmode, pin, slot, night,
+  nightfrom, nightto`
+
+  `carousel` is -1 when off; `theme` is -1 when a custom palette is active.
+  Fields 16-20 were **appended** in v1.9.0 — a panel that splits by index and
+  ignores the tail keeps working. Only ever append here, never reorder.
+
+_Last synced with `parsePayload()` at firmware v1.9.0. `tools/check_schema.py` enforces that every key the firmware reads is named here._

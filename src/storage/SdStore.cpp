@@ -25,7 +25,7 @@ bool SdStore::begin() {
                   SD.usedBytes() / (1024ULL * 1024ULL),
                   SD.totalBytes() / (1024ULL * 1024ULL));
   } else {
-    Serial.println("[SD] no card / mount failed — running without SD");
+    Serial.println("[SD] no card / mount failed - running without SD");
   }
   return ok_;
 }
@@ -37,7 +37,8 @@ void SdStore::ensureDirs() {
   SD.mkdir("/logs");
 }
 
-void SdStore::enqueueAppend(const char *path, const String &line) {
+void SdStore::enqueueAppend(const char *path, const String &line,
+                            size_t maxBytes) {
   if (!ok_) return;
   /* single producer (main loop) / single consumer (main loop): the slot at
    * qHead_ is ours until the index advances. No heap ops inside critical. */
@@ -49,6 +50,7 @@ void SdStore::enqueueAppend(const char *path, const String &line) {
   if (full) return; /* drop newest on overflow — logs, not ledgers */
   queue_[head].path = path;
   queue_[head].line = line;
+  queue_[head].cap = maxBytes;
   portENTER_CRITICAL(&mux_);
   qHead_ = next;
   portEXIT_CRITICAL(&mux_);
@@ -58,6 +60,7 @@ void SdStore::flush() {
   if (!ok_) return;
   while (qTail_ != qHead_) {
     PendingWrite &w = queue_[qTail_];
+    if (w.cap) rotate(w.path.c_str(), w.cap);
     appendLine(w.path.c_str(), w.line);
     portENTER_CRITICAL(&mux_);
     qTail_ = (qTail_ + 1) % kQueueMax;
@@ -97,4 +100,51 @@ bool SdStore::readLastLines(const char *path, int n, String &out) {
   }
   out = all;
   return true;
+}
+
+bool SdStore::rotate(const char *path, size_t maxBytes) {
+  if (!ok_ || maxBytes == 0) return false;
+  File f = SD.open(path, FILE_READ);
+  if (!f) return false;
+  size_t size = f.size();
+  if (size <= maxBytes) {
+    f.close();
+    return false; /* nothing to do */
+  }
+  /* keep the newest half, starting at the first whole line after the seek */
+  f.seek(size - maxBytes / 2);
+  String tail = f.readString();
+  f.close();
+  int nl = tail.indexOf('\n');
+  if (nl >= 0) tail = tail.substring(nl + 1);
+
+  String tmp = String(path) + ".tmp";
+  SD.remove(tmp.c_str());
+  File out = SD.open(tmp.c_str(), FILE_WRITE);
+  if (!out) return false;
+  out.print(tail);
+  out.close();
+  SD.remove(path);
+  bool moved = SD.rename(tmp.c_str(), path);
+  Serial.printf("[SD] rotate %s: %u -> %u B%s\n", path, (unsigned)size,
+                (unsigned)tail.length(), moved ? "" : " (rename failed)");
+  return moved;
+}
+
+bool SdStore::writeBlob(const char *path, const void *data, size_t len) {
+  if (!ok_ || !data || !len) return false;
+  File f = SD.open(path, FILE_WRITE); /* FILE_WRITE truncates */
+  if (!f) return false;
+  size_t n = f.write((const uint8_t *)data, len);
+  f.close();
+  return n == len;
+}
+
+bool SdStore::readBlob(const char *path, void *data, size_t len) {
+  if (!ok_ || !data || !len) return false;
+  File f = SD.open(path, FILE_READ);
+  if (!f) return false;
+  bool good = (f.size() == len) && (f.read((uint8_t *)data, len) == (int)len);
+  f.close();
+  return good;
 }

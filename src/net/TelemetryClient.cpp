@@ -8,19 +8,7 @@
 static void copyStr(char *dst, size_t cap, const char *src) {
   if (!src) src = "";
   String s = stripGlyphs(src); /* drop tofu glyphs before they reach a panel */
-  strncpy(dst, s.c_str(), cap - 1);
-  dst[cap - 1] = '\0';
-  /* strncpy counts BYTES, so a Cyrillic name landing exactly on the boundary
-   * left a half-written UTF-8 sequence behind — the renderer then drew a tofu
-   * box (or mis-measured the width). Walk back off any dangling continuation
-   * bytes so the buffer always ends on a whole codepoint. */
-  size_t n = strlen(dst);
-  while (n > 0 && (dst[n - 1] & 0xC0) == 0x80) dst[--n] = '\0'; /* 10xxxxxx */
-  if (n > 0) {
-    unsigned char lead = (unsigned char)dst[n - 1];
-    /* a lead byte with nothing following it is also incomplete */
-    if (lead >= 0xC0) dst[n - 1] = '\0';
-  }
+  copyUtf8(dst, cap, s.c_str()); /* truncate on a whole codepoint (TextUtil.h) */
 }
 
 void TelemetryClient::tryConnect(unsigned long now) {
@@ -80,14 +68,19 @@ void TelemetryClient::sendCfg(const Settings &s) {
   if (!tcpConnected_) return;
   /* one CSV the panel reads back so its controls show the board's live state.
    * order: petllm,wchat,wtone,led,flip,bglight,bright,carousel,timeout,
-   *        bgstyle,theme,uielem,scenemask,notifshow,ledmode (carousel/theme -1) */
-  client_.printf("cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d\n",
+   *        bgstyle,theme,uielem,scenemask,notifshow,ledmode (carousel/theme -1)
+   * Fields 16.. were APPENDED (pin,slot,night,nightfrom,nightto): a panel that
+   * splits by index and ignores the tail keeps working unchanged. Never
+   * reorder — only append. */
+  client_.printf("cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d\n",
                  s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone,
                  s.ledEnabled ? 1 : 0, s.flipped ? 1 : 0, s.bgLight ? 1 : 0,
                  s.brightness, s.carouselEnabled ? s.carouselIntervalSec : -1,
                  s.displayTimeoutSec, s.bgStyle,
                  s.customActive ? -1 : s.themePreset, (unsigned)s.uiElements,
-                 (unsigned long)s.sceneMask, s.notifShow ? 1 : 0, s.ledMode);
+                 (unsigned long)s.sceneMask, s.notifShow ? 1 : 0, s.ledMode,
+                 s.pinnedScene, s.activeSlot, s.nightMode ? 1 : 0, s.nightFrom,
+                 s.nightTo);
 }
 
 bool TelemetryClient::signalLost(unsigned long now) const {
@@ -387,6 +380,12 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcLedMode = rc["ledmode"] | -1;
       state.rcUiElem = rc["uielem"] | (long)-1;
       state.rcPresetReset = rc["resetcustom"] | -1;
+      state.rcPin = rc["pin"] | -2;
+      state.rcSlot = rc["slot"] | -1;
+      state.rcNight = rc["night"] | -1;
+      state.rcNightFrom = rc["nightfrom"] | -1;
+      state.rcNightTo = rc["nightto"] | -1;
+      state.rcOtaUrl = (const char *)(rc["ota"] | "");
       state.rcColorRole = -1;
       if (rc["color"].is<JsonArray>() && rc["color"].size() == 4) {
         state.rcColorRole = rc["color"][0] | -1;

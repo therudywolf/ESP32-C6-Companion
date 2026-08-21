@@ -8,8 +8,10 @@
  */
 #include <Arduino.h>
 #include <SPI.h>
+#include <esp_log.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
+#include <time.h>
 
 #include "secrets.h"
 
@@ -24,6 +26,7 @@
 #include "net/LlmClient.h"
 #include "net/CoverClient.h"
 #include "net/LiteClient.h"
+#include "net/OtaManager.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
 #include "pet/PetBrain.h"
@@ -54,15 +57,49 @@ static Graphs graphs;
 static Histories histories;
 static AppState state;
 static SceneManager sceneMgr;
+static OtaManager ota;
 static InputSystem *input = nullptr;
 static IntervalTimer frameTimer(NOCT_FRAME_MS);
 static bool prevTcpConnected = false;
+
+/* One place decides what the backlight is: the user setting, folded with the
+ * screensaver dim and quiet hours. Every other path just changes an input to
+ * this — otherwise the menu, the RC block and the dim timer each drive the PWM
+ * and the last writer wins at random. */
+static void applyBacklight(bool dimmed, bool night) {
+  int b = state.settings.brightness;
+  if (dimmed && b > 90) b = 90;
+  if (night && b > NOCT_NIGHT_BRIGHT) b = NOCT_NIGHT_BRIGHT;
+  static int applied = -1;
+  if (b != applied) {
+    applied = b;
+    display.setBrightness((uint8_t)b);
+  }
+}
+
+/* Quiet hours, from our own NTP clock. `from > to` wraps past midnight
+ * (23 -> 8). Unknown clock = never night: guessing would be worse than not
+ * dimming. A recent button press suspends it so you can just use the thing. */
+static bool nightNow(unsigned long now) {
+  const Settings &s = state.settings;
+  if (!s.nightMode) return false;
+  if (now - sceneMgr.lastInputMs() < NOCT_NIGHT_WAKE_MS) return false;
+  time_t t = time(nullptr);
+  if (t < 1700000000L) return false; /* no real clock yet */
+  struct tm tmNow;
+  if (!localtime_r(&t, &tmNow)) return false;
+  int h = tmNow.tm_hour;
+  if (s.nightFrom == s.nightTo) return false;
+  return (s.nightFrom < s.nightTo) ? (h >= s.nightFrom && h < s.nightTo)
+                                   : (h >= s.nightFrom || h < s.nightTo);
+}
 
 void setup() {
   Serial.begin(115200);
   delay(100);
   Serial.printf("\n[BOOT] Nocturne C6 v%s\n", NOCT_VERSION);
 
+  settings::readBootInfo(state.boot); /* why we restarted, before anything else */
   settings::load(state.settings);
   theme::bgStyle = state.settings.bgStyle;
   theme::bgLight = state.settings.bgLight;
@@ -103,12 +140,26 @@ void setup() {
   input = new InputSystem(NOCT_PIN_BUTTON);
 
   pet.begin();
+  histories.attach(&sd); /* graphs survive a reboot when the card is present */
   phrases.begin(&sd);
   llm.begin(kLlmEndpoints, kLlmCount, LLM_API_KEY, LLM_MODEL, LLM_MODEL_BIG);
   brain.begin(&pet, &llm, &phrases, &sd);
 
   wifi.begin(kWifiNets, kWifiCount, state.settings.netSel);
   tcp.setServer(PC_IP, TCP_PORT);
+#ifdef OTA_PASSWORD
+  ota.begin(NOCT_OTA_HOSTNAME, OTA_PASSWORD, PC_IP);
+#else
+  ota.begin(NOCT_OTA_HOSTNAME, nullptr, PC_IP);
+#endif
+  /* Flash is being written while this runs, so the normal frame loop is stalled:
+   * the callback draws + pushes the panel itself and feeds the watchdog. */
+  ota.setUiCallback([](int pct, const char *msg) {
+    state.otaPct = pct;
+    esp_task_wdt_reset();
+    UiCtx ui{display.fb, state, graphs, pet, brain, millis()};
+    sceneMgr.drawOtaScreen(ui, pct, msg);
+  });
   coverClient.begin(PC_IP, 8899); /* album cover from the control panel */
 #if defined(LITE_URL) && defined(LITE_TOKEN)
   liteClient.begin(LITE_URL, LITE_TOKEN); /* always-on fallback when PC is off */
@@ -137,8 +188,14 @@ void setup() {
   wdt.timeout_ms = 15000;
   wdt.idle_core_mask = 0;
   wdt.trigger_panic = true;
+  /* The core usually starts the TWDT itself, so init() returns INVALID_STATE and
+   * we just retune it. That path is normal — but init() logs an ERROR line on
+   * the way out ("TWDT already initialized"), which looked like a fault in every
+   * boot log. Mute the tag across the probe, then restore it. */
+  esp_log_level_set("task_wdt", ESP_LOG_NONE);
   if (esp_task_wdt_init(&wdt) == ESP_ERR_INVALID_STATE)
     esp_task_wdt_reconfigure(&wdt); /* core already started it — just retune */
+  esp_log_level_set("task_wdt", ESP_LOG_ERROR);
   esp_task_wdt_add(NULL);
 }
 
@@ -158,8 +215,13 @@ void loop() {
    * the server's "clk" once synced; the status bar/screensaver then run standalone */
   static bool ntpInit = false;
   if (wifi.connected() && !ntpInit) {
-    configTime(3 * 3600, 0, "pool.ntp.org", "time.google.com");
+    configTime(NOCT_TZ_OFFSET_SEC, NOCT_TZ_DST_SEC, NOCT_NTP_PRIMARY,
+               NOCT_NTP_SECONDARY);
     ntpInit = true;
+    /* the address you point `--upload-port` at — also on the СИСТЕМА screen,
+     * but having it in the boot log means OTA never needs the panel first */
+    Serial.printf("[NET] ip %s — OTA on :%d\n",
+                  WiFi.localIP().toString().c_str(), NOCT_OTA_PORT);
   }
   if (ntpInit) {
     struct tm tmNow;
@@ -211,8 +273,7 @@ void loop() {
               : state.rcBright > NOCT_BRIGHT_MAX ? NOCT_BRIGHT_MAX
                                                : state.rcBright;
       cfg.brightness = b;
-      display.setBrightness(b);
-      persist = true;
+      persist = true; /* applyBacklight() picks it up on the next frame */
     }
     if (state.rcLed >= 0) {
       cfg.ledEnabled = state.rcLed != 0;
@@ -236,6 +297,40 @@ void loop() {
       cfg.flipped = state.rcFlip != 0;
       display.setFlipped(cfg.flipped);
       persist = true;
+    }
+    if (state.rcPin != -2) { /* pinned "home" scene, -1 = the den */
+      cfg.pinnedScene = (state.rcPin >= 0 && state.rcPin < SCENE_FORZA)
+                            ? state.rcPin
+                            : -1;
+      persist = true;
+    }
+    if (state.rcSlot >= 0 && state.rcSlot < 3) {
+      cfg.activeSlot = state.rcSlot;
+      if (cfg.slotUsed[cfg.activeSlot]) {
+        memcpy(cfg.custom, cfg.slot[cfg.activeSlot], sizeof(cfg.custom));
+        cfg.customActive = true;
+        theme::applyPalette(cfg.custom);
+        theme::setBgLight(cfg.bgLight);
+      }
+      persist = true;
+    }
+    if (state.rcNight >= 0) {
+      cfg.nightMode = state.rcNight != 0;
+      persist = true;
+    }
+    if (state.rcNightFrom >= 0 && state.rcNightFrom <= 23) {
+      cfg.nightFrom = state.rcNightFrom;
+      persist = true;
+    }
+    if (state.rcNightTo >= 0 && state.rcNightTo <= 23) {
+      cfg.nightTo = state.rcNightTo;
+      persist = true;
+    }
+    if (state.rcOtaUrl.length()) {
+      /* the URL is validated inside (private/trusted hosts only) — telemetry is
+       * an unauthenticated LAN channel, so this must never be taken on faith */
+      if (!ota.requestPull(state.rcOtaUrl)) sceneMgr.toast(ota.message());
+      state.rcOtaUrl = "";
     }
     if (state.rcTimeout >= 0) {
       cfg.displayTimeoutSec = state.rcTimeout;
@@ -344,8 +439,15 @@ void loop() {
     WiFi.setSleep(!wifiFast);
   }
 
-  /* long-window hour history (accumulate live data, commit one sample/min) */
-  if (tcp.connected() && !state.link.signalLost) histories.accumulate(state.hw);
+  /* Long-window history. accumulate() is a PER-PAYLOAD sample: calling it every
+   * loop iteration (~1 kHz) burned cycles and weighted the minute average by
+   * loop rate instead of by data. */
+  static unsigned long lastHistPayload = 0;
+  if (tcp.connected() && !state.link.signalLost &&
+      tcp.lastPayloadMs() != lastHistPayload) {
+    lastHistPayload = tcp.lastPayloadMs();
+    histories.accumulate(state.hw);
+  }
   histories.tick(now);
 
   pet.tick(now);
@@ -394,15 +496,24 @@ void loop() {
       led.setMoodColor(0, 40, 200); /* sad blue */
     led.setMode(StatusLed::BREATHE);
   }
-  led.setAmbient(state.settings.ledMode); /* idle ambient style */
+  /* quiet hours: dark LED and a dark panel, but a hardware ALERT still wins */
+  bool night = nightNow(now);
+  state.link.nightActive = night;
+  led.setAmbient(night && !state.alertActive ? 1 /* off */
+                                             : state.settings.ledMode);
   led.tick(now);
+  applyBacklight(sceneMgr.screenDimmed(), night && !state.alertActive);
+
+  ota.tick(wifi.connected());
 
   /* input */
+  input->setRepeatEnabled(sceneMgr.wantsButtonRepeat());
   ButtonEvent ev = input->update();
   if (ev != EV_NONE) {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
-             coverClient.ready() ? coverClient.data() : nullptr};
+             coverClient.ready() ? coverClient.data() : nullptr,
+             sceneMgr.historyDay()};
     sceneMgr.handleInput(ev, ui);
   }
 
@@ -410,7 +521,8 @@ void loop() {
   if (frameTimer.check(now)) {
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
-             coverClient.ready() ? coverClient.data() : nullptr};
+             coverClient.ready() ? coverClient.data() : nullptr,
+             sceneMgr.historyDay()};
     sceneMgr.draw(ui);
     display.push();
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so

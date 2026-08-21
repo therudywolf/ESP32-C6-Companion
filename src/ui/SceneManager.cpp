@@ -5,6 +5,107 @@
 using namespace theme;
 using namespace widgets;
 
+/* ── Menu model ───────────────────────────────────────────────────────────
+ * ONE table drives navigation, labels, values and actions. The previous flat
+ * list kept its length in four places (kMenuItems, kRows, names[], val[][]) and
+ * meant up to 20 short presses to reach the last row on a one-button device.
+ * Now: DOUBLE opens a 5-row category list, LONG enters a category, LONG
+ * activates an item, DOUBLE steps back out. Holding the button fast-scrolls
+ * (Button.h EV_REPEAT, enabled only here). */
+namespace {
+
+enum MenuCat {
+  CAT_SCREEN = 0, /* panel, colours, sleep */
+  CAT_WOLF,       /* the pet's voice */
+  CAT_LAYOUT,     /* which screens / widgets exist */
+  CAT_SIGNALS,    /* LED + notifications */
+  CAT_SYSTEM,
+  CAT_COUNT
+};
+
+/* Stable ids: menuAction() switches on these, never on a row index. */
+enum MenuId {
+  MI_BRIGHT = 0, MI_BG, MI_BGLIGHT, MI_THEME, MI_SLOT, MI_COLORS, MI_FLIP,
+  MI_DIM, MI_NIGHT,
+  MI_PETLLM, MI_CHATTER, MI_TONE,
+  MI_CAROUSEL, MI_SCENES, MI_ELEMS, MI_FORZA,
+  MI_LED, MI_LEDMODE, MI_NOTIF,
+  MI_WIFI, MI_SYSINFO, MI_RESET,
+  MI_COUNT
+};
+
+struct MenuItem {
+  uint8_t cat;
+  uint8_t id;
+  const char *name;
+};
+
+const MenuItem kMenu[] = {
+    {CAT_SCREEN, MI_BRIGHT, "Яркость"},
+    {CAT_SCREEN, MI_THEME, "Тема"},
+    {CAT_SCREEN, MI_BG, "Фон"},
+    {CAT_SCREEN, MI_BGLIGHT, "Светлый фон"},
+    {CAT_SCREEN, MI_SLOT, "Слот темы"},
+    {CAT_SCREEN, MI_COLORS, "Цвета вручную"},
+    {CAT_SCREEN, MI_FLIP, "Переворот"},
+    {CAT_SCREEN, MI_DIM, "Гашение экрана"},
+    {CAT_SCREEN, MI_NIGHT, "Ночной режим"},
+
+    {CAT_WOLF, MI_PETLLM, "Волк LLM"},
+    {CAT_WOLF, MI_CHATTER, "Болтливость"},
+    {CAT_WOLF, MI_TONE, "Характер"},
+
+    {CAT_LAYOUT, MI_CAROUSEL, "Карусель"},
+    {CAT_LAYOUT, MI_SCENES, "Экраны"},
+    {CAT_LAYOUT, MI_ELEMS, "Элементы"},
+    {CAT_LAYOUT, MI_FORZA, "Forza HUD"},
+
+    {CAT_SIGNALS, MI_LED, "LED"},
+    {CAT_SIGNALS, MI_LEDMODE, "Подсветка"},
+    {CAT_SIGNALS, MI_NOTIF, "Уведомления"},
+
+    {CAT_SYSTEM, MI_WIFI, "WiFi"},
+    {CAT_SYSTEM, MI_SYSINFO, "Инфо системы"},
+    {CAT_SYSTEM, MI_RESET, "Сброс настроек"},
+};
+const int kMenuCount = (int)(sizeof(kMenu) / sizeof(kMenu[0]));
+
+const char *kCatName[CAT_COUNT] = {"Экран", "Волк", "Состав", "Сигналы",
+                                   "Система"};
+
+/* Backlight steps the menu cycles through. NOCT_BRIGHT_MAX is "100%" for the
+ * UI — the panel blooms above it. Stepping through a TABLE (rather than
+ * += 40) means any stored value snaps onto the ladder instead of diving to the
+ * dimmest rung on the first press. */
+const int kBrightSteps[] = {50, 90, 130, 170, NOCT_BRIGHT_MAX};
+const int kBrightStepCount = (int)(sizeof(kBrightSteps) / sizeof(int));
+
+int nextBrightness(int cur) {
+  for (int i = 0; i < kBrightStepCount; i++)
+    if (kBrightSteps[i] > cur) return kBrightSteps[i];
+  return kBrightSteps[0];
+}
+
+int rowsInCat(int cat) {
+  int n = 0;
+  for (int i = 0; i < kMenuCount; i++)
+    if (kMenu[i].cat == cat) n++;
+  return n;
+}
+
+/* row -> table index within a category (row == count means the "back" row) */
+int itemIndex(int cat, int row) {
+  int n = 0;
+  for (int i = 0; i < kMenuCount; i++) {
+    if (kMenu[i].cat != cat) continue;
+    if (n == row) return i;
+    n++;
+  }
+  return -1;
+}
+
+} // namespace
+
 void SceneManager::begin(const Deps &deps) {
   d_ = deps;
   lastInput_ = millis();
@@ -51,8 +152,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   if (ev == EV_NONE) return;
   lastInput_ = ui.now;
   if (dimmed_) { /* first press only wakes the screen */
-    dimmed_ = false;
-    d_.disp->setBrightness(ui.st.settings.brightness);
+    dimmed_ = false; /* main() re-applies the backlight from screenDimmed() */
     return;
   }
   /* a button dismisses the notification flyover (and doesn't also navigate) */
@@ -83,6 +183,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     Settings &s = ui.st.settings;
     if (!editChan_) {
       switch (ev) {
+      case EV_REPEAT: /* hold to run down the role strip */
       case EV_SHORT:
         editRole_ = (editRole_ + 1) % theme::COLOR_ROLES;
         editLoadRole();
@@ -99,7 +200,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
         settings::save(s);
         editMode_ = false;
         {
-          char t[24];
+          char t[48]; /* 2 B/char: "сохранено: слот 1" needs 31 */
           snprintf(t, sizeof(t), "сохранено: слот %d", s.activeSlot + 1);
           toast(t);
         }
@@ -116,6 +217,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
       }
     } else {
       switch (ev) {
+      case EV_REPEAT: /* hold to sweep the channel instead of tapping 8x */
       case EV_SHORT: { /* bump the active channel in 32-steps, hit 255, wrap */
         int *ch = editCh_ == 0 ? &editR_ : editCh_ == 1 ? &editG_ : &editB_;
         if (*ch >= 255)
@@ -152,6 +254,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   if (scenePickMode_) {
     Settings &s = ui.st.settings;
     switch (ev) {
+    case EV_REPEAT:
     case EV_SHORT:
       if (++scenePickSel_ >= SCENE_FORZA) scenePickSel_ = SCENE_DASH;
       break;
@@ -179,6 +282,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   if (elemPickMode_) {
     Settings &s = ui.st.settings;
     switch (ev) {
+    case EV_REPEAT:
     case EV_SHORT:
       if (++elemPickSel_ >= theme::UI_ELEM_COUNT) elemPickSel_ = 0;
       break;
@@ -202,17 +306,26 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 
   if (menuOpen_) {
-    const int kMenuItems = 21; /* must match names[]/val[]/kRows in drawMenu */
+    int rows = menuRowCount();
     switch (ev) {
+    case EV_REPEAT:
     case EV_SHORT:
-      menuSel_ = (menuSel_ + 1) % kMenuItems;
+      menuSel_ = (menuSel_ + 1) % rows;
       break;
     case EV_LONG:
-      menuAction(ui);
+      menuActivateRow(ui, menuSel_);
       break;
     case EV_DOUBLE:
+      if (menuCat_ >= 0) { /* step out of the category, not out of the menu */
+        menuSel_ = menuCat_;
+        menuCat_ = -1;
+      } else {
+        menuOpen_ = false;
+      }
+      break;
     case EV_TRIPLE:
       menuOpen_ = false;
+      menuCat_ = -1;
       break;
     default:
       break;
@@ -256,6 +369,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
   case EV_DOUBLE:
     menuOpen_ = true;
+    menuCat_ = -1; /* always open on the category list */
     menuSel_ = 0;
     break;
   case EV_TRIPLE: {
@@ -275,6 +389,9 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     } else if (scene_ == SCENE_FOREST || scene_ == SCENE_SERVICES) {
       d_.tcp->sendCmd("status");
       toast("обновляю...");
+    } else if (scene_ == SCENE_HISTORY) {
+      histDay_ = !histDay_; /* 60 min <-> 24 h */
+      toast(histDay_ ? "история: сутки" : "история: час");
     } else if (scene_ != SCENE_FORZA) {
       /* pin / unpin this scene as the TRIPLE-press "home" (reversible) */
       Settings &s = ui.st.settings;
@@ -294,10 +411,130 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   }
 }
 
-void SceneManager::menuAction(UiCtx &ui) {
+/* -- Menu: rows, values, actions -------------------------------------- */
+
+int SceneManager::menuRowCount() const {
+  /* category list: N categories + "close"; item list: N items + "back" */
+  return (menuCat_ < 0) ? CAT_COUNT + 1 : rowsInCat(menuCat_) + 1;
+}
+
+const char *SceneManager::menuRowName(int row) const {
+  if (menuCat_ < 0) return (row < CAT_COUNT) ? kCatName[row] : "Закрыть";
+  int idx = itemIndex(menuCat_, row);
+  return idx >= 0 ? kMenu[idx].name : "Назад";
+}
+
+void SceneManager::menuRowValue(int row, const Settings &s, char *out,
+                                size_t cap) const {
+  out[0] = 0;
+  if (menuCat_ < 0) {
+    if (row < CAT_COUNT) snprintf(out, cap, "%d", rowsInCat(row));
+    return;
+  }
+  int idx = itemIndex(menuCat_, row);
+  if (idx < 0) return;
+  static const char *chatterN[] = {"выкл", "редко", "норма", "часто"};
+  static const char *toneN[] = {"обычный", "добрый", "ворчун", "дерзкий"};
+  static const char *ledN[] = {"настроение", "выкл", "радуга", "свеча"};
+  switch (kMenu[idx].id) {
+  case MI_BRIGHT:
+    /* NOCT_BRIGHT_MAX is the ceiling this panel tolerates, so it IS 100% here.
+     * Dividing by 255 made a fully bright screen report "82%". */
+    snprintf(out, cap, "%d%%", s.brightness * 100 / NOCT_BRIGHT_MAX);
+    break;
+  case MI_THEME:
+    snprintf(out, cap, "%s",
+             s.customActive ? "своя" : theme::presetName(s.themePreset));
+    break;
+  case MI_BG:
+    snprintf(out, cap, "%s", theme::bgStyleName(s.bgStyle));
+    break;
+  case MI_BGLIGHT:
+    snprintf(out, cap, "%s", s.bgLight ? "светлый" : "тёмный");
+    break;
+  case MI_SLOT:
+    snprintf(out, cap, "#%d%s", s.activeSlot + 1,
+             s.slotUsed[s.activeSlot] ? "" : " нов");
+    break;
+  case MI_FLIP:
+    snprintf(out, cap, "%s", s.flipped ? "180" : "0");
+    break;
+  case MI_DIM:
+    if (s.displayTimeoutSec <= 0) snprintf(out, cap, "выкл");
+    else snprintf(out, cap, "%dс", s.displayTimeoutSec);
+    break;
+  case MI_NIGHT:
+    if (!s.nightMode) snprintf(out, cap, "выкл");
+    else snprintf(out, cap, "%02d-%02d", s.nightFrom, s.nightTo);
+    break;
+  case MI_PETLLM:
+    snprintf(out, cap, "%s", s.petLlm ? "вкл" : "выкл");
+    break;
+  case MI_CHATTER:
+    snprintf(out, cap, "%s", chatterN[s.wolfChatter & 3]);
+    break;
+  case MI_TONE:
+    snprintf(out, cap, "%s", toneN[s.wolfTone & 3]);
+    break;
+  case MI_CAROUSEL:
+    if (s.carouselEnabled) snprintf(out, cap, "%dс", s.carouselIntervalSec);
+    else snprintf(out, cap, "выкл");
+    break;
+  case MI_SCENES: {
+    int on = 0;
+    for (int i = SCENE_DASH; i < SCENE_FORZA; i++)
+      if ((s.sceneMask >> i) & 1u) on++;
+    snprintf(out, cap, "%d/%d", on + 1, SCENE_FORZA); /* +1 = ЛОГОВО */
+    break;
+  }
+  case MI_ELEMS: {
+    int on = 0;
+    for (int i = 0; i < theme::UI_ELEM_COUNT; i++)
+      if ((s.uiElements >> i) & 1u) on++;
+    snprintf(out, cap, "%d/%d", on, theme::UI_ELEM_COUNT);
+    break;
+  }
+  case MI_LED:
+    snprintf(out, cap, "%s", s.ledEnabled ? "вкл" : "выкл");
+    break;
+  case MI_LEDMODE:
+    snprintf(out, cap, "%s", ledN[s.ledMode & 3]);
+    break;
+  case MI_NOTIF:
+    snprintf(out, cap, "%s", s.notifShow ? "вкл" : "выкл");
+    break;
+  case MI_WIFI:
+    if (s.netSel < 0) snprintf(out, cap, "авто");
+    else snprintf(out, cap, "%.10s", d_.wifiNames[s.netSel]);
+    break;
+  default:
+    break; /* pickers / sysinfo / reset carry no value column */
+  }
+}
+
+void SceneManager::menuActivateRow(UiCtx &ui, int row) {
+  if (menuCat_ < 0) {
+    if (row < CAT_COUNT) { /* enter the category */
+      menuCat_ = row;
+      menuSel_ = 0;
+    } else {
+      menuOpen_ = false; /* "Закрыть" */
+    }
+    return;
+  }
+  int idx = itemIndex(menuCat_, row);
+  if (idx < 0) { /* "Назад" */
+    menuSel_ = menuCat_;
+    menuCat_ = -1;
+    return;
+  }
+  menuAction(ui, kMenu[idx].id);
+}
+
+void SceneManager::menuAction(UiCtx &ui, int itemId) {
   Settings &s = ui.st.settings;
-  switch (menuSel_) {
-  case 0: { /* carousel */
+  switch (itemId) {
+  case MI_CAROUSEL:
     if (!s.carouselEnabled) {
       s.carouselEnabled = true;
       s.carouselIntervalSec = 5;
@@ -309,116 +546,116 @@ void SceneManager::menuAction(UiCtx &ui) {
       s.carouselEnabled = false;
     }
     break;
-  }
-  case 1: /* brightness — steps 50/90/130/170/210, capped under the thermal cliff */
-    s.brightness += 40;
-    if (s.brightness > NOCT_BRIGHT_MAX) s.brightness = 50;
-    d_.disp->setBrightness(s.brightness);
+  case MI_BRIGHT: /* snap onto the ladder; main() applies it next frame */
+    s.brightness = nextBrightness(s.brightness);
     break;
-  case 2: /* LED */
+  case MI_LED:
     s.ledEnabled = !s.ledEnabled;
     d_.led->setEnabled(s.ledEnabled);
     break;
-  case 3: /* wolf LLM */
+  case MI_PETLLM:
     s.petLlm = !s.petLlm;
     break;
-  case 4: /* wifi lock */
+  case MI_WIFI:
     s.netSel++;
     if (s.netSel >= d_.wifiCount) s.netSel = -1;
     d_.wifi->setForced(s.netSel);
     break;
-  case 5: /* flip display 180 */
+  case MI_FLIP:
     s.flipped = !s.flipped;
     d_.disp->setFlipped(s.flipped);
     break;
-  case 6: /* theme preset (cycling drops any custom palette) */
+  case MI_THEME: /* theme preset (cycling drops any custom palette) */
     s.themePreset = (s.themePreset + 1) % theme::THEME_PRESETS;
     s.customActive = false;
     theme::applyPreset(s.themePreset);
     theme::setBgLight(s.bgLight);
     toast(theme::presetName(s.themePreset));
     break;
-  case 7: /* background style */
+  case MI_BG:
     s.bgStyle = (s.bgStyle + 1) % theme::BG_STYLES;
     theme::setBgStyle(s.bgStyle);
     toast(theme::bgStyleName(s.bgStyle));
     break;
-  case 8: /* light / dark background */
+  case MI_BGLIGHT:
     s.bgLight = !s.bgLight;
     theme::setBgLight(s.bgLight);
     toast(s.bgLight ? "светлый фон" : "тёмный фон");
     break;
-  case 9: { /* theme slot — cycle 1→2→3, load that saved palette if it exists */
+  case MI_SLOT: { /* cycle 1-2-3, load that saved palette if it exists */
     s.activeSlot = (s.activeSlot + 1) % 3;
+    char t[40]; /* 2 B/char: "слот 1 (пусто)" needs 24 exactly - leave slack */
     if (s.slotUsed[s.activeSlot]) {
       memcpy(s.custom, s.slot[s.activeSlot], sizeof(s.custom));
       s.customActive = true;
       theme::applyPalette(s.custom);
       theme::setBgLight(s.bgLight);
-      char t[24];
       snprintf(t, sizeof(t), "слот %d", s.activeSlot + 1);
-      toast(t);
     } else {
-      char t[24];
       snprintf(t, sizeof(t), "слот %d (пусто)", s.activeSlot + 1);
-      toast(t);
     }
+    toast(t);
     break;
   }
-  case 10: /* on-device colour editor */
+  case MI_COLORS:
     menuOpen_ = false;
+    menuCat_ = -1;
     editMode_ = true;
     editRole_ = 0;
     editChan_ = false;
     editLoadRole();
     toast("редактор цвета");
     break;
-  case 11: /* screen composition picker */
+  case MI_SCENES:
     menuOpen_ = false;
+    menuCat_ = -1;
     scenePickMode_ = true;
     scenePickSel_ = SCENE_DASH;
     toast("выбор экранов");
     break;
-  case 12: /* Forza HUD (manual open — it also auto-enters on telemetry) */
+  case MI_FORZA: /* manual open - it also auto-enters on telemetry */
     menuOpen_ = false;
+    menuCat_ = -1;
     gotoScene(SCENE_FORZA, ui);
     break;
-  case 13: /* sysinfo */
+  case MI_SYSINFO:
     sysInfo_ = true;
     menuOpen_ = false;
+    menuCat_ = -1;
     break;
-  case 14: { /* wolf chatter frequency */
+  case MI_CHATTER: {
     s.wolfChatter = (s.wolfChatter + 1) % 4;
     static const char *n[] = {"болтливость: выкл", "болтливость: редко",
                               "болтливость: норма", "болтливость: часто"};
     toast(n[s.wolfChatter & 3]);
     break;
   }
-  case 15: { /* wolf tone / character */
+  case MI_TONE: {
     s.wolfTone = (s.wolfTone + 1) % 4;
     static const char *n[] = {"характер: обычный", "характер: добрый",
                               "характер: ворчун", "характер: дерзкий"};
     toast(n[s.wolfTone & 3]);
     break;
   }
-  case 16: /* element composition picker */
+  case MI_ELEMS:
     menuOpen_ = false;
+    menuCat_ = -1;
     elemPickMode_ = true;
     elemPickSel_ = 0;
     toast("элементы экрана");
     break;
-  case 17: /* PC notifications flyover */
+  case MI_NOTIF:
     s.notifShow = !s.notifShow;
     toast(s.notifShow ? "уведомления: вкл" : "уведомления: выкл");
     break;
-  case 18: { /* idle LED ambient style */
+  case MI_LEDMODE: {
     s.ledMode = (s.ledMode + 1) % 4;
     static const char *ln[] = {"подсветка: настроение", "подсветка: выкл",
                                "подсветка: радуга", "подсветка: свеча"};
     toast(ln[s.ledMode & 3]);
     break;
   }
-  case 19: { /* screen dim / screensaver timeout (mirrors the panel options) */
+  case MI_DIM:
     s.displayTimeoutSec = s.displayTimeoutSec == 0    ? 30
                           : s.displayTimeoutSec == 30 ? 60
                                                       : 0;
@@ -426,10 +663,45 @@ void SceneManager::menuAction(UiCtx &ui) {
           : s.displayTimeoutSec == 30 ? "гашение: 30с"
                                       : "гашение: 60с");
     break;
-  }
-  case 20: /* close */
-    menuOpen_ = false;
+  case MI_NIGHT: { /* off -> 23-08 -> 00-07 -> 22-06 -> off */
+    if (!s.nightMode) {
+      s.nightMode = true;
+      s.nightFrom = 23;
+      s.nightTo = 8;
+    } else if (s.nightFrom == 23) {
+      s.nightFrom = 0;
+      s.nightTo = 7;
+    } else if (s.nightFrom == 0) {
+      s.nightFrom = 22;
+      s.nightTo = 6;
+    } else {
+      s.nightMode = false;
+    }
+    char t[40]; /* Cyrillic is 2 B/char - "ночной режим: выкл" is 33 B */
+    if (s.nightMode) snprintf(t, sizeof(t), "ночь: %02d-%02d", s.nightFrom, s.nightTo);
+    else snprintf(t, sizeof(t), "ночной режим: выкл");
+    toast(t);
     break;
+  }
+  case MI_RESET: /* destructive: a second LONG within 4 s confirms */
+    if (resetArmedUntil_ && (long)(ui.now - resetArmedUntil_) < 0) {
+      resetArmedUntil_ = 0;
+      menuOpen_ = false;
+      menuCat_ = -1;
+      settings::factoryReset(s);
+      theme::applyPreset(s.themePreset);
+      theme::setBgStyle(s.bgStyle);
+      theme::setBgLight(s.bgLight);
+      theme::uiElements = s.uiElements;
+      d_.led->setEnabled(s.ledEnabled);
+      d_.disp->setFlipped(s.flipped);
+      d_.wifi->setForced(s.netSel);
+      toast("настройки сброшены");
+      return; /* factoryReset already rewrote NVS */
+    }
+    resetArmedUntil_ = ui.now + 4000;
+    toast("ещё раз - сброс");
+    return; /* nothing changed yet - don't spend an NVS write */
   }
   settings::save(s);
 }
@@ -437,88 +709,89 @@ void SceneManager::menuAction(UiCtx &ui) {
 void SceneManager::drawMenu(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
-  /* full content band — no overlaying scene leftovers */
+  /* full content band - no overlaying scene leftovers */
   g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
   g.drawFastHLine(0, NOCT_CONTENT_TOP, NOCT_W, ORANGE);
 
-  char val[21][20];
-  if (s.carouselEnabled)
-    snprintf(val[0], 20, "%dс", s.carouselIntervalSec);
-  else
-    snprintf(val[0], 20, "выкл");
-  snprintf(val[1], 20, "%d%%", s.brightness * 100 / 255);
-  snprintf(val[2], 20, "%s", s.ledEnabled ? "вкл" : "выкл");
-  snprintf(val[3], 20, "%s", s.petLlm ? "вкл" : "выкл");
-  if (s.netSel < 0)
-    snprintf(val[4], 20, "авто");
-  else
-    snprintf(val[4], 20, "%.10s", d_.wifiNames[s.netSel]);
-  snprintf(val[5], 20, "%s", s.flipped ? "180" : "0");
-  snprintf(val[6], 20, "%s", s.customActive ? "своя" : theme::presetName(s.themePreset));
-  snprintf(val[7], 20, "%s", theme::bgStyleName(s.bgStyle));
-  snprintf(val[8], 20, "%s", s.bgLight ? "светлый" : "тёмный");
-  snprintf(val[9], 20, "#%d%s", s.activeSlot + 1,
-           s.slotUsed[s.activeSlot] ? "" : " нов");
-  val[10][0] = '\0';
-  {
-    int onCount = 0;
-    for (int i = SCENE_DASH; i < SCENE_FORZA; i++)
-      if ((s.sceneMask >> i) & 1u) onCount++;
-    snprintf(val[11], 20, "%d/%d", onCount + 1, SCENE_FORZA); /* +1 = ЛОГОВО */
-  }
-  val[12][0] = '\0';
-  val[13][0] = '\0';
-  {
-    static const char *chatterN[] = {"выкл", "редко", "норма", "часто"};
-    static const char *toneN[] = {"обычный", "добрый", "ворчун", "дерзкий"};
-    snprintf(val[14], 20, "%s", chatterN[s.wolfChatter & 3]);
-    snprintf(val[15], 20, "%s", toneN[s.wolfTone & 3]);
-  }
-  {
-    int onCount = 0;
-    for (int i = 0; i < theme::UI_ELEM_COUNT; i++)
-      if ((s.uiElements >> i) & 1u) onCount++;
-    snprintf(val[16], 20, "%d/%d", onCount, theme::UI_ELEM_COUNT);
-  }
-  snprintf(val[17], 20, "%s", s.notifShow ? "вкл" : "выкл");
-  {
-    static const char *ln[] = {"настроение", "выкл", "радуга", "свеча"};
-    snprintf(val[18], 20, "%s", ln[s.ledMode & 3]);
-  }
-  if (s.displayTimeoutSec <= 0)
-    snprintf(val[19], 20, "выкл");
-  else
-    snprintf(val[19], 20, "%dс", s.displayTimeoutSec);
-  val[20][0] = '\0';
-
-  static const char *names[] = {
-      "Карусель",     "Яркость",       "LED",          "Волк LLM",
-      "WiFi",         "Переворот",      "Тема",         "Фон",
-      "Светлый фон",  "Слот темы",      "Цвета вручную", "Экраны",
-      "Forza HUD",    "Инфо системы",   "Болтливость",  "Характер",
-      "Элементы",     "Уведомления",    "Подсветка",    "Гашение экрана",
-      "Закрыть"};
-  /* 6 visible rows, 22 px tall — no glyph overlap; list scrolls */
-  const int kRows = 21, kVisible = 6, rowH = 22;
+  const int rows = menuRowCount();
+  const int kVisible = 5, rowH = 22;
   int scroll = menuSel_ - (kVisible - 1);
   if (scroll < 0) scroll = 0;
+
+  /* breadcrumb: which level we are on */
+  g.setFont(&F_TEXT);
+  g.setTextSize(1);
+  char crumb[40];
+  if (menuCat_ < 0)
+    snprintf(crumb, sizeof(crumb), "МЕНЮ");
+  else
+    snprintf(crumb, sizeof(crumb), "МЕНЮ / %s", kCatName[menuCat_]);
+  textAt(g, 8, 24, crumb, ORANGE);
+
   g.setFont(&F_MED);
   g.setTextSize(1);
-  for (int i = scroll; i < kRows && i < scroll + kVisible; i++) {
-    int y = NOCT_CONTENT_TOP + 6 + (i - scroll) * rowH;
+  for (int i = scroll; i < rows && i < scroll + kVisible; i++) {
+    int y = 38 + (i - scroll) * rowH;
     bool sel = i == menuSel_;
     if (sel) g.fillRect(6, y - 2, NOCT_W - 18, rowH - 2, ORANGE);
-    textAt(g, 14, y, names[i], sel ? BG : TEXT);
-    if (val[i][0]) textRight(g, NOCT_W - 20, y, val[i], sel ? BG : DIM);
+    char nm[28];
+    clipW(g, menuRowName(i), nm, sizeof(nm), 200);
+    textAt(g, 14, y, nm, sel ? BG : TEXT);
+    char val[20];
+    menuRowValue(i, s, val, sizeof(val));
+    if (val[0]) {
+      g.setFont(&F_TEXT);
+      textRight(g, NOCT_W - 20, y + 3, val, sel ? BG : DIM);
+      g.setFont(&F_MED);
+    } else if (menuCat_ < 0 && i < CAT_COUNT) {
+      textRight(g, NOCT_W - 20, y, ">", sel ? BG : ORANGE_DIM);
+    }
   }
+
+  /* scrollbar (only when the list actually scrolls) */
+  if (rows > kVisible) {
+    int track = NOCT_H - 42;
+    int sbH = track * kVisible / rows;
+    int sbY = 38 + (track - sbH) * scroll / (rows - kVisible);
+    g.fillRect(NOCT_W - 6, 38, 3, track, PANEL);
+    g.fillRect(NOCT_W - 6, sbY, 3, sbH, ORANGE);
+  }
+
+  g.setFont(&F_TEXT);
+  textAt(g, 8, 158,
+         menuCat_ < 0 ? "1x далее / долго открыть / 2x закрыть / удерж. быстро"
+                      : "1x далее / долго выбрать / 2x назад / 3x закрыть",
+         DIM);
+}
+
+/* Should a held button auto-repeat? Only in list-like modes: everywhere else a
+ * hold is LONG and must stay LONG (feeding the wolf, pinning a scene). */
+bool SceneManager::wantsButtonRepeat() const {
+  return menuOpen_ || editMode_ || scenePickMode_ || elemPickMode_;
+}
+
+/* Full-screen OTA takeover. Called from the update callback while the normal
+ * frame loop is blocked writing flash, so it pushes the panel itself. */
+void SceneManager::drawOtaScreen(UiCtx &ui, int pct, const char *msg) {
+  LGFX_Sprite &g = ui.g;
+  g.fillSprite(BG);
+  g.drawRect(0, 0, NOCT_W, NOCT_H, ORANGE);
+  g.setFont(&F_MED);
   g.setTextSize(1);
-  /* scrollbar */
-  int sbH = (NOCT_H - NOCT_CONTENT_TOP - 8) * kVisible / kRows;
-  int sbY = NOCT_CONTENT_TOP + 4 +
-            (NOCT_H - NOCT_CONTENT_TOP - 8 - sbH) * scroll / (kRows - kVisible);
-  g.fillRect(NOCT_W - 6, NOCT_CONTENT_TOP + 4, 3,
-             NOCT_H - NOCT_CONTENT_TOP - 8, PANEL);
-  g.fillRect(NOCT_W - 6, sbY, 3, sbH, ORANGE);
+  textCenter(g, NOCT_W / 2, 26, "ОБНОВЛЕНИЕ", ORANGE);
+  xbmScaled(g, (NOCT_W - 64) / 2, 46, wolf_idle, 32, 32, 2, ORANGE);
+
+  int bx = 40, by = 118, bw = NOCT_W - 80;
+  g.drawRect(bx - 2, by - 2, bw + 4, 16, ORANGE_DIM);
+  int p = pct < 0 ? 0 : (pct > 100 ? 100 : pct);
+  g.fillRect(bx, by, bw * p / 100, 12, ORANGE);
+  char v[8];
+  snprintf(v, sizeof(v), "%d%%", p);
+  g.setFont(&F_TEXT);
+  textCenter(g, NOCT_W / 2, by + 20, v, TEXT);
+  if (msg && *msg) textCenter(g, NOCT_W / 2, by + 34, msg, DIM);
+  textCenter(g, NOCT_W / 2, 100, "не отключай питание", DIM);
+  d_.disp->push();
 }
 
 /* Pull the focused role's RGB (0..255) out of the live palette so the channel
@@ -543,7 +816,7 @@ void SceneManager::drawColorEditor(UiCtx &ui) {
   uint16_t pal[theme::COLOR_ROLES];
   theme::getPalette(pal);
 
-  char ttl[32];
+  char ttl[40]; /* "РЕДАКТОР / СЛОТ 1" is 29 B of UTF-8 */
   snprintf(ttl, sizeof(ttl), "РЕДАКТОР / СЛОТ %d", s.activeSlot + 1);
   g.setFont(&F_TEXT);
   g.setTextSize(1);
@@ -919,15 +1192,13 @@ void SceneManager::draw(UiCtx &ui) {
       !menuOpen_ && !scenePickMode_ && !elemPickMode_ && !notifUntil_ &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
       !alertActive(ui)) {
-    dimmed_ = true;
-    d_.disp->setBrightness(s.brightness > 90 ? 90 : s.brightness);
+    dimmed_ = true; /* main() folds this into the effective backlight */
   }
   /* An arriving notification wakes the screen, exactly like an alert does.
    * drawScreensaver() returns early, BELOW which the notification card is
    * drawn — so a card arriving on a dimmed screen was never rendered at all. */
   if (dimmed_ && (alertActive(ui) || notifUntil_)) {
     dimmed_ = false;
-    d_.disp->setBrightness(s.brightness);
   }
   if (dimmed_ && !alertActive(ui)) {
     drawScreensaver(ui);

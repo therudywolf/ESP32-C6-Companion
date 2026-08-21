@@ -5,6 +5,12 @@
  * background task so the render loop never blocks. The main loop feeds the JSON
  * to the existing TelemetryClient parser, so the WEATHER / FOREST / SERVICES
  * scenes stay alive with the PC off. URL+token live in gitignored secrets.h.
+ *
+ * Concurrency: `payload_` is an Arduino String touched by BOTH the fetch task
+ * and the loop task, so every access goes through mux_. A cancel (the PC coming
+ * back mid-fetch) bumps gen_ instead of clearing the String underneath the task
+ * — assigning to a String reallocates, and doing that from two tasks at once
+ * corrupts the heap.
  */
 #ifndef NOCT_LITE_CLIENT_H
 #define NOCT_LITE_CLIENT_H
@@ -28,8 +34,10 @@ private:
   String token_;
   volatile bool pending_ = false;
   volatile bool ready_ = false;
-  volatile bool ok_ = false; /* last fetch succeeded */
-  String payload_;
+  volatile bool ok_ = false;      /* last fetch succeeded */
+  volatile uint32_t gen_ = 0;     /* bumped on cancel; a stale result is dropped */
+  String payload_;                /* guarded by mux_ */
+  SemaphoreHandle_t mux_ = nullptr;
   unsigned long lastReq_ = 0;
   TaskHandle_t task_ = nullptr;
   static const unsigned long kIntervalMs = 30000; /* refresh cadence when PC off */

@@ -29,14 +29,22 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   and lap deltas are the faithful substitute for "time to next car".)*
 - **16 telemetry scenes** + Forza: ЛОГОВО, ОБЗОР, CPU, GPU, ПАМЯТЬ, ДИСКИ,
   КУЛЕРЫ, ПЛАТА, СЕТЬ, МЕДИА, ПОГОДА, CLAUDE, ЛЕС (nodes), СЕРВИСЫ, СОБЫТИЯ
-  (alerts), ИСТОРИЯ (on-device last-hour graphs). Trend carets, reactive
+  (alerts), ИСТОРИЯ (on-device graphs, long-press to swap **last hour ↔ last 24 h**;
+  both survive a reboot when an SD card is present). Trend carets, reactive
   backgrounds that speed up under load and turn red on alerts.
 - **Deep customisation** — 12 themes **plus** an on-device colour editor
   (per-element R/G/B), 3 saved theme slots, animated/light backgrounds,
   **screen composition** (which scenes ride the ring) and **element composition**
   (hide sparklines / trend carets / decorations / etc.) — all on-device or web.
-- **One button**: short = next scene · double = menu · triple = home (the den) ·
-  long = contextual action. Direction-aware scene transitions.
+  **Quiet hours** dim the panel and kill the LED overnight (own NTP clock, so it
+  works with the PC off); a hardware alert still overrides them. A guarded
+  factory reset lives in Меню → Система — it clears settings only, never the
+  wolf.
+- **One button**: short = next scene · double = menu · triple = home (the den)
+  · long = contextual action · **hold = fast-scroll** inside lists and the colour
+  editor. The menu is grouped into five categories (Экран / Волк / Состав /
+  Сигналы / Система) so nothing is more than a few presses deep. Direction-aware
+  scene transitions.
 - **WS2812 mood light** + **multi-WiFi** (ranks known SSIDs by RSSI).
 
 ## Companion web panel 🎛️
@@ -56,6 +64,28 @@ pio run -e nocturne-c6                # build
 pio run -e nocturne-c6 -t upload      # flash (USB-Serial/JTAG)
 ```
 
+**Over the air** — after the first USB flash you never need the cable again:
+
+```bash
+pio run -e nocturne-c6 -t upload --upload-port 192.168.1.42
+```
+
+The device's IP is on the **Меню → Система → Инфо системы** screen. Set
+`OTA_PASSWORD` in `secrets.h` on any shared network (then add
+`--upload-flags --auth=...`). The server can also push an update itself via the
+`rc` block's `ota` field; the firmware only accepts an image URL on `PC_IP` or a
+private-range host, because telemetry is an unauthenticated LAN channel.
+
+**Tests** (host-side, no board needed):
+
+```bash
+pio test -e native && python tools/check_schema.py
+```
+
+`check_schema.py` fails if the firmware parses a JSON key that `SCHEMA.md` does
+not document — the wire contract used to drift silently. Both run in CI along
+with the firmware build and an OTA-headroom check.
+
 > The compiled binary bakes in your `secrets.h`, so the GitHub releases ship
 > **source only** — build it yourself. After flashing over USB-JTAG the C6 may
 > stay in the bootloader; tap **RST** once.
@@ -69,8 +99,9 @@ pio run -e nocturne-c6 -t upload      # flash (USB-Serial/JTAG)
 | WS2812B RGB LED | 8 |
 | BOOT button (user input, active LOW) | 9 |
 
-Panel: ST7789V3 172×320, `offset_x=34`, **INVON required**, 80 MHz SPI, 8 MB
-flash, no PSRAM — the 110 KB RGB565 framebuffer is allocated first at boot.
+Panel: ST7789V3 172×320, `offset_x=34`, **INVON required**, 80 MHz SPI, **4 MB
+flash** (the product page's "FH8" is a typo — it is an ESP32-C6FH4), no PSRAM —
+the 110 KB RGB565 framebuffer is allocated first at boot.
 Backlight is capped below the panel's thermal cliff. Fonts are u8g2 Cyrillic
 subsets; all server/LLM text is glyph-filtered so unsupported characters never
 render as tofu boxes.
@@ -82,7 +113,16 @@ render as tofu boxes.
 - Telemetry: TCP `<pc>:8888`, newline-delimited JSON (schema `sv:1.0`), with an
   embedded `rc{}` remote-control block; the device reports pet state upstream
   via a `wolf:` line. Forza UDP on port 5300.
+- Partitions: `min_spiffs.csv` — two 1.875 MB OTA app slots (the image is
+  ~1.5 MB, ~77%). NVS keeps the offset it had under the old `huge_app.csv`, so
+  switching tables does not disturb saved state.
 - NVS: pet state (`wolfpet`) is unchanged from the Heltec firmware, so the wolf
-  survives the hardware migration; settings live in `nocturne`.
+  survives the hardware migration; settings live in `nocturne`. The boot counter
+  and the last `esp_reset_reason()` live there too, and show up on the СИСТЕМА
+  screen — the watchdog reboots this device to heal it, and a silent heal is
+  indistinguishable from a reboot loop without them.
 - SD layout: `/wolf/cache/*.jsonl` (phrase cache), `/wolf/memory.jsonl` (diary →
-  prompt memory), `/logs/`. The card is optional — everything degrades without it.
+  prompt memory), `/logs/hist.bin` (graph snapshot). Line files **rotate** at
+  their cap, keeping the newest half — an earlier cap simply stopped appending,
+  which froze the phrase cache on whatever it learned first. The card is
+  optional — everything degrades without it.

@@ -35,7 +35,11 @@ static void fmtLap(char *out, size_t cap, float s) {
     return;
   }
   int tenths = (int)(s * 10.0f + 0.5f);
-  snprintf(out, cap, "%d:%02d.%d", tenths / 600, (tenths / 10) % 60, tenths % 10);
+  if (tenths < 0) tenths = 0;
+  unsigned mins = (unsigned)(tenths / 600);
+  if (mins > 99) mins = 99; /* the stamp buffers are small; never overrun them */
+  snprintf(out, cap, "%u:%02u.%u", mins, (unsigned)((tenths / 10) % 60),
+           (unsigned)(tenths % 10));
 }
 
 /* y to pass to textAt so the visible glyph TOP lands at wantTop.
