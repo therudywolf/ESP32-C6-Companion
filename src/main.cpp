@@ -77,6 +77,55 @@ static void applyBacklight(bool dimmed, bool night) {
   }
 }
 
+/* "YYYY-MM-DD" / "HH:MM" from the NTP clock; empty string when it has not
+ * synced yet, which every caller treats as "don't write a dated record". */
+static bool clockParts(char *date, size_t dcap, char *hm, size_t hcap) {
+  time_t t = time(nullptr);
+  struct tm tmv;
+  if (t < 1700000000L || !localtime_r(&t, &tmv)) return false;
+  if (date) strftime(date, dcap, "%Y-%m-%d", &tmv);
+  if (hm) strftime(hm, hcap, "%H:%M", &tmv);
+  return true;
+}
+
+/* One CSV row per minute in /logs/YYYY-MM-DD.csv. The in-RAM windows reach back
+ * an hour and a day; this reaches back as far as the card does — ~30 B/row is
+ * 43 KB a day, 16 MB a year, against 7.4 GB of card. That turns the board from
+ * a monitor into a monitor with an archive: week-long graphs, day-to-day
+ * comparisons, hardware slowly getting hotter. */
+static void logTelemetryRow(int ct, int gt, int cl, int gl, int ram) {
+  if (!sd.ok()) return;
+  char date[12], hm[8];
+  if (!clockParts(date, sizeof(date), hm, sizeof(hm))) return;
+  char path[32];
+  snprintf(path, sizeof(path), "/logs/%s.csv", date);
+  if (!sd.exists(path)) /* a fresh day starts with its own header */
+    sd.enqueueAppend(path, "time,cpu_c,gpu_c,cpu_pct,gpu_pct,ram_pct");
+  char row[48];
+  snprintf(row, sizeof(row), "%s,%d,%d,%d,%d,%d", hm, ct, gt, cl, gl, ram);
+  sd.enqueueAppend(path, row);
+}
+
+/* One line per boot in /logs/boot.jsonl. The reset reason and the counters
+ * already live in NVS, but that is a single number: this is the timeline, which
+ * is what tells a one-off self-heal apart from a reboot loop. Written once the
+ * clock is real, so the record can be placed in time. */
+static void logBootRecord() {
+  if (!sd.ok()) return;
+  char date[12], hm[8];
+  if (!clockParts(date, sizeof(date), hm, sizeof(hm))) return;
+  char line[160];
+  snprintf(line, sizeof(line),
+           "{\"t\":\"%s %s\",\"v\":\"%s\",\"reason\":\"%s\",\"boot\":%lu,"
+           "\"faults\":%lu,\"heap\":%u,\"sd_hz\":%lu}",
+           date, hm, NOCT_VERSION, state.boot.reasonText,
+           (unsigned long)state.boot.bootCount,
+           (unsigned long)state.boot.faultCount,
+           (unsigned)(ESP.getFreeHeap() / 1024),
+           (unsigned long)sd.clockHz());
+  sd.enqueueAppend("/logs/boot.jsonl", line, NOCT_SD_DIARY_MAX);
+}
+
 /* Quiet hours, from our own NTP clock. `from > to` wraps past midnight
  * (23 -> 8). Unknown clock = never night: guessing would be worse than not
  * dimming. A recent button press suspends it so you can just use the thing. */
@@ -167,6 +216,7 @@ void setup() {
 
   pet.begin();
   histories.attach(&sd); /* graphs survive a reboot when the card is present */
+  histories.setOnCommit(logTelemetryRow); /* ...and the card keeps the archive */
   phrases.begin(&sd);
   llm.begin(kLlmEndpoints, kLlmCount, LLM_API_KEY, LLM_MODEL, LLM_MODEL_BIG);
   brain.begin(&pet, &llm, &phrases, &sd);
@@ -249,6 +299,14 @@ void loop() {
     Serial.printf("[NET] ip %s — OTA on :%d\n",
                   WiFi.localIP().toString().c_str(), NOCT_OTA_PORT);
   }
+  /* The boot record needs a real clock, so it waits for SNTP rather than being
+   * written in setup(). One attempt: if the clock never arrives, no record. */
+  static bool bootLogged = false;
+  if (!bootLogged && ntpInit && clockParts(nullptr, 0, nullptr, 0)) {
+    bootLogged = true;
+    logBootRecord();
+    sd.logDir("/logs"); /* the board is never near a card reader — say what it has */
+  }
   if (ntpInit) {
     struct tm tmNow;
     if (getLocalTime(&tmNow, 0))
@@ -258,6 +316,11 @@ void loop() {
 
   tcp.tick(now, wifi.connected(), state, graphs);
   coverClient.update(state.media.coverTok); /* refetch cover on track change */
+  /* Card first: a repeated track is one SD read instead of an 18 KB download,
+   * and it works the instant the scene appears. Both calls are loop-task only —
+   * the fetch task must never touch SPI. */
+  coverClient.serveFromCache(&sd);
+  coverClient.storeToCache(&sd);
 
   /* standalone fallback: when the PC is unreachable, pull weather/forest/
    * services from the always-on lite endpoint and feed the same
@@ -555,8 +618,11 @@ void loop() {
      * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
     static unsigned long lastFlush = 0;
     if (now - lastFlush > 500) {
-      sd.flush();
+      sd.flush(); /* bounded to NOCT_SD_FLUSH_MAX entries per call */
       lastFlush = now;
+      /* The card can go away at runtime — SdStore gives up on it after a run of
+       * failures, and the UI should say so rather than keep claiming a card. */
+      state.link.sdOk = sd.ok();
     }
 
     static unsigned long lastHeapLog = 0;

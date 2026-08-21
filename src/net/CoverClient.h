@@ -20,6 +20,16 @@ public:
   bool ready() const { return ready_; }
   const uint16_t *data() const { return buf_; }
 
+  /* SD-backed cache, LOOP TASK ONLY — the fetch task must never touch SPI.
+   * A cover is 18 KB over HTTP every time a track repeats; from the card it is
+   * one read, and it survives a reboot. serveFromCache() answers a pending
+   * token straight from disk (cancelling the download); storeToCache() files a
+   * freshly fetched image. Both are no-ops without a card. */
+  bool serveFromCache(class SdStore *sd);
+  void storeToCache(class SdStore *sd);
+  /* the token the UI is currently showing, 0 = nothing */
+  long haveToken() const { return haveTok_; }
+
 private:
   static void taskEntry(void *self);
   void taskLoop();
@@ -31,6 +41,7 @@ private:
   long haveTok_ = 0;
   volatile bool pending_ = false;
   volatile bool ready_ = false;
+  long cachedTok_ = 0;  /* token already written to the card, don't rewrite it */
   uint16_t buf_[W * H]; /* 18 KB RGB565 framebuffer for the cover */
   TaskHandle_t task_ = nullptr;
 };

@@ -32,6 +32,11 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   (alerts), ИСТОРИЯ (on-device graphs, long-press to swap **last hour ↔ last 24 h**;
   both survive a reboot when an SD card is present). Trend carets, reactive
   backgrounds that speed up under load and turn red on alerts.
+- **A real archive** — with a card in, every minute is appended to
+  `/logs/YYYY-MM-DD.csv`: ~43 KB a day, 16 MB a year against 7.4 GB of card. The
+  on-screen graphs reach back an hour and a day; the card reaches back as far as
+  you keep it. `/logs/boot.jsonl` records every restart with its reason, which
+  is what tells a one-off self-heal apart from a reboot loop.
 - **Deep customisation** — 12 themes **plus** an on-device colour editor
   (per-element R/G/B), 3 saved theme slots, animated/light backgrounds,
   **screen composition** (which scenes ride the ring) and **element composition**
@@ -121,8 +126,15 @@ render as tofu boxes.
   and the last `esp_reset_reason()` live there too, and show up on the СИСТЕМА
   screen — the watchdog reboots this device to heal it, and a silent heal is
   indistinguishable from a reboot loop without them.
-- SD layout: `/wolf/cache/*.jsonl` (phrase cache), `/wolf/memory.jsonl` (diary →
-  prompt memory), `/logs/hist.bin` (graph snapshot). Line files **rotate** at
-  their cap, keeping the newest half — an earlier cap simply stopped appending,
-  which froze the phrase cache on whatever it learned first. The card is
+- SD layout: `/wolf/cache/*.jsonl` (phrase cache, de-duplicated),
+  `/wolf/memory.jsonl` (dated diary → prompt memory), `/logs/hist.bin` (graph
+  snapshot), `/logs/YYYY-MM-DD.csv` (one telemetry row per minute),
+  `/logs/boot.jsonl` (one record per boot), `/covers/*.565` (cached album art).
+  Line files **rotate** at their cap, keeping the newest half. The card is
   optional — everything degrades without it.
+- The card's clock is **negotiated, not assumed**: 25 → 10 → 4 MHz, each rung
+  accepted only after a real write succeeds on a quiet bus. The card here mounts
+  at 25 MHz and sometimes still cannot write a byte, so neither "always fast" nor
+  "always slow" is right. All SD work runs on the render loop, so queued writes
+  drain one per flush tick — a 1.3 KB write costs 30-140 ms of *card* time, which
+  no bus speed removes.

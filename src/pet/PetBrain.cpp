@@ -1,5 +1,7 @@
 #include "pet/PetBrain.h"
 
+#include <time.h>
+
 #include "core/config.h"
 
 static const char *moodRu(int m) {
@@ -21,8 +23,19 @@ void PetBrain::begin(WolfPet *pet, LlmClient *llm, PhraseCache *cache,
 
 void PetBrain::diary(const char *ev) {
   if (!sd_ || !sd_->ok()) return;
-  String line = String("{\"age\":") + pet_->ageDays() + ",\"up\":" +
-                (millis() / 60000UL) + ",\"ev\":\"" + ev + "\"}";
+  /* Plain dated text, not JSON. The only consumer is an LLM prompt, and a
+   * model reads "2026-08-21 19:30 кормил" far better than a struct — it can
+   * say "утром" or "вчера" off the back of it. The old {"age":..,"up":..}
+   * form put raw braces in the context and told the wolf nothing it could
+   * actually use. Falls back to uptime when the clock has not synced yet. */
+  char stamp[24];
+  time_t t = time(nullptr);
+  struct tm tmv;
+  if (t >= 1700000000L && localtime_r(&t, &tmv))
+    strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M", &tmv);
+  else
+    snprintf(stamp, sizeof(stamp), "+%luм", millis() / 60000UL);
+  String line = String(stamp) + " " + ev;
   /* capped: the diary is append-only and only its tail is ever read back into
    * the prompt, so let it rotate instead of growing on the card forever */
   sd_->enqueueAppend("/wolf/memory.jsonl", line, NOCT_SD_DIARY_MAX);
@@ -81,13 +94,21 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
     c += st.weather.temp;
     c += " градусов. ";
   }
-  /* diary tail → continuity ("ты кормил меня недавно, опять?") */
+  /* diary tail → continuity ("ты кормил меня недавно, опять?"). Now that the
+   * entries are dated the model can place them in time, so it is worth giving
+   * it a few more of them, separated so they read as a list and not one run-on
+   * sentence. */
   if (sd_ && sd_->ok()) {
     String mem;
-    if (sd_->readLastLines("/wolf/memory.jsonl", 3, mem) && mem.length()) {
-      mem.replace("\n", " ");
-      c += "Недавно в твоём дневнике: ";
+    if (sd_->readLastLines("/wolf/memory.jsonl", 6, mem) && mem.length()) {
+      mem.replace("\r", "");
+      mem.replace("\n", "; ");
+      mem.trim();
+      while (mem.endsWith(";")) mem.remove(mem.length() - 1);
+      c += "Твой дневник (что было и когда): ";
       c += mem;
+      c += ". Сегодня ";
+      c += st.pcClock;
       c += ". ";
     }
   }
