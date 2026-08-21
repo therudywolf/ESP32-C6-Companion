@@ -103,7 +103,7 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   against a Yandex hub all fill it the same. A reading older than an hour dims
   the whole tile, because battery sensors go quiet and a stale number presented
   as current is the same lie "no signal" exists to prevent.
-- **A USB console.** `help`, `info`, `ls`, `cat`, `ach`, `say`, `feed`, `shot`,
+- **A USB console.** `help`, `info`, `ls`, `cat`, `ach`, `say`, `eat`, `shot`,
   `theme`, `bright`, `feed <json>`, `reboot` on the same serial port as the logs.
   `feed` pushes a raw payload through the real parser, so a producer for this
   schema can be developed against the board with no server in the middle. Most of a
