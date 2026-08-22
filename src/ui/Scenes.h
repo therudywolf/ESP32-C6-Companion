@@ -30,7 +30,8 @@ void drawForest(UiCtx &ui);
 void drawServices(UiCtx &ui);
 void drawEvents(UiCtx &ui);
 void drawHistory(UiCtx &ui);
-void drawHome(UiCtx &ui); /* ДОМ — the Zigbee climate dashboard */
+void drawHome(UiCtx &ui);  /* ДОМ — the Zigbee climate dashboard */
+void drawBoard(UiCtx &ui); /* ПЛАТА C6 — what the board knows about itself */
 void drawForza(UiCtx &ui);
 void drawSysInfo(UiCtx &ui); /* overlay via menu, not in the ring */
 void drawAchievements(UiCtx &ui); /* overlay via menu */

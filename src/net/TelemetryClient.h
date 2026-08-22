@@ -36,6 +36,13 @@ public:
    * many sensors, and how long since any of them last spoke. */
   void sendZbStatus(bool up, int channel, int joinLeft, int devices,
                     int lastHeard);
+  /* The board's own vitals. It watches a PC all day and had no way to say
+   * how IT was doing — die temperature, loop duty cycle, heap, uptime and
+   * the restart counters that turn a silent self-heal into a number. */
+  void sendBoard(float temp, float tempMax, int load, int fps, int heapFree,
+                 int heapMin, int heapLargest, unsigned long uptime,
+                 int cpuMhz, int rssi, unsigned long boots,
+                 unsigned long faults, const char *reason);
   /* Report the SD card's health upstream. The board is the only thing that can
    * see the card, and "the archive has a hole in it" is discovered months
    * later unless the failures are visible while they happen. */

@@ -272,6 +272,18 @@ struct AppState {
    * guess made once at room temperature. */
   float boardTemp = 0;
   float boardTempMax = 0;
+  /* The board's own vitals, for the ПЛАТА C6 screen and the panel. Measured
+   * rather than guessed: `boardLoad` is the share of each frame period the
+   * render loop actually spent working, which is the only "CPU load" an
+   * Arduino sketch can honestly report — there is no scheduler accounting to
+   * ask, and a busy-idle counter would cost more than it tells. */
+  int boardLoad = 0;      /* 0..100 %, share of the frame budget used */
+  int boardFps = 0;       /* frames actually rendered in the last second */
+  int heapFreeKb = 0;
+  int heapMinKb = 0;      /* lowest ever seen — the number that matters */
+  int heapLargestKb = 0;  /* biggest contiguous block: fragmentation shows here */
+  unsigned long uptimeSec = 0;
+  int cpuMhz = 0;
   bool weatherReceived = false;
   bool forzaLive = false; /* Forza telemetry within timeout window */
   bool alertActive = false;

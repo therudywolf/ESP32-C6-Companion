@@ -166,6 +166,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.17.0"
+#define NOCT_VERSION "1.18.0"
 
 #endif

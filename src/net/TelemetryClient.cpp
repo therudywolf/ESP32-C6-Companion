@@ -138,6 +138,19 @@ void TelemetryClient::sendZbSensor(const ZbSensor &z) {
   sendLine(b);
 }
 
+void TelemetryClient::sendBoard(float temp, float tempMax, int load, int fps,
+                                int heapFree, int heapMin, int heapLargest,
+                                unsigned long uptime, int cpuMhz, int rssi,
+                                unsigned long boots, unsigned long faults,
+                                const char *reason) {
+  if (!tcpConnected_) return;
+  char b[176];
+  snprintf(b, sizeof(b), "brd:%.1f,%.1f,%d,%d,%d,%d,%d,%lu,%d,%d,%lu,%lu,%s\n",
+           temp, tempMax, load, fps, heapFree, heapMin, heapLargest, uptime,
+           cpuMhz, rssi, boots, faults, reason ? reason : "?");
+  sendLine(b);
+}
+
 void TelemetryClient::sendZbStatus(bool up, int channel, int joinLeft,
                                    int devices, int lastHeard) {
   if (!tcpConnected_) return;
