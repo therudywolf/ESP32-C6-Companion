@@ -86,6 +86,12 @@ void fmtRate(char *out, size_t cap, int kbs);
 void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr,
                 int back = 8, int deadband = 2);
 
+/* Barometric direction marker: a triangle pointing the way the needle is
+ * moving, doubled when the change is a sharp one. `dir` is -1/0/+1. Drawn
+ * rather than typed because the font has no arrow glyphs. Returns the width
+ * consumed, so callers can place text after it without guessing. */
+int baroArrow(LGFX_Sprite &g, int x, int y, int dir, bool sharp, uint16_t c);
+
 /* Little wolf paw print (pad + 4 toe beans) centred at (cx,cy), ~8x10. */
 void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color);
 

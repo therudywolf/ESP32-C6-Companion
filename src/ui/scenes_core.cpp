@@ -3,6 +3,7 @@
 
 #include "core/config.h"
 #include "pet/wolf_sprites.h"
+#include "core/Barometer.h"
 #include "ui/Scenes.h"
 
 using namespace theme;
@@ -278,17 +279,42 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
     cx += cw + 7;
   }
 
-  /* freed bottom band: wolf age + device uptime (hidden in the action menu) */
+  /* Bottom band: what the weather is about to do, and how long we have been
+   * up. The forecast goes HERE rather than only on ДОМ because a barometric
+   * state lasts hours and changes a couple of times a week — you want to know
+   * it at a glance from the screen you actually sit in front of, not by
+   * navigating to the one screen that owns the sensor. A toast announces the
+   * change once; this is what the change left behind. */
   if (!actionMode && uiOn(UI_STRIPS)) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
-    char vb[64];
+    char vb[80];
     unsigned long upm = now / 60000UL;
-    /* ageDays() is uint32_t: %d was a format mismatch, and the widest case
-     * overran vb[48] by a few bytes. */
-    snprintf(vb, sizeof(vb), "возраст %lu дн     в сети %luч %02luм",
-             (unsigned long)ui.pet.ageDays(), upm / 60, upm % 60);
-    textAt(g, 10, 160, vb, DIM);
+
+    bool said = false;
+    if (ui.st.zbTrendOk) {
+      auto t = barometer::classify(ui.st.zbPress10Delta3h, 3);
+      if (t != barometer::TEND_STEADY && t != barometer::TEND_UNKNOWN) {
+        /* Amber only for the fast drop — the one worth turning your head for.
+         * Colouring every tendency would make the colour mean nothing. */
+        uint16_t c = barometer::headacheWatch(t) ? WARN : ORANGE_DIM;
+        int aw = baroArrow(g, 10, 160, barometer::direction(t),
+                           barometer::isSharp(t), c);
+        snprintf(vb, sizeof(vb), "%s", barometer::forecast(t));
+        textAt(g, 10 + aw, 160, vb, c);
+        said = true;
+      }
+    }
+    if (!said) {
+      /* ageDays() is uint32_t: %d was a format mismatch, and the widest case
+       * overran the buffer by a few bytes. */
+      snprintf(vb, sizeof(vb), "возраст %lu дн     в сети %luч %02luм",
+               (unsigned long)ui.pet.ageDays(), upm / 60, upm % 60);
+      textAt(g, 10, 160, vb, DIM);
+    } else {
+      snprintf(vb, sizeof(vb), "%luч %02luм", upm / 60, upm % 60);
+      textRight(g, NOCT_W - 10, 160, vb, DIM);
+    }
   }
 }
 

@@ -96,17 +96,25 @@ inline const char *forecastShort(Tendency t) {
   }
 }
 
-/* An arrow the eye reads before the words. */
-inline const char *arrow(Tendency t) {
+/* Direction as a number the caller can draw with: -1 falling, +1 rising,
+ * 0 steady. The u8g2 cyrillic subset has no arrow glyphs and the ASCII stand-in
+ * ("vv") read as a placeholder, so the arrow is drawn as a triangle the way
+ * trendArrow() does it — same shape the hardware screens already use. */
+inline int direction(Tendency t) {
   switch (t) {
-  case TEND_FALL_FAST: return "vv";
-  case TEND_FALL:      return "v";
-  case TEND_FALL_SLOW: return "v";
-  case TEND_RISE_SLOW: return "^";
-  case TEND_RISE:      return "^";
-  case TEND_RISE_FAST: return "^^";
-  default:             return "=";
+  case TEND_FALL_FAST:
+  case TEND_FALL:
+  case TEND_FALL_SLOW: return -1;
+  case TEND_RISE_SLOW:
+  case TEND_RISE:
+  case TEND_RISE_FAST: return 1;
+  default:             return 0;
   }
+}
+
+/* True for the two extreme bands, where a doubled marker is worth the pixels. */
+inline bool isSharp(Tendency t) {
+  return t == TEND_FALL_FAST || t == TEND_RISE_FAST;
 }
 
 /* True while the drop is steep enough to be the kind weather-sensitive people

@@ -1545,11 +1545,32 @@ void SceneManager::draw(UiCtx &ui) {
 
   /* toast */
   if ((long)(toastUntil_ - ui.now) > 0) {
-    g.setFont(&F_TEXT);
-    int tw = g.textWidth(toast_.c_str()) + 16;
+    /* A toast exists to interrupt. The old one was F_TEXT in an 18 px strip —
+     * legible if you were already reading the screen, invisible from across
+     * the room, which is where you are when the room gets cold. F_MED is the
+     * font the scenes use for their primary text, and the box is sized from
+     * the wrapped text rather than assumed, so a long line gets two rows
+     * instead of running off both edges. */
+    g.setFont(&F_MED);
+    g.setTextSize(1);
+    const int pad = 12, lineH = 22, maxW = NOCT_W - 40;
+    /* Measure first: one line if it fits, two if it does not. */
+    int oneW = g.textWidth(toast_.c_str());
+    bool two = oneW > maxW;
+    int tw = two ? maxW + pad * 2 : oneW + pad * 2;
+    int th = (two ? 2 * lineH : lineH) + 12;
     int tx = (NOCT_W - tw) / 2;
-    g.fillRoundRect(tx, 130, tw, 18, 4, ORANGE);
-    textAt(g, tx + 8, 134, toast_.c_str(), BG);
+    int ty = (NOCT_H - th) / 2; /* centred: an interruption belongs in the eye's
+                                 * path, not tucked against the footer */
+    /* Shadow, then fill, then a rim — the box has to survive landing on top of
+     * a bright sparkline or an album cover. */
+    g.fillRoundRect(tx + 2, ty + 2, tw, th, 6, BG);
+    g.fillRoundRect(tx, ty, tw, th, 6, ORANGE);
+    g.drawRoundRect(tx, ty, tw, th, 6, TEXT);
+    if (two)
+      textWrap(g, toast_.c_str(), tx + pad, ty + 6, maxW, lineH, 2, BG);
+    else
+      textAt(g, tx + pad, ty + 6, toast_.c_str(), BG);
   }
 
   /* scene-change wipe (180 ms), directional: forward reveals L→R, back R→L */
