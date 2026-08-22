@@ -203,6 +203,7 @@ struct LinkState {
   bool llmOk = false;      /* last LLM call succeeded */
   bool liteActive = false; /* PC down but the fallback endpoint is feeding data */
   bool nightActive = false; /* quiet hours in force right now */
+  bool zbUp = false;        /* Zigbee coordinator formed a network */
 };
 
 /** Why the board last restarted, read once at boot from esp_reset_reason().
@@ -225,7 +226,18 @@ struct AppState {
   NotifData notif;
   ProcessData process;
   ClaudeData claude;
+  /* What the Р”РћРњ screen and the РџРћР“РћР”Рђ tile actually draw: the board's own
+   * paired sensors first, then any the server relays. Composed once per tick
+   * by ZbHub from zbRemote below вЂ” never written directly. */
   ZigbeeData zb;
+  /* Sensors from the payload's `zb` block, i.e. someone ELSE's coordinator
+   * (Zigbee2MQTT on the server, a Yandex-hub poller). Kept separate because
+   * the hub rebuilds st.zb every frame, and merging beats one silently
+   * clobbering the other вЂ” which is exactly what happened the first time. */
+  ZigbeeData zbRemote;
+  /* Seconds left in the Zigbee pairing window, 0 = closed. The ДОМ screen
+   * counts it down so "press the button on the sensor" has a deadline. */
+  int zbJoinSecs = 0;
   EventsData events;
   ForestData forest;
   ServiceData services;

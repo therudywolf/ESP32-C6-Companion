@@ -482,6 +482,51 @@ static void consoleExec(String line) {
       }
       Serial.println("  zb join | zb reset");
     }
+  } else if (cmd == "dump") {
+    /* Base64 a file out over the console. The board takes screenshots to the
+     * card, and until now the only way to LOOK at one was to power down, pull
+     * the card and find a reader - so nobody ever did, and "what does the
+     * screen actually look like" stayed unanswerable. 110 KB at 115200 baud is
+     * about ten seconds. */
+    if (!sd.ok() || !arg.length()) {
+      Serial.println("usage: dump /shots/001.bmp  (needs a card)");
+    } else {
+      sd.syncBusNow();
+      File f = SD.open(arg.c_str(), FILE_READ);
+      if (!f) {
+        Serial.printf("dump: %s not found\r\n", arg.c_str());
+      } else {
+        static const char *b64 =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        Serial.printf("---BEGIN %s %u---\r\n", arg.c_str(), (unsigned)f.size());
+        uint8_t in[3];
+        char out[5];
+        out[4] = 0;
+        int col = 0;
+        while (true) {
+          int n = f.read(in, 3);
+          if (n <= 0) break;
+          uint32_t v = (uint32_t)in[0] << 16;
+          if (n > 1) v |= (uint32_t)in[1] << 8;
+          if (n > 2) v |= in[2];
+          out[0] = b64[(v >> 18) & 63];
+          out[1] = b64[(v >> 12) & 63];
+          out[2] = n > 1 ? b64[(v >> 6) & 63] : '=';
+          out[3] = n > 2 ? b64[v & 63] : '=';
+          Serial.print(out);
+          /* Wrapped, so a serial monitor stays usable and no line grows
+           * unbounded on the receiving side. */
+          if ((col += 4) >= 76) {
+            col = 0;
+            Serial.println();
+          }
+          /* The console runs on the render loop, which the watchdog watches. */
+          if ((f.position() & 0xFFF) == 0) esp_task_wdt_reset();
+        }
+        f.close();
+        Serial.printf("\r\n---END %s---\r\n", arg.c_str());
+      }
+    }
   } else if (cmd == "shot") {
     Serial.println(saveScreenshot() ? "saved" : "failed");
   } else if (cmd == "phy") {
@@ -992,12 +1037,24 @@ void loop() {
     brain.notice("к тебе привязали новый датчик климата - обнюхай и одобри");
   }
 
-  /* Local sensors go upstream too, so the server (and через него навык Алисы)
-   * sees what the coordinator hears. One line per sensor per minute. */
+  /* Local sensors go upstream too, so the server — and through it a Yandex
+   * skill — sees what the coordinator hears. One line per sensor per minute. */
   static unsigned long lastZbReport = 0;
   if (tcp.connected() && state.zb.count > 0 && now - lastZbReport > 60000UL) {
     lastZbReport = now;
     for (int i = 0; i < state.zb.count; i++) tcp.sendZbSensor(state.zb.list[i]);
+  }
+
+  /* The card's health, same cadence. Cheap, and it turns "why is the archive
+   * short" into a number you can watch climb instead of a discovery made
+   * months later. */
+  sd.refreshUsage(now); /* self-rate-limited; fills in what the mount missed */
+  static unsigned long lastSdReport = 0;
+  if (tcp.connected() && now - lastSdReport > 60000UL) {
+    lastSdReport = now;
+    tcp.sendSdStats(sd.ok(), sd.clockHz(), sd.usedMB(), sd.totalMB(),
+                    sd.writes(), sd.slowOps(), sd.failTotal(), sd.queueDepth(),
+                    sd.lastOpMs());
   }
 
   /* report wolf state upstream every 2 s so the companion app can show it */
@@ -1172,7 +1229,9 @@ void loop() {
     zbStarted = true;
     zb.begin(&sd, &cardCfg);
   }
-  zb.tick(now, state);
+  zb.tick(now, state, graphs);
+  state.link.zbUp = zb.running();
+  state.zbJoinSecs = zb.joinSecsLeft(now);
 
   /* input */
   input->setRepeatEnabled(sceneMgr.wantsButtonRepeat());

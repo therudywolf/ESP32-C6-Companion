@@ -31,6 +31,12 @@ public:
    * so the server side (and through it the Yandex skill) learns the readings
    * from us - the reverse of the zb payload block, one line per sensor. */
   void sendZbSensor(const ZbSensor &z);
+  /* Report the SD card's health upstream. The board is the only thing that can
+   * see the card, and "the archive has a hole in it" is discovered months
+   * later unless the failures are visible while they happen. */
+  void sendSdStats(bool ok, uint32_t clockHz, uint32_t usedMB, uint32_t totalMB,
+                   uint32_t writes, uint32_t slow, uint32_t fails, int queue,
+                   uint32_t lastMs);
   /* feed an externally-fetched payload (the lite fallback) through
    * the same parser, so weather/forest/services scenes work with the PC off */
   void feedExternal(const char *json, AppState &state, Graphs &graphs) {

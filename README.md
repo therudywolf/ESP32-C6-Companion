@@ -27,10 +27,11 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   a session-summary card, and a green/red LED blip on overtake/loss.
   *(Forza's telemetry is ego-only — it carries no opponent gap, so place-changes
   and lap deltas are the faithful substitute for "time to next car".)*
-- **16 telemetry scenes** + Forza: ЛОГОВО, ОБЗОР, CPU, GPU, ПАМЯТЬ, ДИСКИ,
+- **17 telemetry scenes** + Forza: ЛОГОВО, ОБЗОР, CPU, GPU, ПАМЯТЬ, ДИСКИ,
   КУЛЕРЫ, ПЛАТА, СЕТЬ, МЕДИА, ПОГОДА, CLAUDE, ЛЕС (nodes), СЕРВИСЫ, СОБЫТИЯ
   (alerts), ИСТОРИЯ (on-device graphs; long-press cycles **last hour → last
-  24 h → the card's archive by day**, and the first two survive a reboot).
+  24 h → the card's archive by day**, and the first two survive a reboot),
+  **ДОМ** (the climate dashboard — see below).
   Trend carets, reactive
   backgrounds that speed up under load and turn red on alerts.
 - **A real archive** — with a card in, every minute is appended to
@@ -101,10 +102,20 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   receives nothing), and an RF-calibration quirk where the boot after a Zigbee
   session cannot associate (cured by an automatic sub-second erase-and-restart).
   Pair a sensor via **Меню → Система → Подключить датчик** or `zb join`;
-  temperature, humidity and Aqara's proprietary battery TLV are parsed, the
-  readings show on the ПОГОДА tile ("за окном" and "дома" side by side) and go
-  upstream as `zbs:` lines — the server, and through it a Yandex Smart Home
-  skill, hears what the coordinator hears. The measured cost: +380 KB flash and
+  temperature, humidity and Aqara's proprietary battery TLV are parsed, and the
+  readings go upstream as `zbs:` lines — the server, and through it a Yandex
+  Smart Home skill, hears what the coordinator hears. The network calls itself
+  **ForestHome**, which is also what the first sensor is named until
+  `nocturne.ini` says otherwise.
+- **ДОМ, the climate screen.** The ПОГОДА tile answers "and it's 23 inside";
+  this answers what the house has been *doing*. One sensor gets the hero
+  layout — big temperature, humidity with a comfort verdict, a battery bar, and
+  a sparkline that reaches back most of a day (32 samples of a device that
+  speaks every 20–60 minutes). Two to four get a column each. **Zero** gets the
+  pairing instructions and a live countdown of the join window, because a
+  screen that is simply blank until you guess the right menu item teaches
+  nothing. Locally paired sensors and ones relayed by a server are merged into
+  one list, deduplicated by name — neither source silently wins. The measured cost: +380 KB flash and
   the OTA slots (**updates are by cable now**) plus ~55 KB RAM, guarded so a
   TLS fetch skips rather than OOMs. A reading older than an hour dims the whole
   tile, because battery sensors go quiet and a stale number presented as current
@@ -112,7 +123,9 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   without the stack and takes its `zb` block from a server instead.)
 - **A USB console.** `help`, `info`, `ls`, `cat`, `ach`, `say`, `eat`, `shot`,
   `theme`, `bright`, `feed <json>`, `zb [join|reset]`, `mem`, `probe`, `phy`,
-  `reboot` on the same serial port as the logs.
+  `dump <path>`, `reboot` on the same serial port as the logs. `dump` base64s a
+  card file out — which is how the screenshots in this README were taken, with
+  no card reader and no camera: `shot` then `dump /shots/001.bmp`.
   `feed` pushes a raw payload through the real parser, so a producer for this
   schema can be developed against the board with no server in the middle. Most of a
   debugging session is asking the board questions it could simply answer.

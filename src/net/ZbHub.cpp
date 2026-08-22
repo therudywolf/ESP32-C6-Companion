@@ -1,5 +1,6 @@
 #include "net/ZbHub.h"
 
+#include "core/Graphs.h"
 #include "core/config.h"
 #include "storage/CardConfig.h"
 #include "storage/SdStore.h"
@@ -9,7 +10,10 @@
 /* No Zigbee in this build: everything degrades to nothing, exactly like the SD
  * card does when absent. The `zb` block still works — a server can fill it. */
 bool ZbHub::begin(SdStore *, const CardConfig *) { return false; }
-void ZbHub::tick(unsigned long, AppState &) {}
+void ZbHub::tick(unsigned long, AppState &st, Graphs &) {
+  /* No local hub in this build: whatever the server relayed IS the list. */
+  st.zb = st.zbRemote;
+}
 void ZbHub::permitJoin(int) {}
 int ZbHub::deviceCount() const { return 0; }
 void ZbHub::factoryReset() {}
@@ -97,6 +101,12 @@ public:
                   .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
                   .app_device_id = ESP_ZB_HA_TEMPERATURE_SENSOR_DEVICE_ID,
                   .app_device_version = 0};
+
+    /* Name the hub on the network. Has to come after the cluster list exists —
+     * the setter writes into the basic cluster's attributes — so the board is
+     * "Nocturne ForestHome" to anything that interviews it, not an anonymous
+     * coordinator. */
+    setManufacturerAndModel(NOCT_ZB_VENDOR, NOCT_ZB_NET_NAME);
   }
 
   /* Every attribute report and read response lands here. */
@@ -275,7 +285,7 @@ void ZbHub::factoryReset() {
   Zigbee.factoryReset(true); /* reboots */
 }
 
-void ZbHub::tick(unsigned long now, AppState &st) {
+void ZbHub::tick(unsigned long now, AppState &st, Graphs &g) {
   if (!running_) return;
 
   int n = 0;
@@ -286,12 +296,16 @@ void ZbHub::tick(unsigned long now, AppState &st) {
     /* Names come from the card so a sensor can be "Спальня" rather than a
      * short address nobody can read. */
     const char *nm = cfg_ ? cfg_->zbName(n) : "";
-    if (nm && *nm) snprintf(out.name, sizeof(out.name), "%s", nm);
-    else {
-      /* "датчик " is 13 B of UTF-8 in a 17 B field; n is 0..3 here but the
-       * compiler assumes the whole int range, so bound it explicitly. */
+    if (nm && *nm) {
+      snprintf(out.name, sizeof(out.name), "%s", nm);
+    } else if (n == 0) {
+      /* The first sensor IS the house, so it carries the network's name. */
+      snprintf(out.name, sizeof(out.name), "%s", NOCT_ZB_NET_NAME);
+    } else {
+      /* n is 1..3 here, but the compiler assumes the whole int range and warns
+       * about the field width, so bound it explicitly. */
       char idx[2] = {(char)('1' + (n & 3)), 0};
-      snprintf(out.name, sizeof(out.name), "датчик %s", idx);
+      snprintf(out.name, sizeof(out.name), "%s %s", NOCT_ZB_NET_NAME, idx);
     }
     out.temp10 = s.temp10;
     out.humidity = s.humidity;
@@ -302,7 +316,36 @@ void ZbHub::tick(unsigned long now, AppState &st) {
     out.ageSec = newest ? (int)((now - newest) / 1000UL) : -1;
     n++;
   }
+  /* Then top up from the server's own coordinator, skipping anything we
+   * already hear ourselves. A sensor both relayed AND paired locally is one
+   * sensor; listing it twice would be worse than either source alone. */
+  for (int i = 0; i < st.zbRemote.count && n < ZigbeeData::kMax; i++) {
+    const ZbSensor &r = st.zbRemote.list[i];
+    bool dup = false;
+    for (int j = 0; j < n; j++)
+      if (strncmp(st.zb.list[j].name, r.name, sizeof(r.name)) == 0) dup = true;
+    if (!dup) st.zb.list[n++] = r;
+  }
   st.zb.count = n;
+
+  /* Sparkline history for whichever sensor sits first, LOCAL OR RELAYED. This
+   * used to hang off the local-report flag, which meant a server-fed sensor
+   * got a screen but never a graph. Sampling on CHANGE (not on a timer) suits
+   * a battery device that speaks every 20-60 minutes: 32 samples then reach
+   * back most of a day, which is the whole reason this screen exists rather
+   * than just the ПОГОДА tile. */
+  if (n > 0) {
+    const ZbSensor &z0 = st.zb.list[0];
+    if (z0.temp10 != -32768 && z0.temp10 != lastTemp_) {
+      lastTemp_ = z0.temp10;
+      g.zbTemp.push(z0.temp10);
+    }
+    if (z0.humidity >= 0 && z0.humidity != lastHum_) {
+      lastHum_ = z0.humidity;
+      g.zbHum.push(z0.humidity);
+    }
+  }
+
   if (n > knownCount_) {
     knownCount_ = n;
     newSensor_ = true; /* consumed by main: toast + wolf */

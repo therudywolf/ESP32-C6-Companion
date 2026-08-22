@@ -103,6 +103,12 @@
  * Endpoint 1 is the conventional first application endpoint. */
 #define NOCT_ZB_ENDPOINT 1
 #define NOCT_ZB_JOIN_SEC 180
+/* What this hub calls itself. Goes three places: the Basic cluster's
+ * ModelIdentifier (so the board is recognisable from any other Zigbee tool),
+ * the default name of the first paired sensor, and the ДОМ screen's header.
+ * nocturne.ini [zigbee] name1..name4 override the per-sensor names. */
+#define NOCT_ZB_NET_NAME "ForestHome"
+#define NOCT_ZB_VENDOR "Nocturne"
 /* 802.15.4 channel for a NEW network formation. 25 = 2.475 GHz, above WiFi
  * channel 11 - measured on this board, parking Zigbee on top of the WiFi
  * frequency starved WiFi RX to zero payloads while TCP stayed "connected". */
@@ -160,6 +166,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.14.0"
+#define NOCT_VERSION "1.15.0"
 
 #endif

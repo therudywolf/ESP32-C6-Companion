@@ -33,6 +33,11 @@ struct RollingGraph {
 
 struct Graphs {
   RollingGraph cpuLoad, gpuLoad, cpuTemp, gpuTemp, netDown, netUp, ramUsed;
+  /* Indoor climate from the Zigbee hub. Not fed by onPayload() — a battery
+   * sensor reports every half hour, so these are pushed when a reading
+   * actually arrives, and 32 samples then span most of a day. Temperature is
+   * stored x10 so half-degree moves survive; humidity is whole percent. */
+  RollingGraph zbTemp, zbHum;
   void onPayload(const struct HardwareData &hw);
 };
 

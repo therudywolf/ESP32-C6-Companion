@@ -24,6 +24,10 @@ enum SceneId {
   SCENE_SERVICES,
   SCENE_EVENTS,
   SCENE_HISTORY,
+  /* ДОМ sits last in the ring, right before FORZA. Appending here rather than
+   * inserting mid-enum keeps every existing scene index — and therefore every
+   * saved scnMask bit and the server's screen:N — exactly where it was. */
+  SCENE_HOME,
   SCENE_FORZA,
   SCENE_COUNT
 };
@@ -38,6 +42,7 @@ inline int sceneFromServerName(const char *name) {
       {"GPU", SCENE_GPU},     {"RAM", SCENE_RAM},
       {"DISKS", SCENE_DISKS}, {"MEDIA", SCENE_MEDIA},
       {"FANS", SCENE_FANS},   {"MOTHERBOARD", SCENE_MB},
+      {"HOME", SCENE_HOME},
   };
   for (auto &m : map)
     if (strcmp(name, m.n) == 0) return m.s;

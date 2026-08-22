@@ -23,6 +23,25 @@ public:
   bool begin(); /* call BEFORE display init — the bus must be quiet */
   bool ok() const { return ok_; }
   uint32_t clockHz() const { return clockHz_; } /* what the card actually took */
+  /* Health counters for the web panel and SYSINFO. A card that is "present"
+   * but has quietly failed forty writes is worth knowing about BEFORE the
+   * archive turns out to have a hole in it. */
+  uint32_t usedMB() const { return usedMB_; }
+  uint32_t totalMB() const { return totalMB_; }
+  uint32_t writes() const { return writes_; }
+  uint32_t slowOps() const { return slowOps_; }
+  uint32_t failTotal() const { return failTotal_; }
+  int failStreak() const { return failStreak_; }
+  int queueDepth() const {
+    int d = qTail_ - qHead_;
+    return d < 0 ? d + kQueueMax : d;
+  }
+  uint32_t lastOpMs() const { return lastOpMs_; }
+  /* Re-read the card's size/usage. f_getfree is flaky right after a mount and
+   * sometimes answers 0 — which is why one read at boot left the panel showing
+   * "0 / 0 MB" on a perfectly good 7.4 GB card. Also genuinely useful later:
+   * usage GROWS as the archive fills. Rate-limited internally. */
+  void refreshUsage(unsigned long now);
 
   /* Hook that must leave SPI2 idle before the card is selected. main() wires
    * this to Display::syncBus(); without it the LCD's in-flight DMA collides
@@ -83,6 +102,9 @@ private:
   bool ok_ = false;
   uint32_t clockHz_ = 0;
   int failStreak_ = 0;
+  uint32_t usedMB_ = 0, totalMB_ = 0;
+  uint32_t writes_ = 0, slowOps_ = 0, failTotal_ = 0, lastOpMs_ = 0;
+  unsigned long lastUsage_ = 0;
 };
 
 #endif

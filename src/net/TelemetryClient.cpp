@@ -133,6 +133,19 @@ void TelemetryClient::sendZbSensor(const ZbSensor &z) {
   sendLine(b);
 }
 
+void TelemetryClient::sendSdStats(bool ok, uint32_t clockHz, uint32_t usedMB,
+                                  uint32_t totalMB, uint32_t writes,
+                                  uint32_t slow, uint32_t fails, int queue,
+                                  uint32_t lastMs) {
+  if (!tcpConnected_) return;
+  char b[112];
+  snprintf(b, sizeof(b), "sd:%d,%lu,%lu,%lu,%lu,%lu,%lu,%d,%lu\n", ok ? 1 : 0,
+           (unsigned long)clockHz, (unsigned long)usedMB,
+           (unsigned long)totalMB, (unsigned long)writes, (unsigned long)slow,
+           (unsigned long)fails, queue, (unsigned long)lastMs);
+  sendLine(b);
+}
+
 bool TelemetryClient::signalLost(unsigned long now) const {
   if (!tcpConnected_) return true;
   if (!firstData_) return (now - connectTime_) > NOCT_SIGNAL_GRACE_MS;
@@ -349,11 +362,12 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
    * has nothing, which is different and worth showing differently. */
   if (doc["zb"].is<JsonObject>()) {
     JsonObject z = doc["zb"];
-    state.zb.count = z["n"] | 0;
-    if (state.zb.count > ZigbeeData::kMax) state.zb.count = ZigbeeData::kMax;
+    state.zbRemote.count = z["n"] | 0;
+    if (state.zbRemote.count > ZigbeeData::kMax)
+      state.zbRemote.count = ZigbeeData::kMax;
     JsonArray list = z["list"];
     for (int i = 0; i < ZigbeeData::kMax; i++) {
-      ZbSensor &e = state.zb.list[i];
+      ZbSensor &e = state.zbRemote.list[i];
       if (i < (int)list.size()) {
         copyStr(e.name, sizeof(e.name), list[i]["name"] | "");
         e.temp10 = list[i]["t"] | -32768;
