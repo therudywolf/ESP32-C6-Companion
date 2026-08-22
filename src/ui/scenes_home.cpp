@@ -187,22 +187,26 @@ void drawHome(UiCtx &ui) {
     snprintf(v, sizeof(v), "%d%%", z.humidity);
     textAt(g, hx, 38, v, hc);
     g.setFont(&F_TEXT);
-    textAt(g, hx, 72, "влажность", DIM);
+    /* F_HUGE's ink reaches y72, so the label sat inside the "%" glyph. */
+    textAt(g, hx, 78, "влажность", DIM);
     /* 30–60% is the band everyone agrees on; outside it, say which way. */
     const char *verdict = z.humidity < 30   ? "сухо"
                           : z.humidity > 60 ? "сыро"
                                             : "норма";
     uint16_t vc = (z.humidity < 30 || z.humidity > 60) ? WARN : GOOD;
-    textRight(g, NOCT_W - 8, 72, verdict, stale ? DIM : vc);
+    textRight(g, NOCT_W - 8, 78, verdict, stale ? DIM : vc);
   }
 
   /* The WSDCGQ11LM has a barometer; the cheaper models do not, so this line
    * appears only when there is a reading behind it. mmHg, because that is the
    * unit a Russian forecast quotes. */
   if (z.pressure > 0) {
+    /* Below the temperature, not inside it: the hero number is F_HUGE at
+     * size 2 and its ink runs to about y104, so y96 drew the pressure straight
+     * through the digits. */
     g.setFont(&F_TEXT);
     snprintf(v, sizeof(v), "%d мм рт.ст.", (z.pressure * 3) / 4);
-    textAt(g, 8, 96, v, DIM);
+    textAt(g, 8, 108, v, DIM);
   }
 
   if (z.battery >= 0) {
