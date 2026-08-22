@@ -255,6 +255,14 @@ struct AppState {
   /* Seconds left in the Zigbee pairing window, 0 = closed. The ДОМ screen
    * counts it down so "press the button on the sensor" has a deadline. */
   int zbJoinSecs = 0;
+  /* The PC has been silent long enough that its numbers are no longer worth
+   * showing, and no fallback is covering. Distinct from link.dataDead only in
+   * that it also accounts for the lite endpoint: when THAT is feeding, the
+   * data is real and every scene stays useful. */
+  bool pcOffline = false;
+  /* Seconds since the last payload, -1 = none this session. What a frozen
+   * screen needs beside it to stop being a lie. */
+  int payloadAgeSec = -1;
   EventsData events;
   ForestData forest;
   ServiceData services;

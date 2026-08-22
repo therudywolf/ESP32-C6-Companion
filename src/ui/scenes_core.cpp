@@ -58,12 +58,31 @@ void noSignal(UiCtx &ui) {
   textCenter(g, NOCT_W / 2, 70, "НЕТ СИГНАЛА", blink ? CRIT : ORANGE_DIM);
   g.setTextSize(1);
   g.setFont(&F_TEXT);
+  char buf[96];
   if (!ui.st.link.wifiConnected) {
     textCenter(g, NOCT_W / 2, 95, "ищу WiFi...", DIM);
   } else {
-    char buf[96];
-    snprintf(buf, sizeof(buf), "WiFi: %s — сервер молчит", ui.st.link.ssid);
+    snprintf(buf, sizeof(buf), "WiFi: %s - сервер молчит", ui.st.link.ssid);
     textCenter(g, NOCT_W / 2, 95, buf, DIM);
+  }
+  /* How long the numbers behind this screen have been frozen. A blank that
+   * does not say "since when" leaves the owner unable to tell a reboot from a
+   * PC that died on Tuesday. */
+  if (ui.st.payloadAgeSec >= 0) {
+    int a = ui.st.payloadAgeSec;
+    if (a < 3600) snprintf(buf, sizeof(buf), "последние данные %d мин назад", a / 60);
+    else if (a < 86400) snprintf(buf, sizeof(buf), "последние данные %d ч назад", a / 3600);
+    else snprintf(buf, sizeof(buf), "последние данные %d дн назад", a / 86400);
+    textCenter(g, NOCT_W / 2, 114, buf, DIM);
+  }
+  /* And where there IS still something to look at. The board keeps a wolf, a
+   * climate sensor, its own vitals and the card archive with the PC dark; a
+   * screen that only says "no" teaches nothing about that. */
+  if (ui.st.pcOffline) {
+    g.setFont(&F_SMALL);
+    textCenter(g, NOCT_W / 2, 136,
+               "работают: ЛОГОВО · ДОМ · ПЛАТА C6 · ИСТОРИЯ", ORANGE_DIM);
+    g.setFont(&F_TEXT);
   }
 }
 

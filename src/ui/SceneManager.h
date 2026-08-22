@@ -88,7 +88,8 @@ private:
   void drawGame(UiCtx &ui);      /* the one-button runner */
   void gameReset();
   /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
-  int nextVisibleScene(int from, uint32_t mask, bool allowDen) const;
+  int nextVisibleScene(int from, uint32_t mask, bool allowDen,
+                       bool pcOffline = false) const;
   void menuAction(UiCtx &ui, int itemId);
   int denActionSel(UiCtx &ui) const;
   bool alertActive(UiCtx &ui) const;

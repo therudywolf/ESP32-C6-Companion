@@ -115,6 +115,14 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   **requests**, not settings: an Aqara sleeps between check-ins and Xiaomi
   firmware is known to ignore configure-reporting, and a button that quietly
   does nothing is worse than one that says what it can promise.
+- **Useful with the PC switched off.** The board is a companion, not a
+  terminal: with the server dark it still has a wolf, a paired climate sensor,
+  its own vitals and an archive on the card. The nav ring now **skips** the
+  screens that need the PC instead of walking you through fourteen identical
+  blanks, and the ones you can still reach say when the numbers behind them
+  froze — "последние данные 3 ч назад" — plus where there is something live to
+  look at. A fallback endpoint feeding real data counts as *not* offline, so
+  nothing is hidden while it covers.
 - **ПЛАТА C6 — the board's own screen.** Die temperature with its 32-second
   trend and the peak since boot, heap free against the lowest ever seen and the
   largest contiguous block, the render loop's duty cycle with the frame rate

@@ -388,7 +388,9 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   switch (ev) {
   case EV_SHORT: {
     /* FORZA is an app, not a ring member: cycle the enabled ring scenes */
-    gotoScene(nextVisibleScene(scene_, ui.st.settings.sceneMask, true), ui);
+    gotoScene(nextVisibleScene(scene_, ui.st.settings.sceneMask, true,
+                               ui.st.pcOffline),
+              ui);
     break;
   }
   case EV_DOUBLE:
@@ -1039,15 +1041,20 @@ void SceneManager::drawGame(UiCtx &ui) {
   }
 }
 
-int SceneManager::nextVisibleScene(int from, uint32_t mask, bool allowDen) const {
+int SceneManager::nextVisibleScene(int from, uint32_t mask, bool allowDen,
+                                   bool pcOffline) const {
   for (int k = 1; k <= SCENE_FORZA; k++) {
     int n = from + k;
-    while (n >= SCENE_FORZA) n -= SCENE_FORZA; /* wrap inside the ring 0..15 */
+    while (n >= SCENE_FORZA) n -= SCENE_FORZA; /* wrap inside the ring */
     if (n == SCENE_DEN) {
       if (allowDen) return n;
       continue;
     }
-    if (mask & (1u << n)) return n;
+    if (!(mask & (1u << n))) continue;
+    /* With the PC dark, walking past a dozen identical blanks is not
+     * navigation. Skip them; everything autonomous stays in the ring. */
+    if (pcOffline && sceneNeedsPc(n)) continue;
+    return n;
   }
   return SCENE_DEN; /* everything off → fall back home */
 }
@@ -1356,7 +1363,8 @@ void SceneManager::draw(UiCtx &ui) {
       !denActionMode_ && ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
-    gotoScene(nextVisibleScene(scene_, s.sceneMask, false), ui);
+    gotoScene(nextVisibleScene(scene_, s.sceneMask, false, ui.st.pcOffline),
+              ui);
   }
 
   /* screensaver: after the dim timeout, dim a little and show the ambient
