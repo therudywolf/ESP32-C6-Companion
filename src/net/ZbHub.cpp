@@ -18,6 +18,10 @@ void ZbHub::restore() {}
 
 #else
 
+#include <Preferences.h>
+#include <esp_coexist.h>
+#include <esp_task_wdt.h>
+
 #include "Zigbee.h"
 
 namespace {
@@ -126,6 +130,43 @@ public:
         s->humAt = millis();
         gDirty = true;
       }
+    } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_BASIC &&
+               attribute->id == 0xFF01 && attribute->data.value &&
+               (attribute->data.type == ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING ||
+                attribute->data.type == ESP_ZB_ZCL_ATTR_TYPE_OCTET_STRING)) {
+      /* Aqara/Xiaomi: battery does NOT come via PowerConfig. It rides in a
+       * proprietary TLV blob on the basic cluster, attr 0xFF01: a length-
+       * prefixed string of [tag u8][zcl-type u8][payload] records. Battery is
+       * tag 0x01, type 0x21 (u16 LE), in millivolts. */
+      const uint8_t *p = (const uint8_t *)attribute->data.value;
+      uint8_t blen = p[0];
+      const uint8_t *end = p + 1 + blen;
+      p += 1;
+      while (p + 2 <= end) {
+        uint8_t tag = p[0], type = p[1];
+        p += 2;
+        int tl;
+        switch (type) { /* only the sizes Xiaomi actually uses */
+        case 0x10: case 0x20: case 0x28: tl = 1; break;
+        case 0x21: case 0x29: tl = 2; break;
+        case 0x23: case 0x2B: case 0x39: tl = 4; break;
+        case 0x24: tl = 5; break;
+        case 0x25: tl = 6; break;
+        default: tl = -1; break;
+        }
+        if (tl < 0 || p + tl > end) break; /* unknown type: stop, don't guess */
+        if (tag == 0x01 && type == 0x21) {
+          uint16_t mv = (uint16_t)(p[0] | (p[1] << 8));
+          /* CR2032 discharge curve, the mapping Zigbee2MQTT settled on:
+           * ~3.0 V fresh, ~2.7 V dead. Linear between is honest enough. */
+          int pct = ((int)mv - 2700) * 100 / 300;
+          if (pct < 0) pct = 0;
+          if (pct > 100) pct = 100;
+          s->battery = pct;
+          gDirty = true;
+        }
+        p += tl;
+      }
     } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_POWER_CONFIG &&
                attribute->data.value) {
       /* Battery percentage is reported in HALF percent, which trips everyone
@@ -168,16 +209,46 @@ bool ZbHub::begin(SdStore *sd, const CardConfig *cfg) {
 
   gSink = new SensorSink(NOCT_ZB_ENDPOINT);
   Zigbee.addEndpoint(gSink);
+  /* Form the network on 802.15.4 channel 25 (2.475 GHz): above WiFi channel 11
+   * and clear of 1-11 entirely, so the two stacks stop sitting on the same
+   * frequency while they time-share one antenna. Only affects a NEW formation;
+   * a network persisted in zb_storage keeps its original channel. */
+  Zigbee.setPrimaryChannelMask(1UL << NOCT_ZB_CHANNEL);
   /* Do NOT open the network at boot. A coordinator that is permanently
    * joinable is one anyone can join; pairing is an explicit act (Меню -> Волк,
    * or `zb join` on the console). */
   Zigbee.setRebootOpenNetwork(0);
-  if (!Zigbee.begin(ZIGBEE_COORDINATOR)) {
+  /* Formation scans channels and can take seconds - more when the radio is
+   * shared with a busy WiFi. This runs on the loop task, which the 15 s task
+   * watchdog is watching, so step out of the watchdog for the duration rather
+   * than gamble on the scan being quick. */
+  /* Arm the WiFi + 802.15.4 coexistence scheme. NOBODY else does: not the
+   * Arduino Zigbee library, not the zboss port, not the ieee802154 driver -
+   * in Espressif's own coexistence example this call sits in the app's main,
+   * and without it the 15.4 radio simply squats on the medium. Measured here:
+   * TCP stayed "connected" while not one payload arrived for five minutes,
+   * because WiFi RX never got the antenna back. */
+  esp_err_t coex = esp_coex_wifi_i154_enable();
+  Serial.printf("[ZB] wifi+154 coexistence: %s\r\n",
+                coex == ESP_OK ? "armed" : esp_err_to_name(coex));
+  esp_task_wdt_delete(NULL);
+  bool ok = Zigbee.begin(ZIGBEE_COORDINATOR);
+  esp_task_wdt_add(NULL);
+  if (!ok) {
     Serial.println("[ZB] coordinator failed to start");
     return false;
   }
   running_ = true;
-  Serial.printf("[ZB] coordinator up on endpoint %d\n", NOCT_ZB_ENDPOINT);
+  Serial.printf("[ZB] coordinator up on endpoint %d, channel %d\n",
+                NOCT_ZB_ENDPOINT, (int)esp_zb_get_current_channel());
+  /* Mark the session: the NEXT boot must run the erase-and-restart cure before
+   * it wastes two minutes failing to associate (see main.cpp setup). */
+  {
+    Preferences pp;
+    pp.begin("nocturne", false);
+    pp.putBool("zbRan", true);
+    pp.end();
+  }
   return true;
 }
 
@@ -232,6 +303,10 @@ void ZbHub::tick(unsigned long now, AppState &st) {
     n++;
   }
   st.zb.count = n;
+  if (n > knownCount_) {
+    knownCount_ = n;
+    newSensor_ = true; /* consumed by main: toast + wolf */
+  }
 
   if (gDirty) {
     gDirty = false;

@@ -284,7 +284,6 @@ struct AppState {
   int rcSlot = -1;              /* active theme slot 0..2, -1 = none */
   int rcNight = -1;             /* quiet hours 0/1, -1 = none */
   int rcNightFrom = -1, rcNightTo = -1; /* quiet-hour bounds, -1 = none */
-  String rcOtaUrl;              /* pull-OTA image URL, "" = none */
 };
 
 #endif

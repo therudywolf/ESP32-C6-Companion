@@ -24,6 +24,10 @@ public:
   void tick(unsigned long now, bool pcDown);
   /* moves a freshly-fetched payload into `out` and returns true (consumes it) */
   bool take(String &out);
+  /* Test hook: force one fetch right now, regardless of pcDown. This exercises
+   * the exact DNS + TLS path that crashed the Zigbee build (see LwipSafety.cpp),
+   * so the fix can be PROVEN from the console instead of waited for. */
+  void debugFetchNow() { pending_ = true; }
 
 private:
   static void taskEntry(void *self);

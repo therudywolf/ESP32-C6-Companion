@@ -3,6 +3,8 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_heap_caps.h>
+#include <esp_sntp.h>
 
 #include "net/lite_ca.h"
 
@@ -79,6 +81,28 @@ bool LiteClient::fetch(String &out) {
    * "cert not yet valid". Skip until the clock is real; the retry cadence picks
    * it up once SNTP lands (seconds after WiFi). */
   if (time(nullptr) < 1700000000L) return false;
+  /* Hold the first fetch until SNTP's own DNS query has finished. The RTC
+   * keeps time across warm reboots, so the wall-clock guard above passes
+   * seconds after boot while SNTP is still mid-lookup - and interleaving two
+   * resolvers in that window is what the dns_clear_cache crash grew from.
+   * The linker wrap is the real fix; this removes the collision entirely. */
+  if (millis() < 60000UL && esp_sntp_enabled() &&
+      esp_sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET)
+    return false;
+  /* A TLS handshake needs tens of KB of heap. With the Zigbee stack resident
+   * that can be most of what is free - skip the fetch rather than OOM the
+   * board, and say so, once per dry spell. */
+  size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  static bool warned = false;
+  if (largest < 46 * 1024) {
+    if (!warned) {
+      warned = true;
+      Serial.printf("[LITE] skipped: largest free block %u B < 46 KB\n",
+                    (unsigned)largest);
+    }
+    return false;
+  }
+  warned = false;
   WiFiClientSecure client;
   client.setCACert(LITE_CA_BUNDLE); /* verify chain vs pinned ISRG Root X1+X2 — no MITM, no leak */
   HTTPClient http;
