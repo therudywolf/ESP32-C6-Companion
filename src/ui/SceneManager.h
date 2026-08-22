@@ -28,7 +28,14 @@ public:
   void begin(const Deps &deps);
   void handleInput(ButtonEvent ev, UiCtx &ui);
   void draw(UiCtx &ui);
+  /* A plain toast keeps working — every existing caller uses it — but it now
+   * renders as the same card the PC notifications get, with a generic title. */
   void toast(const String &msg);
+  /* The rich form: a titled card in the notification's visual language.
+   * `kind` picks the accent and the header dot, so weather, climate and the
+   * sensor read apart at a glance without anyone reading the words. */
+  enum AlertKind { AL_INFO = 0, AL_WEATHER, AL_CLIMATE, AL_SENSOR, AL_WARN };
+  void alertCard(AlertKind kind, const char *title, const String &msg);
   int currentScene() const { return scene_; }
   /* remote-control: jump to a scene on the next draw (companion app). */
   void requestScene(int s) { pendingScene_ = s; }
@@ -155,7 +162,10 @@ private:
   unsigned long denModeAt_ = 0;
 
   String toast_;
+  String toastTitle_;
+  int toastKind_ = 0;
   unsigned long toastUntil_ = 0;
+  unsigned long toastAt_ = 0; /* for the slide-in */
 
   unsigned long lastCarousel_ = 0;
   unsigned long lastInput_ = 0;

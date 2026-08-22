@@ -33,31 +33,31 @@ void ClimateAlert::tick(unsigned long now, AppState &st, PetBrain &brain,
     if (s.zbTempMax < 99) {
       if (!tempHigh_ && t10 > hi10) {
         tempHigh_ = true;
-        snprintf(msg, sizeof(msg), "дома жарко: %d.%d, порог %d",
+        snprintf(msg, sizeof(msg), "жарко: %d.%d, порог %d",
                  t10 / 10, abs(t10 % 10), s.zbTempMax);
-        ui.toast(msg);
+        ui.alertCard(SceneManager::AL_CLIMATE, "КЛИМАТ", msg);
         Serial.printf("[CLIMATE] high temp %d.%d > %d\n", t10 / 10,
                       abs(t10 % 10), s.zbTempMax);
         brain.notice("дома стало жарче порога - скажи хозяину");
       } else if (tempHigh_ && t10 < hi10 - kTempHystX10) {
         tempHigh_ = false;
         Serial.println("[CLIMATE] temp back in band");
-        ui.toast("температура вернулась в норму");
+        ui.alertCard(SceneManager::AL_SENSOR, "КЛИМАТ", "температура в норме");
       }
     }
     if (s.zbTempMin > -99) {
       if (!tempLow_ && t10 < lo10) {
         tempLow_ = true;
-        snprintf(msg, sizeof(msg), "дома холодно: %d.%d, порог %d",
+        snprintf(msg, sizeof(msg), "холодно: %d.%d, порог %d",
                  t10 / 10, abs(t10 % 10), s.zbTempMin);
-        ui.toast(msg);
+        ui.alertCard(SceneManager::AL_CLIMATE, "КЛИМАТ", msg);
         Serial.printf("[CLIMATE] low temp %d.%d < %d\n", t10 / 10,
                       abs(t10 % 10), s.zbTempMin);
         brain.notice("дома стало холоднее порога - забеспокойся");
       } else if (tempLow_ && t10 > lo10 + kTempHystX10) {
         tempLow_ = false;
         Serial.println("[CLIMATE] temp back in band");
-        ui.toast("температура вернулась в норму");
+        ui.alertCard(SceneManager::AL_SENSOR, "КЛИМАТ", "температура в норме");
       }
     }
   }
@@ -71,26 +71,26 @@ void ClimateAlert::tick(unsigned long now, AppState &st, PetBrain &brain,
       if (!humHigh_ && h > s.zbHumMax) {
         humHigh_ = true;
         snprintf(msg, sizeof(msg), "сыро: %d%%, порог %d%%", h, s.zbHumMax);
-        ui.toast(msg);
+        ui.alertCard(SceneManager::AL_CLIMATE, "КЛИМАТ", msg);
         Serial.printf("[CLIMATE] high humidity %d%% > %d%%\n", h, s.zbHumMax);
         brain.notice("дома слишком сыро - это к плесени, предупреди");
       } else if (humHigh_ && h < s.zbHumMax - kHumHyst) {
         humHigh_ = false;
         Serial.println("[CLIMATE] humidity back in band");
-        ui.toast("влажность вернулась в норму");
+        ui.alertCard(SceneManager::AL_SENSOR, "КЛИМАТ", "влажность в норме");
       }
     }
     if (s.zbHumMin >= 0) {
       if (!humLow_ && h < s.zbHumMin) {
         humLow_ = true;
         snprintf(msg, sizeof(msg), "сухо: %d%%, порог %d%%", h, s.zbHumMin);
-        ui.toast(msg);
+        ui.alertCard(SceneManager::AL_CLIMATE, "КЛИМАТ", msg);
         Serial.printf("[CLIMATE] low humidity %d%% < %d%%\n", h, s.zbHumMin);
         brain.notice("дома слишком сухой воздух - посоветуй увлажнить");
       } else if (humLow_ && h > s.zbHumMin + kHumHyst) {
         humLow_ = false;
         Serial.println("[CLIMATE] humidity back in band");
-        ui.toast("влажность вернулась в норму");
+        ui.alertCard(SceneManager::AL_SENSOR, "КЛИМАТ", "влажность в норме");
       }
     }
   }
@@ -127,7 +127,10 @@ void ClimateAlert::tick(unsigned long now, AppState &st, PetBrain &brain,
       int dp = st.zbPress10Delta3h;
       snprintf(msg, sizeof(msg), "%+d.%d гПа/3ч - %s", dp / 10, abs(dp % 10),
                barometer::forecast((barometer::Tendency)tend));
-      ui.toast(msg);
+      ui.alertCard(barometer::headacheWatch((barometer::Tendency)tend)
+                       ? SceneManager::AL_WARN
+                       : SceneManager::AL_WEATHER,
+                   "ПОГОДА", msg);
       Serial.printf("[BARO] alert: %+d.%d hPa/3h - %s\n", dp / 10,
                     abs(dp % 10),
                     barometer::forecast((barometer::Tendency)tend));
@@ -173,7 +176,7 @@ void ClimateAlert::tick(unsigned long now, AppState &st, PetBrain &brain,
         battLow_ = true;
         battNagUntil_ = now + 24UL * 3600UL * 1000UL;
         snprintf(msg, sizeof(msg), "батарея датчика %d%%", z.battery);
-        ui.toast(msg);
+        ui.alertCard(SceneManager::AL_WARN, "ДАТЧИК", msg);
         Serial.printf("[CLIMATE] battery %d%% <= %d%%\n", z.battery,
                       s.zbBattMin);
         brain.notice("у датчика климата садится батарейка - напомни сменить");

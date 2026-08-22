@@ -62,14 +62,26 @@ static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
  * heroTemp() draws on CPU and GPU, so this screen sits at the same optical
  * height as the rest of the ring. */
 static void hero(LGFX_Sprite &g, int x, int y, const char *num,
-                 const char *unit, uint16_t c) {
+                 const char *frac, const char *unit, uint16_t c) {
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   int vw = g.textWidth(num);
   textAt(g, x, inkTop(g, y, 64), num, c);
   g.setTextSize(1);
-  g.setFont(&F_MED);
-  if (unit) textAt(g, x + vw + 4, y + 44, unit, DIM);
+  /* The tenth and the unit stack in one narrow column to the RIGHT of the
+   * digits, tenth on top. Read downward it says "23 , 4 C" in that order.
+   * The tenth used to sit in the tile's bottom-left corner, which put it
+   * nowhere near the number it belongs to - it read as a stray mark rather
+   * than as part of the reading. A room moves by tenths, so the digit has to
+   * stay; it just has to stay ATTACHED. */
+  if (frac) {
+    g.setFont(&F_TEXT);
+    textAt(g, x + vw + 4, y + 40, frac, c);
+  }
+  if (unit) {
+    g.setFont(&F_MED);
+    textAt(g, x + vw + 4, frac ? y + 58 : y + 44, unit, DIM);
+  }
 }
 
 /* Big number + small unit on one baseline. Mirrors bigVal() in scenes_hw.cpp
@@ -156,13 +168,10 @@ void drawHome(UiCtx &ui) {
     if (z.temp10 != -32768) {
       int whole = z.temp10 / 10, frac = z.temp10 % 10;
       if (frac < 0) frac = -frac;
+      char f[8];
       snprintf(v, sizeof(v), "%d", whole);
-      hero(g, 14, 36, v, "C", c);
-      /* The tenth under the unit, out of the hero's way. A room moves by
-       * tenths, so dropping it would cost the screen its resolution. */
-      g.setFont(&F_TEXT);
-      snprintf(v, sizeof(v), ",%d", frac);
-      textAt(g, 14, 96, v, stale ? DIM : ORANGE);
+      snprintf(f, sizeof(f), ",%d", frac);
+      hero(g, 14, 36, v, f, "C", c);
     } else {
       g.setFont(&F_BIG);
       textAt(g, 14, 56, "-", DIM);
@@ -186,7 +195,18 @@ void drawHome(UiCtx &ui) {
       textAt(g, 148, 36, v, c);
       g.setTextSize(1);
       trendArrow(g, 218, 34, ui.gr.zbHum, 6, 2);
-      sparkline(g, 232, 34, 76, 34, ui.gr.zbHum, stale ? DIM : INFO);
+      /* Only once there is a line to draw. sparkline() frames itself before
+       * it checks whether it has points, which is invisible on the PC screens
+       * - those fill at 1 Hz - but this sensor reports about every fifty
+       * minutes, so an empty rectangle would sit here for the first hour
+       * after every boot looking like a broken widget. Say what it is
+       * instead: the graph is waiting, not missing. */
+      if (ui.gr.zbHum.count >= 2) {
+        sparkline(g, 232, 34, 76, 34, ui.gr.zbHum, stale ? DIM : INFO);
+      } else {
+        g.setFont(&F_SMALL);
+        textAt(g, 240, 44, "график копится", DIM);
+      }
     } else {
       g.setFont(&F_BIG);
       textAt(g, 148, 38, "-", DIM);
@@ -221,24 +241,30 @@ void drawHome(UiCtx &ui) {
                                          : "ПРОГНОЗ / БАРОМЕТР";
   panel(g, 4, 120, 312, 48, strip);
   {
-    g.setFont(&F_MED);
-    g.setTextSize(1);
+    /* The claim gets the arrow and the big type; the evidence goes small
+     * underneath. Before, both rows were the same weight and the strip read as
+     * two unrelated captions rather than as a statement with its reason. */
     const char *line = nullptr;
     uint16_t lc = TEXT;
+    int ax = 12;
     if (ui.st.zbTrendOk) {
       line = barometer::forecast(tend);
       lc = barometer::headacheWatch(tend) ? WARN
            : tend == barometer::TEND_RISE_FAST ? INFO
                                                : TEXT;
+      ax += baroArrow(g, 12, 130, barometer::direction(tend),
+                      barometer::isSharp(tend), stale ? DIM : lc);
     } else {
       /* No trend yet is not "steady" — say which, or the screen claims the
        * weather is settled when it simply has not been watching long enough. */
-      line = "барометр копит историю";
+      line = "Барометр копит историю";
       lc = DIM;
     }
+    g.setFont(&F_MED);
+    g.setTextSize(1);
     char clipped[48];
-    clipW(g, line, clipped, sizeof(clipped), 300);
-    textAt(g, 12, 128, clipped, stale ? DIM : lc);
+    clipW(g, line, clipped, sizeof(clipped), 306 - ax);
+    textAt(g, ax, 126, clipped, stale ? DIM : lc);
 
     /* Second row: the sensor, its freshness, and the 3-hour delta that the
      * forecast above was derived from — the claim and its evidence together. */

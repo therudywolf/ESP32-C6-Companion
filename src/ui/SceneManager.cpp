@@ -118,8 +118,18 @@ void SceneManager::begin(const Deps &deps) {
 }
 
 void SceneManager::toast(const String &msg) {
+  alertCard(AL_INFO, nullptr, msg);
+}
+
+void SceneManager::alertCard(AlertKind kind, const char *title,
+                             const String &msg) {
   toast_ = msg;
-  toastUntil_ = millis() + NOCT_TOAST_MS;
+  toastTitle_ = title ? title : "";
+  toastKind_ = (int)kind;
+  toastAt_ = millis();
+  /* A titled card is something to read, not a blink: give it half again the
+   * time a bare confirmation gets. */
+  toastUntil_ = toastAt_ + (title ? NOCT_TOAST_MS * 2 : NOCT_TOAST_MS);
 }
 
 bool SceneManager::alertActive(UiCtx &ui) const {
@@ -1545,32 +1555,75 @@ void SceneManager::draw(UiCtx &ui) {
 
   /* toast */
   if ((long)(toastUntil_ - ui.now) > 0) {
-    /* A toast exists to interrupt. The old one was F_TEXT in an 18 px strip —
-     * legible if you were already reading the screen, invisible from across
-     * the room, which is where you are when the room gets cold. F_MED is the
-     * font the scenes use for their primary text, and the box is sized from
-     * the wrapped text rather than assumed, so a long line gets two rows
-     * instead of running off both edges. */
+    /* The board's own alerts get the card the PC notifications get. They were
+     * a bare pill in the corner while a Telegram message got a shadow, a
+     * frame and a header — so the board's own news looked like debug output
+     * next to somebody else's chat. Same language, same weight.
+     *
+     * The accent carries the kind, so weather, climate and the sensor read
+     * apart before a single word is read. */
+    uint16_t accent = ORANGE;
+    switch (toastKind_) {
+    case AL_WEATHER: accent = INFO; break;
+    case AL_CLIMATE: accent = WARN; break;
+    case AL_SENSOR:  accent = GOOD; break;
+    case AL_WARN:    accent = CRIT; break;
+    default:         accent = ORANGE; break;
+    }
+    const bool titled = toastTitle_.length() > 0;
+
     g.setFont(&F_MED);
     g.setTextSize(1);
-    const int pad = 12, lineH = 22, maxW = NOCT_W - 40;
-    /* Measure first: one line if it fits, two if it does not. */
-    int oneW = g.textWidth(toast_.c_str());
-    bool two = oneW > maxW;
-    int tw = two ? maxW + pad * 2 : oneW + pad * 2;
-    int th = (two ? 2 * lineH : lineH) + 12;
-    int tx = (NOCT_W - tw) / 2;
-    int ty = (NOCT_H - th) / 2; /* centred: an interruption belongs in the eye's
-                                 * path, not tucked against the footer */
-    /* Shadow, then fill, then a rim — the box has to survive landing on top of
-     * a bright sparkline or an album cover. */
-    g.fillRoundRect(tx + 2, ty + 2, tw, th, 6, BG);
-    g.fillRoundRect(tx, ty, tw, th, 6, ORANGE);
-    g.drawRoundRect(tx, ty, tw, th, 6, TEXT);
-    if (two)
-      textWrap(g, toast_.c_str(), tx + pad, ty + 6, maxW, lineH, 2, BG);
+    const int mx = 14, cw = NOCT_W - 2 * mx, pad = 12, lineH = 21;
+    const int bodyW = cw - 2 * pad;
+    /* Height from the WRAPPED text, not a guess: a long forecast needs two
+     * rows and a short confirmation must not get a half-empty box. */
+    int rows = g.textWidth(toast_.c_str()) > bodyW ? 2 : 1;
+    int ch = (titled ? 30 : 8) + rows * lineH + 10;
+
+    /* Slide down from the top edge, eased — the same entrance the
+     * notification card makes, so the eye recognises it as the same object. */
+    unsigned long age = ui.now - toastAt_;
+    float env = age < 200 ? (float)age / 200.0f : 1.0f;
+    float e = 1.0f - powf(1.0f - env, 3.0f);
+    int target = (NOCT_H - ch) / 2;
+    int cy = -ch + (int)(e * (ch + target));
+
+    g.fillRoundRect(mx + 2, cy + 3, cw, ch, 10, BG);
+    g.fillRoundRect(mx, cy, cw, ch, 10, PANEL);
+    g.drawRoundRect(mx, cy, cw, ch, 10, accent);
+    g.drawRoundRect(mx + 1, cy + 1, cw - 2, ch - 2, 9,
+                    lerp565(PANEL, accent, 90));
+
+    int ty = cy + 8;
+    if (titled) {
+      /* Header: a filled dot in the accent, the title, and a rule under it —
+       * the notification card's anatomy, minus the queue badge it needs and
+       * this does not. */
+      g.fillCircle(mx + 16, cy + 15, 3, accent);
+      g.drawCircle(mx + 16, cy + 15, 5, lerp565(PANEL, accent, 120));
+      g.setFont(&F_TEXT);
+      textAt(g, mx + 28, cy + 9, toastTitle_.c_str(), accent);
+      g.drawFastHLine(mx + 10, cy + 27, cw - 20, lerp565(PANEL, accent, 70));
+      ty = cy + 33;
+    }
+    g.setFont(&F_MED);
+    g.setTextSize(1);
+    if (rows > 1)
+      textWrap(g, toast_.c_str(), mx + pad, ty, bodyW, lineH, 2, TEXT);
     else
-      textAt(g, tx + pad, ty + 6, toast_.c_str(), BG);
+      textAt(g, mx + pad, ty, toast_.c_str(), TEXT);
+
+    /* A thinning bar along the bottom edge: how long it stays. The
+     * notification card has one, and without it a card that vanishes reads as
+     * a glitch rather than as a timer running out. */
+    long leftL = (long)(toastUntil_ - ui.now);
+    unsigned long dur = toastUntil_ - toastAt_;
+    if (leftL > 0 && dur > 0) {
+      int bw = (int)((long)(cw - 20) * leftL / (long)dur);
+      g.drawFastHLine(mx + 10, cy + ch - 4, cw - 20, lerp565(PANEL, accent, 40));
+      g.drawFastHLine(mx + 10, cy + ch - 4, bw, accent);
+    }
   }
 
   /* scene-change wipe (180 ms), directional: forward reveals L→R, back R→L */
