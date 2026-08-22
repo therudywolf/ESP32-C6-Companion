@@ -255,6 +255,14 @@ struct AppState {
   /* Seconds left in the Zigbee pairing window, 0 = closed. The ДОМ screen
    * counts it down so "press the button on the sensor" has a deadline. */
   int zbJoinSecs = 0;
+  /* Barometric tendency over the last 3 hours, in tenths of a hPa, computed
+   * from the card archive. `zbTrendOk` is false when there is no reading old
+   * enough to compare against — "no trend yet" and "steady" are different
+   * answers and the screen must not conflate them. */
+  int zbPress10Delta3h = 0;
+  bool zbTrendOk = false;
+  int zbTemp10Delta3h = 0;
+  int zbHumDelta3h = 0;
   /* The PC has been silent long enough that its numbers are no longer worth
    * showing, and no fallback is covering. Distinct from link.dataDead only in
    * that it also accounts for the lite endpoint: when THAT is feeding, the

@@ -54,6 +54,20 @@ public:
   /* Load the last `days` days (1 = today) into `out`. Returns false when the
    * card is absent or no file matched. */
   bool loadSeries(int days, Series &out);
+
+  /* Change over the last `hours`, read back off the card.
+   *
+   * Pressure is the one reading here that describes the OUTDOORS. A building
+   * is not airtight, so indoor pressure tracks the atmosphere within a
+   * fraction of a hPa — which is why a barometer indoors forecasts weather
+   * while an indoor thermometer only ever describes the radiator. That
+   * distinction is the whole basis of the hints below; do not extend them to
+   * temperature or humidity.
+   *
+   * Returns false when there is no reading old enough to compare against —
+   * "no trend yet" and "flat" are different answers and must not be conflated.
+   * dPress is in tenths of a hPa so a 0.7 hPa drift is not rounded to zero. */
+  bool trend(int hours, int &dTemp10, int &dHum, int &dPress10);
   const char *dirPath() const { return "/climate"; }
 
 private:

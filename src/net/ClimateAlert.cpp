@@ -1,5 +1,6 @@
 #include "net/ClimateAlert.h"
 
+#include "core/Barometer.h"
 #include "pet/PetBrain.h"
 #include "ui/SceneManager.h"
 
@@ -91,6 +92,62 @@ void ClimateAlert::tick(unsigned long now, AppState &st, PetBrain &brain,
         Serial.println("[CLIMATE] humidity back in band");
         ui.toast("влажность вернулась в норму");
       }
+    }
+  }
+
+  /* ── the barometer ───────────────────────────────────────────────────── */
+  /* Not gated on zbAlert: the climate thresholds are the owner's numbers for
+   * their room, while this is the sky doing something. It also fires far more
+   * rarely — a front is a couple of times a week, not a couple of times an
+   * hour — so it does not need the same restraint. */
+  if (st.zbTrendOk) {
+    int tend = (int)barometer::classify(st.zbPress10Delta3h, 3);
+    bool interesting = tend != (int)barometer::TEND_STEADY &&
+                       tend != (int)barometer::TEND_UNKNOWN &&
+                       tend != (int)barometer::TEND_FALL_SLOW &&
+                       tend != (int)barometer::TEND_RISE_SLOW;
+    /* Six hours of quiet after any announcement. Without it a needle hovering
+     * on a threshold would re-announce every time it crossed back and forth,
+     * which is exactly what a needle on a threshold does. */
+    if (interesting && tend != lastTend_ &&
+        (tendQuietUntil_ == 0 || (long)(now - tendQuietUntil_) > 0)) {
+      lastTend_ = tend;
+      tendQuietUntil_ = now + 6UL * 3600UL * 1000UL;
+      int dp = st.zbPress10Delta3h;
+      snprintf(msg, sizeof(msg), "%+d.%d гПа/3ч - %s", dp / 10, abs(dp % 10),
+               barometer::forecast((barometer::Tendency)tend));
+      ui.toast(msg);
+      Serial.printf("[BARO] alert: %+d.%d hPa/3h - %s\n", dp / 10,
+                    abs(dp % 10),
+                    barometer::forecast((barometer::Tendency)tend));
+      switch ((barometer::Tendency)tend) {
+      case barometer::TEND_FALL_FAST:
+        /* The association between a fast-falling barometer and migraine is
+         * documented and tied to the RATE of the drop. Say what the pressure
+         * did and who tends to notice it; do not diagnose the owner. */
+        brain.notice("давление резко падает - идет непогода, и на таких "
+                     "перепадах у метеочувствительных болит голова; "
+                     "предупреди по-доброму");
+        break;
+      case barometer::TEND_FALL:
+        brain.notice("давление падает - к дождю, посоветуй взять зонт");
+        break;
+      case barometer::TEND_RISE_FAST:
+        brain.notice("давление резко растет - небо расчистится и "
+                     "похолодает, особенно ночью");
+        break;
+      case barometer::TEND_RISE:
+        brain.notice("давление растет - погода налаживается, порадуйся");
+        break;
+      default:
+        break;
+      }
+    }
+    /* Back to steady: re-arm so the next front is heard even inside the quiet
+     * window. A settled needle is the end of the event, not a new one. */
+    if (tend == (int)barometer::TEND_STEADY && lastTend_ != 0) {
+      lastTend_ = 0;
+      tendQuietUntil_ = 0;
     }
   }
 

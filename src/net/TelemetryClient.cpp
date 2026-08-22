@@ -151,6 +151,13 @@ void TelemetryClient::sendBoard(float temp, float tempMax, int load, int fps,
   sendLine(b);
 }
 
+void TelemetryClient::sendZbTrend(int dPress10, int dTemp10, int dHum) {
+  if (!tcpConnected_) return;
+  char b[48];
+  snprintf(b, sizeof(b), "zbtr:%d,%d,%d\n", dPress10, dTemp10, dHum);
+  sendLine(b);
+}
+
 void TelemetryClient::sendZbStatus(bool up, int channel, int joinLeft,
                                    int devices, int lastHeard) {
   if (!tcpConnected_) return;
