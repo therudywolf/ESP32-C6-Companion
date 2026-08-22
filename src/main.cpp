@@ -538,6 +538,23 @@ static void consoleExec(String line) {
         Serial.printf("\n---END %s---\n", arg.c_str());
       }
     }
+  } else if (cmd == "baro") {
+    /* Feed a barometric tendency straight into the state the alerting reads.
+     * The real trend comes off the card and moves on the weather's schedule,
+     * which is no schedule at all to test against — this is the same door
+     * `feed` opens for the sensor, and it exercises the identical code path
+     * rather than a copy of it. The next real recompute overwrites it. */
+    if (!arg.length()) {
+      Serial.println("usage: baro <десятые гПа за 3ч>, напр. -45");
+    } else {
+      state.zbPress10Delta3h = arg.toInt();
+      state.zbTrendOk = true;
+      Serial.printf("trend := %+d.%d hPa/3h -> %s\n",
+                    state.zbPress10Delta3h / 10,
+                    abs(state.zbPress10Delta3h % 10),
+                    barometer::forecast(
+                        barometer::classify(state.zbPress10Delta3h, 3)));
+    }
   } else if (cmd == "home") {
     /* The ДОМ trend window, same three rungs the long press cycles. Here too
      * because "does the card-backed graph read back" is a question worth

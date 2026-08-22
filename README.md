@@ -174,7 +174,8 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   is the same lie "no signal" exists to prevent. (`nocturne-c6-nozb` builds
   without the stack and takes its `zb` block from a server instead.)
 - **A USB console.** `help`, `info`, `ls`, `cat`, `ach`, `say`, `eat`, `shot`,
-  `theme`, `bright`, `feed <json>`, `zb [join|reset]`, `mem`, `probe`, `phy`,
+  `theme`, `bright`, `feed <json>`, `baro <±tenths>`, `zb [join|reset]`,
+  `mem`, `probe`, `phy`,
   `dump <path>`, `reboot` on the same serial port as the logs. `dump` base64s a
   card file out — which is how the screenshots in this README were taken, with
   no card reader and no camera: `shot` then `dump /shots/001.bmp`.

@@ -106,11 +106,22 @@ void ClimateAlert::tick(unsigned long now, AppState &st, PetBrain &brain,
                        tend != (int)barometer::TEND_UNKNOWN &&
                        tend != (int)barometer::TEND_FALL_SLOW &&
                        tend != (int)barometer::TEND_RISE_SLOW;
-    /* Six hours of quiet after any announcement. Without it a needle hovering
-     * on a threshold would re-announce every time it crossed back and forth,
-     * which is exactly what a needle on a threshold does. */
-    if (interesting && tend != lastTend_ &&
-        (tendQuietUntil_ == 0 || (long)(now - tendQuietUntil_) > 0)) {
+    /* Six hours of quiet after any announcement — a needle hovering on a
+     * threshold would otherwise re-announce every time it crossed back and
+     * forth, which is exactly what a needle on a threshold does.
+     *
+     * BUT the quiet window must never swallow an ESCALATION. "Slowly falling"
+     * at noon and a storm at two o'clock is precisely the sequence worth
+     * hearing, and suppressing the second because the first was recent would
+     * silence the alert exactly when it matters. Distance from steady is the
+     * severity, so anything further out than the last announcement gets
+     * through regardless. */
+    int sev = tend - (int)barometer::TEND_STEADY;
+    if (sev < 0) sev = -sev;
+    int lastSev = lastTend_ ? lastTend_ - (int)barometer::TEND_STEADY : 0;
+    if (lastSev < 0) lastSev = -lastSev;
+    bool quiet = tendQuietUntil_ != 0 && (long)(now - tendQuietUntil_) <= 0;
+    if (interesting && tend != lastTend_ && (!quiet || sev > lastSev)) {
       lastTend_ = tend;
       tendQuietUntil_ = now + 6UL * 3600UL * 1000UL;
       int dp = st.zbPress10Delta3h;
