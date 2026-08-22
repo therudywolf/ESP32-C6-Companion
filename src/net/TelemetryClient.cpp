@@ -107,19 +107,24 @@ void TelemetryClient::sendCfg(const Settings &s) {
   /* one CSV the panel reads back so its controls show the board's live state.
    * order: petllm,wchat,wtone,led,flip,bglight,bright,carousel,timeout,
    *        bgstyle,theme,uielem,scenemask,notifshow,ledmode (carousel/theme -1)
-   * Fields 16.. were APPENDED (pin,slot,night,nightfrom,nightto): a panel that
-   * splits by index and ignores the tail keeps working unchanged. Never
-   * reorder — only append. */
-  char b[160];
+   * Fields 16.. were APPENDED (pin,slot,night,nightfrom,nightto), then 21..
+   * (zbalert,zbtmin,zbtmax,zbhmin,zbhmax,zbbat): a panel that splits by index
+   * and ignores the tail keeps working unchanged. Never reorder — only
+   * append, and add the name to the panel's key list in the same commit or the
+   * field is parsed off the wire and silently dropped. */
+  char b[220];
   snprintf(b, sizeof(b),
-           "cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d\n",
+           "cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d,"
+           "%d,%d,%d,%d,%d,%d\n",
            s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone, s.ledEnabled ? 1 : 0,
            s.flipped ? 1 : 0, s.bgLight ? 1 : 0, s.brightness,
            s.carouselEnabled ? s.carouselIntervalSec : -1, s.displayTimeoutSec,
            s.bgStyle, s.customActive ? -1 : s.themePreset,
            (unsigned)s.uiElements, (unsigned long)s.sceneMask,
            s.notifShow ? 1 : 0, s.ledMode, s.pinnedScene, s.activeSlot,
-           s.nightMode ? 1 : 0, s.nightFrom, s.nightTo);
+           s.nightMode ? 1 : 0, s.nightFrom, s.nightTo,
+           s.zbAlert ? 1 : 0, s.zbTempMin, s.zbTempMax, s.zbHumMin,
+           s.zbHumMax, s.zbBattMin);
   sendLine(b);
 }
 
@@ -127,9 +132,18 @@ void TelemetryClient::sendZbSensor(const ZbSensor &z) {
   if (!tcpConnected_) return;
   /* zbs:name,temp10,humidity,battery,age_sec - names come from nocturne.ini
    * and must not contain commas (documented there). */
-  char b[80];
-  snprintf(b, sizeof(b), "zbs:%s,%d,%d,%d,%d\n", z.name, z.temp10, z.humidity,
-           z.battery, z.ageSec);
+  char b[96];
+  snprintf(b, sizeof(b), "zbs:%s,%d,%d,%d,%d,%d\n", z.name, z.temp10,
+           z.humidity, z.battery, z.ageSec, z.pressure);
+  sendLine(b);
+}
+
+void TelemetryClient::sendZbStatus(bool up, int channel, int joinLeft,
+                                   int devices, int lastHeard) {
+  if (!tcpConnected_) return;
+  char b[72];
+  snprintf(b, sizeof(b), "zbst:%d,%d,%d,%d,%d\n", up ? 1 : 0, channel,
+           joinLeft, devices, lastHeard);
   sendLine(b);
 }
 
@@ -374,6 +388,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
         e.humidity = list[i]["h"] | -1;
         e.battery = list[i]["b"] | -1;
         e.ageSec = list[i]["age"] | -1;
+        e.pressure = list[i]["p"] | -1;
       } else {
         e = ZbSensor();
       }
@@ -468,6 +483,18 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcPresetReset = rc["resetcustom"] | -1;
       state.rcPin = rc["pin"] | -2;
       state.rcSlot = rc["slot"] | -1;
+      /* Climate alert thresholds. -1000 is the "not in this command" marker,
+       * because every real value here — including 0 and negatives — is
+       * meaningful for a temperature. */
+      state.rcZbJoin = rc["zbjoin"] | -1;
+      state.rcZbPoll = rc["zbpoll"] | -1;
+      state.rcZbInt = rc["zbint"] | -1;
+      state.rcZbAlert = rc["zbalert"] | -1;
+      state.rcZbTempMin = rc["zbtmin"] | -1000;
+      state.rcZbTempMax = rc["zbtmax"] | -1000;
+      state.rcZbHumMin = rc["zbhmin"] | -1000;
+      state.rcZbHumMax = rc["zbhmax"] | -1000;
+      state.rcZbBattMin = rc["zbbat"] | -1000;
       state.rcNight = rc["night"] | -1;
       state.rcNightFrom = rc["nightfrom"] | -1;
       state.rcNightTo = rc["nightto"] | -1;

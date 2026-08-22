@@ -54,6 +54,12 @@ void load(Settings &s) {
     Serial.printf("[CFG] ring grew %d -> %d scenes; new ones enabled\n",
                   savedBits, (int)SCENE_FORZA);
   }
+  s.zbAlert = p.getBool("zbAl", false);
+  s.zbTempMin = p.getInt("zbTmin", -99);
+  s.zbTempMax = p.getInt("zbTmax", 99);
+  s.zbHumMin = p.getInt("zbHmin", -1);
+  s.zbHumMax = p.getInt("zbHmax", 101);
+  s.zbBattMin = p.getInt("zbBat", 15);
   s.nightMode = p.getBool("night", false);
   s.nightFrom = p.getInt("nightF", 23);
   s.nightTo = p.getInt("nightT", 8);
@@ -99,6 +105,12 @@ void save(const Settings &s) {
   p.putBytes("slot2", s.slot[2], sizeof(s.slot[2]));
   p.putUInt("scnMask", s.sceneMask | 1u);
   p.putInt("scnBits", (int)SCENE_FORZA);
+  p.putBool("zbAl", s.zbAlert);
+  p.putInt("zbTmin", s.zbTempMin);
+  p.putInt("zbTmax", s.zbTempMax);
+  p.putInt("zbHmin", s.zbHumMin);
+  p.putInt("zbHmax", s.zbHumMax);
+  p.putInt("zbBat", s.zbBattMin);
   p.putBool("night", s.nightMode);
   p.putInt("nightF", s.nightFrom);
   p.putInt("nightT", s.nightTo);

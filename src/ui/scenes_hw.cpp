@@ -236,30 +236,38 @@ void drawFans(UiCtx &ui) {
     int pct = hw.fan_controls[i];
     sum += pct;
     if (pct > mx) mx = pct;
-    int barPct = rpm * 100 / 2200;
+    /* The bar shows the DUTY, the same number printed under it. It used to
+     * show rpm/2200, so a CPU fan at 51% duty drew an 83% bar and the pump —
+     * which lives near its top rpm by design — drew a nearly full one. Two
+     * different quantities in one tile, one of them unlabelled.
+     * When the board reports no duty (some headers give rpm only) the rpm
+     * fallback is still better than an empty bar, so it stays as the else. */
+    int barPct = pct > 0 ? pct : (rpm * 100 / 2200);
     if (barPct > 100) barPct = 100;
     vBar(g, x + 16, 28, 30, 68, barPct, rpm > 0 ? GOOD : PANEL);
-    g.setFont(&F_TEXT);
-    textCenter(g, x + 31, 100, names[i], DIM);
+    /* Name and duty share ONE line above the rpm. There is room for a label
+     * row and a hero number between the bar (ends y96) and the footer rule
+     * (y152), but not for three: F_BIG's ink is ~30 px, so a third line landed
+     * inside the rpm digits. Putting the percentage beside the name also sits
+     * it next to the bar that draws the same quantity. */
+    g.setFont(&F_SMALL);
+    textAt(g, x + 4, 100, names[i], DIM);
+    snprintf(v, sizeof(v), "%d%%", pct);
+    textRight(g, x + 58, 100, v, ORANGE);
     g.setFont(&F_BIG);
     snprintf(v, sizeof(v), "%d", rpm);
     textCenter(g, x + 31, 112, v, TEXT);
-    g.setFont(&F_MED);
-    g.setTextSize(1);
-    snprintf(v, sizeof(v), "%d%%", pct);
-    textCenter(g, x + 31, 136, v, ORANGE);
-    g.setTextSize(1);
   }
 
   /* summary across the freed bottom band (F_TEXT stays inside y171) */
   if (uiOn(UI_STRIPS)) {
-    g.drawFastHLine(8, 152, NOCT_W - 16, ORANGE_DIM);
+    g.drawFastHLine(8, 150, NOCT_W - 16, ORANGE_DIM);
     g.setFont(&F_TEXT);
     g.setTextSize(1);
     char sum2[64]; /* "среднее ..." + "максимум ..." is 42 B before the numbers */
     snprintf(sum2, sizeof(sum2), "среднее %d%%      максимум %d%%",
              sum / NOCT_FAN_COUNT, mx);
-    textCenter(g, NOCT_W / 2, 158, sum2, ORANGE);
+    textCenter(g, NOCT_W / 2, 156, sum2, ORANGE);
   }
 }
 

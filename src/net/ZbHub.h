@@ -61,6 +61,18 @@ public:
    * factory reset in the menu. Reboots, because the stack cannot re-form a
    * network in place. */
   void factoryReset();
+  /* Ask the sensor for its current readings NOW. Honest caveat: an Aqara is a
+   * sleepy end device — it hears nothing between check-ins, so a poll while it
+   * sleeps simply goes unanswered. Returns false when there is nobody to ask. */
+  bool pollNow();
+  /* Request a reporting cadence from the sensor: at least `minSec` between
+   * reports, at most `maxSec`. Xiaomi firmware is known to ignore
+   * configure-reporting and keep its own schedule, so this is a REQUEST, and
+   * the panel says so rather than pretending it is a setting. */
+  bool setReportInterval(int minSec, int maxSec);
+  /* Seconds since the last report from any sensor, -1 = nothing ever heard. */
+  int lastHeardSec(unsigned long now) const;
+  int channel() const;
 
 private:
   void save();

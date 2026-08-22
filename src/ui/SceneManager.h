@@ -54,6 +54,14 @@ public:
     zbJoinRequested_ = false;
     return r;
   }
+  /* Ask for a screenshot on the next completed frame. The console uses this
+   * too rather than grabbing the sprite itself — see main.cpp. */
+  void requestShot() { shotRequested_ = true; }
+  /* Push the alert takeover aside for a while — the same thing a long press
+   * does, reachable from the console. A hardware alert that legitimately holds
+   * the screen makes every other scene unverifiable, which matters when the
+   * screenshot IS the test. */
+  void snoozeAlert(unsigned long ms) { alertSnoozeUntil_ = millis() + ms; }
   bool takeShotRequest() {
     bool r = shotRequested_;
     shotRequested_ = false;

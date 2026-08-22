@@ -191,15 +191,16 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   statBar(72, "ЭНЕРГИЯ", ui.pet.energy(),
           ui.pet.energy() < 25 ? INFO : GOOD);
 
-  /* deterministic status, big, with the life stage beside it */
+  /* Deterministic status, big, with the life stage under it. The stage line
+   * used to sit at y118 in F_TEXT, whose ink reaches y130 — straight through
+   * the action buttons that start at y124. It also repeated the age in days,
+   * which the bottom band already prints; the stage name alone is what this
+   * line was for. */
   g.setFont(&F_MED);
-  textAt(g, sx, 98, ui.pet.statusText(), ORANGE);
+  textAt(g, sx, 94, ui.pet.statusText(), ORANGE);
   {
-    g.setFont(&F_TEXT);
-    char ag[32];
-    snprintf(ag, sizeof(ag), "%s - %lu дн", ui.pet.stageName(),
-             (unsigned long)ui.pet.ageDays());
-    textAt(g, sx, 118, ag, DIM);
+    g.setFont(&F_SMALL);
+    textAt(g, sx, 114, ui.pet.stageName(), DIM);
     g.setFont(&F_MED);
   }
 

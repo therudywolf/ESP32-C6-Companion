@@ -107,12 +107,29 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   Smart Home skill, hears what the coordinator hears. The network calls itself
   **ForestHome**, which is also what the first sensor is named until
   `nocturne.ini` says otherwise.
+- **The sensor is managed from the panel** — pair it, poll it, ask for a
+  reporting cadence, and check the link. The check reports the *coordinator's
+  own* answer (up / channel / devices / seconds since the last report), because
+  a hub that is up with no sensors and a hub that is down look identical from
+  outside and need different fixes. Poll and interval are labelled as
+  **requests**, not settings: an Aqara sleeps between check-ins and Xiaomi
+  firmware is known to ignore configure-reporting, and a button that quietly
+  does nothing is worse than one that says what it can promise.
+- **Climate alerts.** Thresholds set from the web panel — too warm, too cold,
+  too damp, too dry, battery running out. They fire on the **edge**, not on the
+  fact of being out of range, with a degree of hysteresis so a room sitting on
+  the line does not announce itself every report. A stale sensor never clears
+  an alert: "no reading" and "the room is fine" are different facts. The
+  battery warning nags once a day instead, because a coin cell moves a few
+  percent a week and a dismissed one-shot means the sensor dies quietly three
+  weeks later.
 - **ДОМ, the climate screen.** The ПОГОДА tile answers "and it's 23 inside";
   this answers what the house has been *doing*. One sensor gets the hero
   layout — big temperature, humidity with a comfort verdict, a battery bar, and
-  a sparkline that reaches back most of a day (32 samples of a device that
-  speaks every 20–60 minutes). Two to four get a column each. **Zero** gets the
-  pairing instructions and a live countdown of the join window, because a
+  two sparklines reaching back most of a day (32 samples of a device that speaks
+  every 20–60 minutes). Built for **one** sensor — the Aqara WSDCGQ11LM this
+  runs against, whose barometer also gets a line in mmHg. **Zero** sensors gets
+  the pairing instructions and a live countdown of the join window, because a
   screen that is simply blank until you guess the right menu item teaches
   nothing. Locally paired sensors and ones relayed by a server are merged into
   one list, deduplicated by name — neither source silently wins. The measured cost: +380 KB flash and

@@ -260,9 +260,22 @@ void drawWeather(UiCtx &ui) {
   g.setFont(&F_TEXT);
   snprintf(v, sizeof(v), "осадки %d%%", w.precip);
   textRight(g, NOCT_W - 6, 26, v, w.precip >= 50 ? INFO : DIM);
-  /* description below the precip, in the right column */
+  /* Description below the precip, in the right column. The column START has
+   * to clear the hero number: at "+12" in F_HUGE x2 the glyphs reach past the
+   * old fixed x=168 and the two collided. Measure instead of assuming — a
+   * two-digit sub-zero reading is wider still. */
   {
-    const int dx = 168, bw = NOCT_W - dx - 6;
+    int heroEnd;
+    {
+      g.setFont(&F_HUGE);
+      g.setTextSize(2);
+      char t[8];
+      snprintf(t, sizeof(t), "%+d", w.temp);
+      heroEnd = 50 + g.textWidth(t) + 10;
+      g.setTextSize(1);
+    }
+    const int dx = heroEnd > 168 ? heroEnd : 168;
+    const int bw = NOCT_W - dx - 6;
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
     bool oneLine = g.textWidth(d.c_str()) <= bw;
@@ -303,7 +316,11 @@ void drawWeather(UiCtx &ui) {
        * handling exists to prevent. Over an hour old -> everything dims. */
       bool stale = z.ageSec >= 0 && z.ageSec > 3600;
       char tab[18];
-      clipW(g, z.name[0] ? z.name : "дома", tab, sizeof(tab), 50);
+      /* The tile is 56 px wide; measure the label in the font it will actually
+       * be drawn in, or "ForestHome" silently becomes "ForestHom" — which
+       * reads as a typo rather than as a truncation. */
+      g.setFont(&F_SMALL);
+      clipW(g, z.name[0] ? z.name : "дома", tab, sizeof(tab), 52);
       panel(g, x, 92, 56, 72, tab, stale ? DIM : ORANGE_DIM,
             stale ? DIM : ORANGE);
       g.setFont(&F_MED);
@@ -404,7 +421,8 @@ void drawClaude(UiCtx &ui) {
   textAt(g, 222, 96, v, TEXT);
   g.setFont(&F_TEXT);
   textAt(g, 222, 118, "сообщений", DIM);
-  if (c.stale) textAt(g, 222, 132, "устарело", WARN);
+  /* Same grammar as the status bar: a pip, not a word. */
+  if (c.stale) g.fillCircle(226, 130, 3, WARN);
 }
 
 /* ── FOREST ──────────────────────────────────────────────────────────── */

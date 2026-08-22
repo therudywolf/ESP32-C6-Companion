@@ -64,7 +64,7 @@ payload block still works exactly as before, so a server-side producer
 (Zigbee2MQTT, Home Assistant, a Yandex-hub poller) can feed the same screen on
 boards built without the stack (`nocturne-c6-nozb`).
 
-entry: `{name, t, h, b, age}`
+entry: `{name, t, h, b, age, p}`
 | key | type | size | meaning |
 |---|---|---|---|
 | `name` | string | ≤16 | room / sensor label, shown on the ПОГОДА tile |
@@ -72,6 +72,7 @@ entry: `{name, t, h, b, age}`
 | `h` | int | | relative humidity %, -1 = unknown |
 | `b` | int | | battery %, -1 = unknown; under 20 the bar turns red |
 | `age` | int | | seconds since the sensor last reported, -1 = unknown |
+| `p` | int | | atmospheric pressure **hPa**, -1 = this sensor has no barometer |
 
 > `age` is not optional in spirit. Battery Zigbee sensors go quiet for hours;
 > a last-known reading presented as current is the same lie the "no signal"
@@ -167,6 +168,26 @@ Every field is optional; the sentinel means "no change this time".
 | `slot` | 0..2 | -1 | switch the active theme slot |
 | `night` | 0/1 | -1 | quiet hours on/off |
 | `nightfrom`, `nightto` | 0..23 | -1 | quiet-hour bounds (wraps past midnight) |
+| `zbalert` | 0/1 | -1 | climate alerts on the ForestHome sensor |
+| `zbtmin`, `zbtmax` | °C | -1000 | temperature band; `-99`/`99` disable that side |
+| `zbhmin`, `zbhmax` | % | -1000 | humidity band; `-1`/`101` disable that side |
+| `zbbat` | % | -1000 | warn below this battery level; `0` = never |
+| `zbjoin` | sec | -1 | **one-shot**: open the network for joining |
+| `zbpoll` | 1 | -1 | **one-shot**: read the sensor's attributes now |
+| `zbint` | sec | -1 | ask the sensor to report at least this often |
+
+> `zbjoin`/`zbpoll` are events, not settings: the panel drops them from a
+> merged command rather than re-running them on the next unrelated click.
+> `zbpoll` is a *request* — an Aqara is a sleepy end device and answers on its
+> own schedule — and `zbint` is a request too: Xiaomi firmware is known to
+> ignore configure-reporting. The panel says both out loud rather than
+> pretending they are settings.
+
+> The climate keys use **-1000** for "not in this command", not -1: every
+> ordinary value here — including 0 and negatives — is a legitimate threshold,
+> so the usual sentinel would have made "warn me below 0 °C" unsayable.
+> Alerts fire on the EDGE with a degree of hysteresis, and a stale sensor never
+> clears one.
 | `ota` | string | — | **removed in v1.14.0** — the Zigbee build has one app partition and no OTA slots; the key is ignored |
 
 > **`ota` is the one field that can execute code.** Telemetry is unauthenticated
@@ -210,9 +231,17 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 - `HELO`, `screen:N`, `cmd:claude|status`
 - `wolf:` — pet stats (hunger/joy/energy/mood/alive/sleeping/age)
 - `zbs:` — one line per locally-paired Zigbee sensor, once a minute:
-  `zbs:name,temp10,humidity,battery,age_sec` (temp ×10; -1 = unknown; names come
-  from `nocturne.ini` and must not contain commas). This is how the server —
+  `zbs:name,temp10,humidity,battery,age_sec,pressure_hpa` (temp ×10; -1 =
+  unknown; names come from `nocturne.ini` and must not contain commas). This is how the server —
   and through it a Yandex Smart Home skill — learns what the coordinator hears.
+- `zbs:` gained a sixth field in v1.16: `…,age_sec,pressure_hpa` (-1 = the
+  sensor has no barometer). The Aqara WSDCGQ11LM has one; the WSDCGQ01LM does
+  not, so consumers must treat it as optional rather than assume zero.
+- `zbst:` — the coordinator's own account of itself, every 15 s:
+  `zbst:up,channel,join_left_sec,devices,last_heard_sec` (-1 = never heard).
+  A hub that is up with no sensors and a hub that is down look identical from
+  outside, and they need different fixes — so the board reports which it is
+  rather than leaving the panel to infer it from silence.
 - `sd:` — the card's health, once a minute:
   `sd:ok,clock_hz,used_mb,total_mb,writes,slow,fails,queue,last_ms`. The board
   is the only thing that can see its own card, so without this a card that has
@@ -226,7 +255,8 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 
   `petllm, wchat, wtone, led, flip, bglight, bright, carousel, timeout,
   bgstyle, theme, uielem, scenemask, notifshow, ledmode, pin, slot, night,
-  nightfrom, nightto`
+  nightfrom, nightto, zbalert, zbtmin, zbtmax, zbhmin, zbhmax, zbbat,
+  zbjoin, zbpoll, zbint`
 
   `carousel` is -1 when off; `theme` is -1 when a custom palette is active.
   Fields 16-20 were **appended** in v1.9.0 — a panel that splits by index and

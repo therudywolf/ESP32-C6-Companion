@@ -131,6 +131,10 @@ struct ZbSensor {
   int battery = -1;    /* % */
   int ageSec = -1;     /* since the sensor last reported; battery devices go
                           quiet for hours, so a reading with no age is a lie */
+  /* Atmospheric pressure, hPa. -1 = this sensor has no barometer: the Aqara
+   * WSDCGQ11LM carries one, the cheaper WSDCGQ01LM does not, so every consumer
+   * must treat it as optional rather than assume zero. */
+  int pressure = -1;
 };
 
 struct ZigbeeData {
@@ -188,6 +192,19 @@ struct Settings {
   bool nightMode = false;        /* "night"  */
   int nightFrom = 23;            /* "nightF" hour 0..23 */
   int nightTo = 8;               /* "nightT" hour 0..23 */
+  /* Climate alerts on the Zigbee sensor. Off by default: a threshold nobody
+   * chose is a threshold that cries wolf. Temperatures are whole degrees,
+   * humidity whole percent; each bound can be disabled on its own with the
+   * sentinel below, because "warn me if it gets cold" is a complete wish and
+   * does not imply an upper bound. */
+  bool zbAlert = false;          /* "zbAl"  master switch */
+  int zbTempMin = -99;           /* "zbTmin" -99 = no lower bound */
+  int zbTempMax = 99;            /* "zbTmax"  99 = no upper bound */
+  int zbHumMin = -1;             /* "zbHmin"  -1 = no lower bound */
+  int zbHumMax = 101;            /* "zbHmax" 101 = no upper bound */
+  /* Silence after a battery warning fires, hours. The reading only moves a
+   * few percent a week, so without this it would re-fire every report. */
+  int zbBattMin = 15;            /* "zbBat" 0 = never warn */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
@@ -294,6 +311,13 @@ struct AppState {
   int rcPresetReset = -1;       /* 1 = drop custom, back to preset */
   int rcPin = -2;               /* pinned "home" scene; -1 = DEN, -2 = none */
   int rcSlot = -1;              /* active theme slot 0..2, -1 = none */
+  int rcZbJoin = -1;   /* seconds to open the network, one-shot */
+  int rcZbPoll = -1;   /* 1 = read the sensor now, one-shot */
+  int rcZbInt = -1;    /* requested reporting cadence, seconds */
+  int rcZbAlert = -1;
+  int rcZbTempMin = -1000, rcZbTempMax = -1000;
+  int rcZbHumMin = -1000, rcZbHumMax = -1000;
+  int rcZbBattMin = -1000;
   int rcNight = -1;             /* quiet hours 0/1, -1 = none */
   int rcNightFrom = -1, rcNightTo = -1; /* quiet-hour bounds, -1 = none */
 };
