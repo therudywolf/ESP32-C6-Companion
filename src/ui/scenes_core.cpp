@@ -44,6 +44,7 @@ const char *actionHint(int scene, UiCtx &ui) {
   case SCENE_FOREST:
   case SCENE_SERVICES: return "—обновить";
   case SCENE_HISTORY: return "—час/сутки";
+  case SCENE_HOME: return "—окно графика";
   default: return nullptr;
   }
 }

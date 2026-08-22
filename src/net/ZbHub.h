@@ -52,6 +52,13 @@ public:
   bool running() const { return running_; }
   /* One-shot: a sensor reported for the first time (fresh pairing, or first
    * words after a reboot). main() turns it into a toast and a wolf remark. */
+  /* A reading changed since the last call — main() turns this into one row in
+   * the dated climate archive. */
+  bool takeLogDue() {
+    bool r = logDue_;
+    logDue_ = false;
+    return r;
+  }
   bool takeNewSensor() {
     bool r = newSensor_;
     newSensor_ = false;
@@ -89,6 +96,7 @@ private:
   int lastTemp_ = -32768; /* last value pushed to the sparkline */
   int lastHum_ = -1;
   bool newSensor_ = false;
+  bool logDue_ = false;
 };
 
 #endif

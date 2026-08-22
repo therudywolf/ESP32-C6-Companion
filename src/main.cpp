@@ -43,6 +43,7 @@
 #include "pet/wolf_sprites.h"
 #include "storage/Archive.h"
 #include "storage/CardConfig.h"
+#include "storage/ClimateLog.h"
 #include "storage/SdStore.h"
 #include "ui/Display.h"
 #include "ui/SceneManager.h"
@@ -73,6 +74,9 @@ static ZbHub zb;
 static ClimateAlert climate;
 static CardConfig cardCfg;
 static Archive archive;
+static ClimateLog climateLog;
+static ClimateLog::Series climateSeries;
+static bool climateSeriesOk = false;
 static Achievements ach;
 
 /* What the board actually uses, after /nocturne.ini has had its say. secrets.h
@@ -530,6 +534,13 @@ static void consoleExec(String line) {
         Serial.printf("\n---END %s---\n", arg.c_str());
       }
     }
+  } else if (cmd == "home") {
+    /* The ДОМ trend window, same three rungs the long press cycles. Here too
+     * because "does the card-backed graph read back" is a question worth
+     * answering without a finger on the button. */
+    sceneMgr.setHomeMode(arg.toInt());
+    Serial.printf("home window = %d (0 live, 1 day, 2 week)\n",
+                  sceneMgr.homeMode());
   } else if (cmd == "snooze") {
     unsigned long sec = arg.length() ? (unsigned long)arg.toInt() : 300;
     if (sec < 1) sec = 1;
@@ -671,6 +682,7 @@ void setup() {
   }
   loadForzaBest();
   archive.begin(&sd);
+  climateLog.begin(&sd);
   if (cardCfg.skin()[0]) wolfLoadSkin(&sd, cardCfg.skin());
   /* Card themes must exist before the stored preset index is applied, or a
    * board set to a file theme would fall back to preset 0 on every boot. */
@@ -1309,6 +1321,14 @@ void loop() {
   /* Thresholds the owner set in the panel; edge-triggered, hysteretic, and
    * deliberately silent while the sensor is stale. */
   climate.tick(now, state, brain, sceneMgr);
+  /* One row per genuinely new reading, stamped with the wall clock. A
+   * WSDCGQ11LM speaks on change plus roughly hourly, so this is 30-80 rows a
+   * day — about 2 KB, under a megabyte a year. */
+  if (zb.takeLogDue() && state.zb.count > 0) {
+    char date[12], hm[8];
+    if (clockParts(date, sizeof(date), hm, sizeof(hm)))
+      climateLog.append(date, hm, state.zb.list[0]);
+  }
 
   /* input */
   input->setRepeatEnabled(sceneMgr.wantsButtonRepeat());
@@ -1329,6 +1349,25 @@ void loop() {
              coverClient.ready() ? coverClient.data() : nullptr,
              sceneMgr.historyMode(), &archive.series(), archive.seriesDays(),
              &ach};
+    /* Reload the climate series when the ДОМ window changes, and refresh an
+     * open one every couple of minutes — a sensor that speaks every 50 minutes
+     * does not warrant more, and each load walks the card. */
+    {
+      static int lastHomeMode = -1;
+      static unsigned long lastClimLoad = 0;
+      static ClimateSeriesView climView;
+      int hm2 = sceneMgr.homeMode();
+      if (hm2 != lastHomeMode || (hm2 > 0 && now - lastClimLoad > 120000UL)) {
+        lastHomeMode = hm2;
+        lastClimLoad = now;
+        climateSeriesOk =
+            hm2 > 0 && climateLog.loadSeries(hm2 == 1 ? 1 : 7, climateSeries);
+      }
+      climView = {climateSeries.temp10, climateSeries.hum, ClimateLog::kCols,
+                  climateSeries.filled, climateSeries.rows};
+      ui.homeMode = hm2;
+      ui.climate = climateSeriesOk ? &climView : nullptr;
+    }
     sceneMgr.draw(ui);
     display.push();
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so

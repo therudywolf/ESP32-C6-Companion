@@ -30,6 +30,21 @@ struct UiCtx {
   const GraphSet *archive = nullptr; /* daily series, only in mode 2 */
   int archiveDays = 0;
   const Achievements *ach = nullptr;
+  /* ДОМ trend window: 0 = the live 32 reports in RAM, 1 = today from the card,
+   * 2 = the week. `climate` is only non-null for 1 and 2. */
+  int homeMode = 0;
+  const struct ClimateSeriesView *climate = nullptr;
+};
+
+/* A loaded climate series, flattened so the UI does not include the storage
+ * layer. INT_MIN / -1 mark buckets no reading fell into: a gap in the record is
+ * a fact, and drawing through it would invent readings the sensor never sent. */
+struct ClimateSeriesView {
+  const int *temp10;
+  const int *hum;
+  int cols;
+  int filled;
+  int rows;
 };
 
 namespace widgets {

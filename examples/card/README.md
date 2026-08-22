@@ -20,7 +20,7 @@ firmware creates the rest itself on first boot.
 |---|---|
 | `/logs/YYYY-MM-DD.csv` | one telemetry row a minute — ~43 KB a day |
 | `/logs/daily.csv` | one row a day, including **idle** CPU/GPU temperature |
-| `/logs/zb.csv` | one row per Zigbee sensor report: `uptime_s,name,temp_c,rh,bat` |
+| `/climate/YYYY-MM-DD.csv` | the climate archive: `time,temp_c,rh,bat,press_hpa`, one row per report. ~2 KB a day, under a megabyte a year. Opens in anything. |
 | `/logs/zb.bin` | last readings, so a reboot does not blank ДОМ for an hour |
 | `/logs/boot.jsonl` | one record per boot: reason, counters, free heap |
 | `/logs/coreNN.elf` | a crash dump copied out of flash after a panic (see below) |

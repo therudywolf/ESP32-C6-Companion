@@ -115,6 +115,15 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   **requests**, not settings: an Aqara sleeps between check-ins and Xiaomi
   firmware is known to ignore configure-reporting, and a button that quietly
   does nothing is worse than one that says what it can promise.
+- **The room keeps a record.** Every reading lands in
+  `/climate/YYYY-MM-DD.csv` — `time,temp_c,rh,bat,press_hpa`, wall clock, one
+  row per report. (The first version stamped rows with *uptime*, which cannot
+  order two readings from either side of a reboot and so was not history at
+  all.) A long press on ДОМ cycles the trends between the last reports held in
+  RAM, **today** and **the week**, both read back from those files. A bucket no
+  reading fell into leaves a gap in the line rather than a straight segment
+  across six silent hours, because that segment would be a claim the sensor
+  never made.
 - **Climate alerts.** Thresholds set from the web panel — too warm, too cold,
   too damp, too dry, battery running out. They fire on the **edge**, not on the
   fact of being out of range, with a degree of hysteresis so a room sitting on

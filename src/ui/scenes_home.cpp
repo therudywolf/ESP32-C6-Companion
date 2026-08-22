@@ -17,6 +17,8 @@
  * the owner's alert band wears the alert colour, so the screen agrees with the
  * toast that just fired instead of looking calm beside it.
  */
+#include <limits.h>
+
 #include "core/config.h"
 #include "ui/Scenes.h"
 #include "ui/Theme.h"
@@ -89,6 +91,49 @@ static void trendBox(LGFX_Sprite &g, int x, int y, int w, int h,
     int y0 = y + h - (gr.at(i - 1) - lo) * h / (hi - lo);
     int y1 = y + h - (gr.at(i) - lo) * h / (hi - lo);
     g.drawLine(x0, y0, x1, y1, stale ? DIM : ink);
+  }
+}
+
+/* Draw a loaded series. Unlike the live sparkline this array HAS GAPS — a
+ * bucket no reading fell into is INT_MIN — and the line skips them instead of
+ * drawing through, because a straight segment across six silent hours is a
+ * claim the sensor never made. */
+static void seriesBox(LGFX_Sprite &g, int x, int y, int w, int h,
+                      const int *vals, int cols, int div, int flatSpan,
+                      const char *label, uint16_t ink) {
+  g.setFont(&F_SMALL);
+  textAt(g, x, y - 4, label, DIM);
+  int lo = 0, hi = 0;
+  bool any = false;
+  for (int i = 0; i < cols; i++) {
+    int v = vals[i];
+    if (v == INT_MIN || v < -1000) continue;
+    if (!any) { lo = hi = v; any = true; }
+    else { if (v < lo) lo = v; if (v > hi) hi = v; }
+  }
+  if (!any) return;
+  if (hi - lo < flatSpan) {
+    int mid = (hi + lo) / 2;
+    lo = mid - flatSpan / 2;
+    hi = mid + flatSpan / 2;
+  }
+  char t[12];
+  snprintf(t, sizeof(t), "%d", hi / div);
+  textRight(g, x + w, y - 4, t, DIM);
+  snprintf(t, sizeof(t), "%d", lo / div);
+  textRight(g, x + w, y + h, t, DIM);
+
+  const int gw = w - 24;
+  int px = -1, py = 0;
+  for (int i = 0; i < cols; i++) {
+    int v = vals[i];
+    if (v == INT_MIN || v < -1000) { px = -1; continue; } /* gap: lift the pen */
+    int cx = x + i * gw / (cols - 1);
+    int cy = y + h - (v - lo) * h / (hi - lo);
+    if (px >= 0) g.drawLine(px, py, cx, cy, ink);
+    else g.drawPixel(cx, cy, ink);
+    px = cx;
+    py = cy;
   }
 }
 
@@ -219,13 +264,29 @@ void drawHome(UiCtx &ui) {
     batteryBar(g, hx, 104, NOCT_W - hx - 8, z.battery, stale);
   }
 
-  /* ── the day so far: one trend per quantity ──────────────────────────── */
-  /* 32 samples of a device that speaks every 20–60 minutes reach back most of
-   * a day, which is the whole reason this screen exists rather than the tile. */
-  trendBox(g, 8, 128, 140, 28, ui.gr.zbTemp, 10, 5, "температура",
-           stale ? DIM : ORANGE, stale);
-  trendBox(g, hx, 128, NOCT_W - hx - 8, 28, ui.gr.zbHum, 1, 6, "влажность",
-           stale ? DIM : INFO, stale);
+  /* ── the trends ──────────────────────────────────────────────────────── */
+  /* Three windows, cycled by a long press. The live one is the 32 reports held
+   * in RAM; the other two are read back from the dated CSVs on the card, which
+   * is what makes this a history rather than a session. */
+  if (ui.homeMode > 0 && ui.climate && ui.climate->filled >= 2) {
+    seriesBox(g, 8, 128, 140, 28, ui.climate->temp10, ui.climate->cols, 10, 5,
+              ui.homeMode == 1 ? "сутки" : "неделя", ORANGE);
+    seriesBox(g, hx, 128, NOCT_W - hx - 8, 28, ui.climate->hum,
+              ui.climate->cols, 1, 6, "влажность", INFO);
+  } else if (ui.homeMode > 0) {
+    /* Asked for the card but there is nothing there yet — say which, rather
+     * than showing an empty box that looks like a broken graph. */
+    g.setFont(&F_SMALL);
+    textAt(g, 8, 132, ui.homeMode == 1 ? "за сутки записей ещё нет"
+                                       : "за неделю записей ещё нет",
+           DIM);
+    textAt(g, 8, 146, "долгое нажатие — вернуть последние отчёты", DIM);
+  } else {
+    trendBox(g, 8, 128, 140, 28, ui.gr.zbTemp, 10, 5, "температура",
+             stale ? DIM : ORANGE, stale);
+    trendBox(g, hx, 128, NOCT_W - hx - 8, 28, ui.gr.zbHum, 1, 6, "влажность",
+             stale ? DIM : INFO, stale);
+  }
 
   /* More sensors than this screen shows: say so rather than hide them — the
    * ПОГОДА tile has room for the next one. */
