@@ -316,11 +316,21 @@ namespace {
 struct PollTarget {
   uint16_t cluster;
   uint16_t attr;
+  /* The smallest change worth a radio message, in the attribute's OWN units.
+   * ZCL calls this the reportable change, and for an ANALOG attribute type it
+   * is mandatory - the stack serialises it into the Configure Reporting
+   * packet by dereferencing the pointer it is given. Passing nullptr here is
+   * not "keep the device default", it is a null dereference inside
+   * zb_zcl_put_value_to_packet, which is exactly how this crashed. */
+  uint16_t delta;
 };
 const PollTarget kPoll[] = {
-    {ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT, 0x0000},
-    {ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, 0x0000},
-    {ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT, 0x0000},
+    /* temperature is S16 in hundredths of a degree: 10 = 0.1 C */
+    {ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT, 0x0000, 10},
+    /* humidity is U16 in hundredths of a percent: 100 = 1 % */
+    {ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, 0x0000, 100},
+    /* pressure is S16 in whole hPa: 1 = 1 hPa, the smallest it can express */
+    {ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT, 0x0000, 1},
 };
 } // namespace
 
@@ -352,6 +362,14 @@ bool ZbHub::pollNow() {
 
 bool ZbHub::setReportInterval(int minSec, int maxSec) {
   if (!running_) return false;
+  /* Configure Reporting is an ACTION - it puts a command on the air - so it
+   * must fire on a CHANGE, never on a value that merely happens to be set.
+   * The control panel replays its whole settings dict about once a second,
+   * and a board that acted on every copy would transmit to a coin-cell
+   * sensor at 1 Hz forever. Trusting the other end to be edge-triggered is
+   * what turned one bad pointer into a boot loop; the guard belongs here,
+   * next to the radio. */
+  if (minSec == lastMin_ && maxSec == lastMax_) return true;
   if (minSec < 1) minSec = 1;
   if (maxSec < minSec) maxSec = minSec;
   if (maxSec > 3600) maxSec = 3600;
@@ -367,7 +385,12 @@ bool ZbHub::setReportInterval(int minSec, int maxSec) {
                          : ESP_ZB_ZCL_ATTR_TYPE_S16;
       rec.min_interval = (uint16_t)minSec;
       rec.max_interval = (uint16_t)maxSec;
-      rec.reportable_change = nullptr; /* keep the device's own delta */
+      /* Must outlive the call and match attrType's width: the stack reads two
+       * bytes through this pointer while building the packet. It is the one
+       * field in the record that is a pointer rather than a value, and the
+       * one that must never be null for an analog type. */
+      uint16_t delta = t.delta;
+      rec.reportable_change = &delta;
 
       esp_zb_zcl_config_report_cmd_t cmd = {};
       cmd.zcl_basic_cmd.dst_addr_u.addr_short = s.addr;
@@ -383,6 +406,8 @@ bool ZbHub::setReportInterval(int minSec, int maxSec) {
       sent++;
     }
   }
+  lastMin_ = minSec;
+  lastMax_ = maxSec;
   Serial.printf("[ZB] requested reporting %d-%d s on %d cluster(s)\n",
                 minSec, maxSec, sent);
   return sent > 0;
