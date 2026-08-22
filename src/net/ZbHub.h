@@ -76,6 +76,8 @@ public:
    * reports, at most `maxSec`. Xiaomi firmware is known to ignore
    * configure-reporting and keep its own schedule, so this is a REQUEST, and
    * the panel says so rather than pretending it is a setting. */
+  /* Idempotent: repeating an interval already in force is a no-op, so a
+   * settings line resent every second costs nothing on the air. */
   bool setReportInterval(int minSec, int maxSec);
   /* Seconds since the last report from any sensor, -1 = nothing ever heard. */
   int lastHeardSec(unsigned long now) const;
@@ -91,6 +93,11 @@ private:
   unsigned long joinUntil_ = 0;
   unsigned long lastSave_ = 0;
   unsigned long lastLog_ = 0;
+  /* The reporting window currently believed to be in force on the sensor.
+   * Zero means "never asked", which is why the guard cannot use 0 as a
+   * legitimate interval - setReportInterval clamps minSec to 1 anyway. */
+  int lastMin_ = 0;
+  int lastMax_ = 0;
   bool dirty_ = false;
   int knownCount_ = 0;
   int lastTemp_ = -32768; /* last value pushed to the sparkline */
