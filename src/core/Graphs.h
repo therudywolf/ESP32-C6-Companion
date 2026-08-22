@@ -38,6 +38,10 @@ struct Graphs {
    * actually arrives, and 32 samples then span most of a day. Temperature is
    * stored x10 so half-degree moves survive; humidity is whole percent. */
   RollingGraph zbTemp, zbHum;
+  /* The board's own die temperature (x10) and loop duty cycle, one sample a
+   * second — 32 s of history, which is the right window for "is it climbing
+   * right now" rather than a daily trend. */
+  RollingGraph boardTemp, boardLoad;
   void onPayload(const struct HardwareData &hw);
 };
 

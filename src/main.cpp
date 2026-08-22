@@ -91,6 +91,9 @@ static InputSystem *input = nullptr;
 static IntervalTimer frameTimer(NOCT_FRAME_MS);
 static bool prevTcpConnected = false;
 static bool shotFromConsole = false; /* who asked, so the reply goes back */
+/* Accumulated inside the frame block, drained once a second into boardLoad. */
+static unsigned long frameBusyUs = 0;
+static int frameCount = 0;
 
 /* One place decides what the backlight is: the user setting, folded with the
  * screensaver dim and quiet hours. Every other path just changes an input to
@@ -1125,6 +1128,17 @@ void loop() {
   /* The card's health, same cadence. Cheap, and it turns "why is the archive
    * short" into a number you can watch climb instead of a discovery made
    * months later. */
+  /* The board's own vitals, every 15 s. */
+  static unsigned long lastBoardReport = 0;
+  if (tcp.connected() && now - lastBoardReport > 15000UL) {
+    lastBoardReport = now;
+    tcp.sendBoard(state.boardTemp, state.boardTempMax, state.boardLoad,
+                  state.boardFps, state.heapFreeKb, state.heapMinKb,
+                  state.heapLargestKb, state.uptimeSec, state.cpuMhz,
+                  state.link.rssi, state.boot.bootCount, state.boot.faultCount,
+                  state.boot.reasonText);
+  }
+
   /* Hub state upstream, so the panel's "check connection" shows the board's
    * answer rather than the server's guess. */
   static unsigned long lastZbStatus = 0;
@@ -1342,8 +1356,36 @@ void loop() {
     sceneMgr.handleInput(ev, ui);
   }
 
+  /* Board vitals, once a second. `busyUs` is accumulated by the frame block
+   * below; the ratio against a real elapsed second is the loop's duty cycle —
+   * the honest answer to "how loaded is the board", and the one that goes red
+   * when a scene starts costing more than the 40 ms budget allows. */
+  {
+    static unsigned long lastVitals = 0;
+    if (now - lastVitals >= 1000) {
+      unsigned long span = now - lastVitals;
+      lastVitals = now;
+      if (span > 0) {
+        int pct = (int)((frameBusyUs / 10UL) / span); /* us->% over span ms */
+        state.boardLoad = pct > 100 ? 100 : pct;
+      }
+      state.boardFps = frameCount;
+      frameBusyUs = 0;
+      frameCount = 0;
+      state.heapFreeKb = (int)(ESP.getFreeHeap() / 1024);
+      state.heapMinKb = (int)(ESP.getMinFreeHeap() / 1024);
+      state.heapLargestKb =
+          (int)(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024);
+      state.uptimeSec = now / 1000UL;
+      state.cpuMhz = (int)getCpuFrequencyMhz();
+      graphs.boardTemp.push((int)(state.boardTemp * 10.0f));
+      graphs.boardLoad.push(state.boardLoad);
+    }
+  }
+
   /* frame */
   if (frameTimer.check(now)) {
+    unsigned long frameT0 = micros();
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
              coverClient.ready() ? coverClient.data() : nullptr,
@@ -1370,6 +1412,8 @@ void loop() {
     }
     sceneMgr.draw(ui);
     display.push();
+    frameBusyUs += micros() - frameT0;
+    frameCount++;
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
      * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
     if (sceneMgr.takeZbJoinRequest()) {

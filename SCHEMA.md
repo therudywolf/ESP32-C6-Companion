@@ -242,6 +242,15 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 - `zbs:` gained a sixth field in v1.16: `…,age_sec,pressure_hpa` (-1 = the
   sensor has no barometer). The Aqara WSDCGQ11LM has one; the WSDCGQ01LM does
   not, so consumers must treat it as optional rather than assume zero.
+- `brd:` — the board's own vitals, every 15 s:
+  `brd:temp,temp_max,load,fps,heap_free_kb,heap_min_kb,heap_largest_kb,
+  uptime_s,cpu_mhz,rssi,boots,faults,reason`. The device watched a PC all day
+  and reported nothing about ITSELF — which means you only find out about it
+  when it stops. `load` is the share of the frame period the render loop
+  actually spent working: an Arduino sketch has no scheduler accounting to ask,
+  so this is the only figure that can be measured rather than invented, and it
+  is labelled as loop duty, not CPU. `heap_min` matters more than `heap_free` —
+  the low-water mark is what decides whether the next TLS handshake fits.
 - `zbst:` — the coordinator's own account of itself, every 15 s:
   `zbst:up,channel,join_left_sec,devices,last_heard_sec` (-1 = never heard).
   A hub that is up with no sensors and a hub that is down look identical from

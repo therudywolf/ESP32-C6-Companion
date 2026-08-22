@@ -115,6 +115,13 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   **requests**, not settings: an Aqara sleeps between check-ins and Xiaomi
   firmware is known to ignore configure-reporting, and a button that quietly
   does nothing is worse than one that says what it can promise.
+- **ПЛАТА C6 — the board's own screen.** Die temperature with its 32-second
+  trend and the peak since boot, heap free against the lowest ever seen and the
+  largest contiguous block, the render loop's duty cycle with the frame rate
+  actually achieved, uptime and the restart reason with its counters. All of it
+  existed only in the serial log or a menu overlay before, which meant nobody
+  ever saw it. The same numbers go upstream as `brd:` and get a card in the web
+  panel.
 - **The room keeps a record.** Every reading lands in
   `/climate/YYYY-MM-DD.csv` — `time,temp_c,rh,bat,press_hpa`, wall clock, one
   row per report. (The first version stamped rows with *uptime*, which cannot
