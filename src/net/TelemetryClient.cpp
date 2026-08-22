@@ -224,6 +224,15 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
    * silence blanks them */
   state.link.dataDead =
       !firstData_ || (now - lastUpdate_) > 30000UL;
+  /* How stale, in seconds, so a frozen screen can say so instead of just
+   * looking current. -1 until the first payload of the session. */
+  state.payloadAgeSec =
+      firstData_ ? (int)((now - lastUpdate_) / 1000UL) : -1;
+  /* "The PC is off" is not the same as "no payload": the lite endpoint can be
+   * feeding real data while the PC sleeps, and then every scene stays useful.
+   * Only when nothing is covering do the PC-only screens stop being worth
+   * walking through. */
+  state.pcOffline = state.link.dataDead && !state.link.liteActive;
 }
 
 void TelemetryClient::parsePayload(const char *line, size_t len,

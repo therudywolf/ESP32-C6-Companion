@@ -182,13 +182,16 @@ void drawHome(UiCtx &ui) {
   bool stale = isStale(z);
   char v[40];
 
-  /* Header: which room, and how fresh. */
-  g.setFont(&F_MED);
-  textAt(g, 6, 24, z.name[0] ? z.name : NOCT_ZB_NET_NAME, stale ? DIM : ORANGE);
+  /* Header: which room, and how fresh.
+   *
+   * F_TEXT, not F_MED: the name is a label over a hero number, and F_MED's ink
+   * runs to y44 while the temperature starts at y40 — the two overlapped. A
+   * header that collides with the value it heads is worse than a smaller one. */
+  g.setFont(&F_TEXT);
+  textAt(g, 6, 22, z.name[0] ? z.name : NOCT_ZB_NET_NAME, stale ? DIM : ORANGE);
   char age[40];
   fmtAge(z, age, sizeof(age));
-  g.setFont(&F_TEXT);
-  textRight(g, NOCT_W - 6, 26, age, stale ? CRIT : DIM);
+  textRight(g, NOCT_W - 6, 22, age, stale ? CRIT : DIM);
 
   /* ── temperature, left half ──────────────────────────────────────────── */
   if (z.temp10 != -32768) {

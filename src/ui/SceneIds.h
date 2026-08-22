@@ -35,6 +35,30 @@ enum SceneId {
   SCENE_COUNT
 };
 
+/* Does this scene need the PC to be worth looking at?
+ *
+ * The board is a companion, not a terminal: with the PC off it still has a
+ * wolf, a paired climate sensor, its own vitals and an archive on the card.
+ * Without this split, a dark PC turned every screen into the same blinking
+ * "НЕТ СИГНАЛА" and the nav ring became fourteen identical blanks.
+ *
+ * ПОГОДА counts as autonomous on purpose: a forecast fetched this morning is
+ * still a forecast this evening, so it keeps showing with its age rather than
+ * being hidden. */
+inline bool sceneNeedsPc(int s) {
+  switch (s) {
+  case SCENE_DEN:
+  case SCENE_WEATHER:
+  case SCENE_HISTORY:
+  case SCENE_HOME:
+  case SCENE_BOARD:
+  case SCENE_FORZA:
+    return false;
+  default:
+    return true;
+  }
+}
+
 /* Map the server's target_screen name to a scene (alert takeover). */
 inline int sceneFromServerName(const char *name) {
   struct {
