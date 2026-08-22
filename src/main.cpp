@@ -1084,11 +1084,30 @@ void loop() {
   }
 
   /* Local sensors go upstream too, so the server — and through it a Yandex
-   * skill — sees what the coordinator hears. One line per sensor per minute. */
+   * skill — sees what the coordinator hears.
+   *
+   * On CHANGE, not only on a timer. A once-a-minute heartbeat meant that right
+   * after pairing the panel showed the new sensor with empty readings for up
+   * to a full minute — which reads as "it joined but is broken" at exactly the
+   * moment the owner is watching to see whether it worked. The 5 s floor keeps
+   * a twitchy reading from becoming a stream, and the 60 s heartbeat still goes
+   * out unchanged so the server can tell "quiet" from "gone". */
   static unsigned long lastZbReport = 0;
-  if (tcp.connected() && state.zb.count > 0 && now - lastZbReport > 60000UL) {
-    lastZbReport = now;
-    for (int i = 0; i < state.zb.count; i++) tcp.sendZbSensor(state.zb.list[i]);
+  static int sentTemp = -32768, sentHum = -1, sentBat = -1, sentCount = -1;
+  if (tcp.connected() && state.zb.count > 0) {
+    const ZbSensor &z0 = state.zb.list[0];
+    bool changed = z0.temp10 != sentTemp || z0.humidity != sentHum ||
+                   z0.battery != sentBat || state.zb.count != sentCount;
+    unsigned long gap = now - lastZbReport;
+    if ((changed && gap > 5000UL) || gap > 60000UL) {
+      lastZbReport = now;
+      sentTemp = z0.temp10;
+      sentHum = z0.humidity;
+      sentBat = z0.battery;
+      sentCount = state.zb.count;
+      for (int i = 0; i < state.zb.count; i++)
+        tcp.sendZbSensor(state.zb.list[i]);
+    }
   }
 
   /* The card's health, same cadence. Cheap, and it turns "why is the archive
