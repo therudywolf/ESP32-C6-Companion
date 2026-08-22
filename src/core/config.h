@@ -95,11 +95,18 @@
 #define NOCT_BTN_REPEAT_DELAY_MS 900 /* hold this long before repeats start */
 #define NOCT_BTN_REPEAT_MS 160       /* gap between repeats */
 
-/* ── OTA ──────────────────────────────────────────────────────────────── */
-/* Two 1.875 MB app slots (min_spiffs.csv) — the image is ~1.5 MB. NVS keeps its
- * offset/size from the old huge_app table, so the wolf survives the switch. */
-#define NOCT_OTA_PORT 3232
-#define NOCT_OTA_HOSTNAME "nocturne-c6"
+/* ── Zigbee ───────────────────────────────────────────────────────────── */
+/* The board is the coordinator. Measured cost: +380 KB flash, +20 KB static
+ * RAM, and no OTA — a single 3.62 MB app partition is the only 4 MB layout that
+ * fits the stack (Espressif's own zigbee_zczr gives 1.25 MB slots, which a
+ * hello-world coordinator already overflows). Updates are by cable now.
+ * Endpoint 1 is the conventional first application endpoint. */
+#define NOCT_ZB_ENDPOINT 1
+#define NOCT_ZB_JOIN_SEC 180
+/* 802.15.4 channel for a NEW network formation. 25 = 2.475 GHz, above WiFi
+ * channel 11 - measured on this board, parking Zigbee on top of the WiFi
+ * frequency starved WiFi RX to zero payloads while TCP stayed "connected". */
+#define NOCT_ZB_CHANNEL 25
 
 /* ── Storage caps (SD is optional; rotate, never freeze) ──────────────── */
 /* How much of a line file's tail is ever read back. A cap ABOVE this makes the
@@ -153,6 +160,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.13.0"
+#define NOCT_VERSION "1.14.0"
 
 #endif

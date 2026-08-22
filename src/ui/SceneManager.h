@@ -49,6 +49,11 @@ public:
    * (menu, pickers, colour editor) — see Button.h. */
   bool wantsButtonRepeat() const;
   /* Menu asked for a screenshot; main() owns the card, so it consumes this. */
+  bool takeZbJoinRequest() {
+    bool r = zbJoinRequested_;
+    zbJoinRequested_ = false;
+    return r;
+  }
   bool takeShotRequest() {
     bool r = shotRequested_;
     shotRequested_ = false;
@@ -108,6 +113,7 @@ private:
   int histMode_ = 0;     /* ИСТОРИЯ: 0 hour, 1 day, 2 card archive */
   unsigned long resetArmedUntil_ = 0; /* factory reset needs a 2nd confirm */
   bool shotRequested_ = false;
+  bool zbJoinRequested_ = false;
 
   unsigned long alertSnoozeUntil_ = 0;
   int preAlertScene_ = -1;

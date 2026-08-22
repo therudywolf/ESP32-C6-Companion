@@ -27,6 +27,10 @@ public:
                 bool sleeping, unsigned long ageDays);
   /* report current device settings upstream so the panel mirrors the board */
   void sendCfg(const Settings &s);
+  /* Report a local Zigbee sensor upstream. The board is the coordinator now,
+   * so the server side (and through it the Yandex skill) learns the readings
+   * from us - the reverse of the zb payload block, one line per sensor. */
+  void sendZbSensor(const ZbSensor &z);
   /* feed an externally-fetched payload (the lite fallback) through
    * the same parser, so weather/forest/services scenes work with the PC off */
   void feedExternal(const char *json, AppState &state, Graphs &graphs) {
@@ -39,6 +43,13 @@ public:
 
 private:
   void tryConnect(unsigned long now);
+  /* All uplink goes through here. The socket is switched to non-blocking after
+   * connect, and a line that does not fit the send buffer is DROPPED, whole.
+   * The alternative was measured the hard way: with WiFi RX starved (Zigbee
+   * coexistence), ACKs stop, the ~5.7 KB send buffer fills in ~70 s of wolf/cfg
+   * reports, and the next blocking printf hangs the render loop until the task
+   * watchdog kills the board. Telemetry uplink is best-effort by nature. */
+  void sendLine(const char *line);
   void parsePayload(const char *line, size_t len, AppState &state,
                     Graphs &graphs);
 

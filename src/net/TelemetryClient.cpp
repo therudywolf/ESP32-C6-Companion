@@ -1,6 +1,7 @@
 #include "net/TelemetryClient.h"
 
 #include <ArduinoJson.h>
+#include <lwip/sockets.h>
 
 #include "core/TextUtil.h"
 #include "ui/SceneIds.h"
@@ -38,30 +39,67 @@ void TelemetryClient::tryConnect(unsigned long now) {
     lineLen_ = 0;
     lastSentScreen_ = -1;
     failCount_ = 0;
-    client_.print("HELO\n");
+    /* Non-blocking from here on: see sendLine(). Must be re-applied per
+     * connect, because stop() closes the fd. */
+    {
+      int fd = client_.fd();
+      if (fd >= 0) {
+        int fl = lwip_fcntl(fd, F_GETFL, 0);
+        lwip_fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+      }
+    }
+    sendLine("HELO\n");
   } else {
     tcpConnected_ = false;
     if (failCount_ < 4) failCount_++;
   }
 }
 
+void TelemetryClient::sendLine(const char *line) {
+  if (!tcpConnected_ || !line) return;
+  int fd = client_.fd();
+  if (fd < 0) return;
+  size_t len = strlen(line);
+  ssize_t n = lwip_send(fd, line, len, 0); /* fd is O_NONBLOCK */
+  if (n == (ssize_t)len) return;           /* the common case */
+  if (n < 0) return;                       /* buffer full: drop the whole line */
+  /* Partial write: a torn line would corrupt the framing, so give the stack a
+   * few milliseconds to drain, then give up. This is rare enough that the log
+   * line is worth it. */
+  size_t off = (size_t)n;
+  for (int tries = 0; tries < 5 && off < len; tries++) {
+    vTaskDelay(pdMS_TO_TICKS(2));
+    ssize_t m = lwip_send(fd, line + off, len - off, 0);
+    if (m > 0) off += (size_t)m;
+  }
+  if (off < len)
+    Serial.printf("[NET] uplink line torn at %u/%u B\n", (unsigned)off,
+                  (unsigned)len);
+}
+
 void TelemetryClient::sendScreen(int n) {
   if (!tcpConnected_ || n == lastSentScreen_) return;
   lastSentScreen_ = n;
-  client_.printf("screen:%d\n", n);
+  char b[24];
+  snprintf(b, sizeof(b), "screen:%d\n", n);
+  sendLine(b);
 }
 
 void TelemetryClient::sendCmd(const char *cmd) {
   if (!tcpConnected_) return;
-  client_.printf("cmd:%s\n", cmd);
+  char b[32];
+  snprintf(b, sizeof(b), "cmd:%s\n", cmd);
+  sendLine(b);
 }
 
 void TelemetryClient::sendWolf(int hunger, int joy, int energy, int mood,
                                bool alive, bool sleeping,
                                unsigned long ageDays) {
   if (!tcpConnected_) return;
-  client_.printf("wolf:%d,%d,%d,%d,%d,%d,%lu\n", hunger, joy, energy, mood,
-                 alive ? 1 : 0, sleeping ? 1 : 0, ageDays);
+  char b[64];
+  snprintf(b, sizeof(b), "wolf:%d,%d,%d,%d,%d,%d,%lu\n", hunger, joy, energy,
+           mood, alive ? 1 : 0, sleeping ? 1 : 0, ageDays);
+  sendLine(b);
 }
 
 void TelemetryClient::sendCfg(const Settings &s) {
@@ -72,15 +110,27 @@ void TelemetryClient::sendCfg(const Settings &s) {
    * Fields 16.. were APPENDED (pin,slot,night,nightfrom,nightto): a panel that
    * splits by index and ignores the tail keeps working unchanged. Never
    * reorder — only append. */
-  client_.printf("cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d\n",
-                 s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone,
-                 s.ledEnabled ? 1 : 0, s.flipped ? 1 : 0, s.bgLight ? 1 : 0,
-                 s.brightness, s.carouselEnabled ? s.carouselIntervalSec : -1,
-                 s.displayTimeoutSec, s.bgStyle,
-                 s.customActive ? -1 : s.themePreset, (unsigned)s.uiElements,
-                 (unsigned long)s.sceneMask, s.notifShow ? 1 : 0, s.ledMode,
-                 s.pinnedScene, s.activeSlot, s.nightMode ? 1 : 0, s.nightFrom,
-                 s.nightTo);
+  char b[160];
+  snprintf(b, sizeof(b),
+           "cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d\n",
+           s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone, s.ledEnabled ? 1 : 0,
+           s.flipped ? 1 : 0, s.bgLight ? 1 : 0, s.brightness,
+           s.carouselEnabled ? s.carouselIntervalSec : -1, s.displayTimeoutSec,
+           s.bgStyle, s.customActive ? -1 : s.themePreset,
+           (unsigned)s.uiElements, (unsigned long)s.sceneMask,
+           s.notifShow ? 1 : 0, s.ledMode, s.pinnedScene, s.activeSlot,
+           s.nightMode ? 1 : 0, s.nightFrom, s.nightTo);
+  sendLine(b);
+}
+
+void TelemetryClient::sendZbSensor(const ZbSensor &z) {
+  if (!tcpConnected_) return;
+  /* zbs:name,temp10,humidity,battery,age_sec - names come from nocturne.ini
+   * and must not contain commas (documented there). */
+  char b[80];
+  snprintf(b, sizeof(b), "zbs:%s,%d,%d,%d,%d\n", z.name, z.temp10, z.humidity,
+           z.battery, z.ageSec);
+  sendLine(b);
 }
 
 bool TelemetryClient::signalLost(unsigned long now) const {
@@ -407,7 +457,6 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcNight = rc["night"] | -1;
       state.rcNightFrom = rc["nightfrom"] | -1;
       state.rcNightTo = rc["nightto"] | -1;
-      state.rcOtaUrl = (const char *)(rc["ota"] | "");
       state.rcColorRole = -1;
       if (rc["color"].is<JsonArray>() && rc["color"].size() == 4) {
         state.rcColorRole = rc["color"][0] | -1;

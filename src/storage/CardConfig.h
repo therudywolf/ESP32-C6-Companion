@@ -50,6 +50,11 @@ public:
   /* Minutes past midnight, or -1 when no alarm is set. The board has an NTP
    * clock, a light and something that talks — it may as well wake you up. */
   int alarmMinutes() const { return alarm_; }
+  /* Names for the paired Zigbee sensors, in join order. "" falls back to
+   * "датчик N" — a short address is not something anyone wants to read. */
+  const char *zbName(int i) const {
+    return (i >= 0 && i < 4) ? zbName_[i].c_str() : "";
+  }
 
 private:
   void apply(const String &section, const String &key, const String &val);
@@ -62,6 +67,7 @@ private:
   String host_, llm_, llmModel_, llmKey_, skin_;
   uint16_t port_ = 0, panelPort_ = 0;
   int alarm_ = -1;
+  String zbName_[4];
   bool loaded_ = false;
   int applied_ = 0;
 };
