@@ -32,6 +32,20 @@ void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr, int back,
   }
 }
 
+int baroArrow(LGFX_Sprite &g, int x, int y, int dir, bool sharp, uint16_t c) {
+  if (dir == 0) {
+    g.drawFastHLine(x, y + 4, 9, c);
+    return 13;
+  }
+  int n = sharp ? 2 : 1;
+  for (int i = 0; i < n; i++) {
+    int xo = x + i * 10;
+    if (dir > 0) g.fillTriangle(xo, y + 8, xo + 8, y + 8, xo + 4, y, c);
+    else g.fillTriangle(xo, y, xo + 8, y, xo + 4, y + 8, c);
+  }
+  return n * 10 + 4;
+}
+
 void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color) {
   if (!uiOn(UI_PAWS)) return; /* element composition */
   g.fillCircle(cx, cy + 2, 3, color);     /* main pad */

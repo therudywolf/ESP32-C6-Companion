@@ -139,6 +139,12 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   reading fell into leaves a gap in the line rather than a straight segment
   across six silent hours, because that segment would be a claim the sensor
   never made.
+- **The forecast stays put.** A toast announces the change once; the standing
+  state lives on ЛОГОВО's bottom line — a drawn arrow (doubled when the change
+  is sharp) and what to expect, amber only for the fast drop. A barometric
+  state lasts hours and turns over a couple of times a week, so you want it at
+  a glance from the screen you actually sit in front of, not by navigating to
+  the one screen that owns the sensor.
 - **A barometer that forecasts.** The WSDCGQ11LM's pressure is the only reading
   on this device that is about the world outside — a building leaks, so the
   needle tracks the atmosphere. The board reads its own card archive for the
