@@ -92,6 +92,89 @@ static const Preset kPresets[THEME_PRESETS] = {
     {"Mono", rgb(24, 26, 30), rgb(235, 238, 245), rgb(255, 255, 255),
      rgb(150, 162, 175), rgb(44, 48, 56), rgb(120, 235, 160), rgb(245, 215, 95),
      rgb(255, 95, 95), rgb(150, 205, 255), rgb(205, 210, 220)},
+
+    /* ── The four below were added for what this device BECAME: something
+     * that sits in a room and reports on that room, day and night. The first
+     * twelve are HUD palettes — excellent on a desk beside a gaming PC, and
+     * all wrong at 3 a.m. or in direct sun. ────────────────────────────── */
+
+    /* 12 Свеча — warm, almost no blue. Evening light: blue is the part of the
+     * spectrum that suppresses melatonin, so a bedside screen that has to be
+     * on all night should have as little of it as possible. Even the "info"
+     * role is pulled to warm gold rather than cyan. */
+    {"Свеча", rgb(20, 10, 2), rgb(255, 158, 46), rgb(255, 232, 190),
+     rgb(168, 120, 66), rgb(44, 24, 8), rgb(196, 214, 92), rgb(255, 190, 60),
+     rgb(255, 96, 40), rgb(240, 178, 88), rgb(255, 206, 130)},
+
+    /* 13 Бумага — dark ink on light paper, for a sunlit room. Every other
+     * preset is light-on-dark, which is right in a dim room and unreadable
+     * with a window behind you: an LCD cannot outshine daylight, so the fix is
+     * to stop trying and use the backlight as paper instead. Roles keep their
+     * meaning but are darkened until they read against white. */
+    {"Бумага", rgb(238, 236, 230), rgb(28, 42, 72), rgb(20, 22, 26),
+     rgb(104, 110, 120), rgb(250, 249, 245), rgb(22, 122, 60),
+     rgb(176, 110, 0), rgb(190, 30, 40), rgb(28, 88, 160), rgb(70, 90, 130)},
+
+    /* 14 Ночь — deep red only. Red light preserves dark adaptation, which is
+     * why instrument panels and observatories use it; this is the palette for
+     * a screen you glance at without waking up. Deliberately low contrast —
+     * legible, never bright. */
+    {"Ночь", rgb(10, 0, 0), rgb(190, 40, 40), rgb(225, 90, 80),
+     rgb(120, 34, 34), rgb(30, 6, 6), rgb(180, 70, 50), rgb(220, 90, 50),
+     rgb(255, 70, 60), rgb(170, 60, 60), rgb(200, 80, 70)},
+
+    /* 15 Мох — muted green and clay, nothing saturated. A climate device is
+     * furniture: it is in the corner of your eye for hours, and a HUD palette
+     * that is exciting for ten minutes is tiring for ten hours. Alert roles
+     * stay vivid so they still cut through the calm. */
+    {"Мох", rgb(14, 20, 16), rgb(142, 176, 120), rgb(228, 236, 220),
+     rgb(122, 140, 118), rgb(30, 40, 32), rgb(150, 200, 130),
+     rgb(224, 178, 92), rgb(214, 96, 74), rgb(140, 180, 175),
+     rgb(178, 196, 150)},
+
+    /* 16 Закат — coral and gold over a violet dusk. Warm like Amber but not
+     * a terminal: Amber is one hue at three brightnesses, this has an actual
+     * colour scheme. */
+    {"Закат", rgb(26, 12, 34), rgb(255, 122, 88), rgb(255, 234, 214),
+     rgb(178, 132, 150), rgb(52, 24, 62), rgb(255, 196, 92),
+     rgb(255, 168, 60), rgb(255, 80, 96), rgb(255, 154, 120),
+     rgb(255, 190, 140)},
+
+    /* 17 Сакура — soft pink on deep plum. Vaporwave without the neon: the
+     * same family of hues taken down to something you can live beside. */
+    {"Сакура", rgb(28, 16, 28), rgb(246, 168, 196), rgb(255, 238, 245),
+     rgb(176, 138, 158), rgb(52, 32, 50), rgb(168, 226, 178),
+     rgb(246, 206, 130), rgb(240, 108, 128), rgb(198, 176, 240),
+     rgb(230, 186, 210)},
+
+    /* 18 Море — teal and aqua on deep water. Ice is a cold blue; this is
+     * green-blue and warmer for it, which suits a room rather than a HUD. */
+    {"Море", rgb(4, 22, 26), rgb(64, 200, 190), rgb(224, 248, 246),
+     rgb(112, 158, 158), rgb(12, 44, 50), rgb(110, 226, 170),
+     rgb(238, 200, 110), rgb(250, 110, 110), rgb(96, 206, 232),
+     rgb(140, 216, 206)},
+
+    /* 19 Кофе — cream on espresso. Reads like paper in a dim room, where the
+     * light Бумага theme would be a lamp in your face. */
+    {"Кофе", rgb(26, 18, 14), rgb(214, 172, 124), rgb(245, 232, 214),
+     rgb(156, 132, 110), rgb(48, 34, 26), rgb(166, 194, 128),
+     rgb(230, 176, 96), rgb(214, 104, 82), rgb(182, 168, 208),
+     rgb(224, 196, 158)},
+
+    /* 20 Хвоя — pine and brass. Forest is bright green; this is the dark
+     * needle-green of a winter wood, with warm metal for the accents. */
+    {"Хвоя", rgb(8, 20, 16), rgb(206, 174, 106), rgb(226, 238, 226),
+     rgb(112, 138, 122), rgb(18, 40, 32), rgb(122, 196, 132),
+     rgb(226, 186, 96), rgb(224, 104, 84), rgb(128, 186, 170),
+     rgb(186, 176, 128)},
+
+    /* 21 Сталь — cool grey-blue, industrial. Mono is neutral grey; this is
+     * grey with a temperature, which keeps the alert roles from looking like
+     * the only colours on the screen. */
+    {"Сталь", rgb(18, 22, 28), rgb(150, 178, 204), rgb(232, 240, 248),
+     rgb(126, 142, 160), rgb(34, 42, 52), rgb(126, 206, 168),
+     rgb(230, 196, 110), rgb(238, 108, 108), rgb(140, 186, 232),
+     rgb(178, 198, 220)},
 };
 
 /* slightly darker chrome for inactive frames */

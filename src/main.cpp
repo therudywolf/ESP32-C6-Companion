@@ -1112,7 +1112,8 @@ void loop() {
    * react - pairing feedback is the whole difference between "is it working?"
    * and knowing. */
   if (zb.takeNewSensor()) {
-    sceneMgr.toast("датчик на связи!");
+    sceneMgr.alertCard(SceneManager::AL_SENSOR, "ДАТЧИК",
+                       "на связи, показания пошли");
     brain.notice("к тебе привязали новый датчик климата - обнюхай и одобри");
   }
 
@@ -1457,7 +1458,10 @@ void loop() {
      * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
     if (sceneMgr.takeZbJoinRequest()) {
       zb.permitJoin(NOCT_ZB_JOIN_SEC);
-      sceneMgr.toast(zb.running() ? "жду датчик 3 мин" : "zigbee не запущен");
+      sceneMgr.alertCard(SceneManager::AL_SENSOR, "ПРИВЯЗКА",
+                         zb.running()
+                             ? "жду датчик 3 минуты - жми кнопку на нем"
+                             : "zigbee не запущен");
     }
     if (sceneMgr.takeShotRequest()) {
       bool okShot = saveScreenshot();

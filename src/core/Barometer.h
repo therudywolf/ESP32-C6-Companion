@@ -68,14 +68,20 @@ inline Tendency classify(int dPress10, int hours) {
  * glancing at a tile wants the consequence; the number beside it already
  * carries the cause. */
 inline const char *forecast(Tendency t) {
+  /* Sentences a person would say, not telegraph. The first version read
+   * "падает - возможен дождь": the number beside it already says the pressure
+   * is falling, so repeating it spent half the line restating the cause and
+   * left a stub for the part that matters. And a bare hyphen between two
+   * fragments reads as a rendering fault, especially since the font has no em
+   * dash to make it look deliberate. */
   switch (t) {
-  case TEND_FALL_FAST: return "резко падает - к непогоде";
-  case TEND_FALL:      return "падает - возможен дождь";
-  case TEND_FALL_SLOW: return "медленно падает - пасмурнее";
-  case TEND_STEADY:    return "ровное - без перемен";
-  case TEND_RISE_SLOW: return "медленно растет - проясняется";
-  case TEND_RISE:      return "растет - к ясной погоде";
-  case TEND_RISE_FAST: return "резко растет - похолодает";
+  case TEND_FALL_FAST: return "Идет непогода";
+  case TEND_FALL:      return "Похоже, будет дождь";
+  case TEND_FALL_SLOW: return "Небо затягивает";
+  case TEND_STEADY:    return "Погода без перемен";
+  case TEND_RISE_SLOW: return "Проясняется";
+  case TEND_RISE:      return "Будет ясно";
+  case TEND_RISE_FAST: return "Прояснится и похолодает";
   default:             return "";
   }
 }
@@ -85,13 +91,13 @@ inline const char *forecast(Tendency t) {
  * wolf, where there is a whole line to spend. */
 inline const char *forecastShort(Tendency t) {
   switch (t) {
-  case TEND_FALL_FAST: return "к непогоде";
-  case TEND_FALL:      return "к дождю";
-  case TEND_FALL_SLOW: return "пасмурнее";
+  case TEND_FALL_FAST: return "непогода";
+  case TEND_FALL:      return "будет дождь";
+  case TEND_FALL_SLOW: return "затягивает";
   case TEND_STEADY:    return "без перемен";
   case TEND_RISE_SLOW: return "проясняется";
-  case TEND_RISE:      return "к ясной";
-  case TEND_RISE_FAST: return "похолодает";
+  case TEND_RISE:      return "будет ясно";
+  case TEND_RISE_FAST: return "ясно, холоднее";
   default:             return "";
   }
 }
