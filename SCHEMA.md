@@ -176,6 +176,11 @@ Every field is optional; the sentinel means "no change this time".
 | `zbpoll` | 1 | -1 | **one-shot**: read the sensor's attributes now |
 | `zbint` | sec | -1 | ask the sensor to report at least this often |
 
+> **On cadence:** an Aqara WSDCGQ11LM decides for itself — it reports on change
+> (~±0.5 °C, ±6 % RH) plus a keep-alive roughly every 50-60 minutes, and that
+> rhythm is what makes a CR2032 last two years. It listens only just after it
+> transmits, so a poll at an arbitrary moment usually reaches nobody.
+>
 > `zbjoin`/`zbpoll` are events, not settings: the panel drops them from a
 > merged command rather than re-running them on the next unrelated click.
 > `zbpoll` is a *request* — an Aqara is a sleepy end device and answers on its

@@ -478,21 +478,11 @@ void ZbHub::tick(unsigned long now, AppState &st, Graphs &g) {
   if (gDirty) {
     gDirty = false;
     dirty_ = true;
-    /* One line per report on the card: the sensor's own history, which is the
-     * whole reason for having a card. */
-    if (sd_ && sd_->ok() && now - lastLog_ > 5000) {
-      lastLog_ = now;
-      for (int i = 0; i < st.zb.count; i++) {
-        const ZbSensor &z = st.zb.list[i];
-        if (z.temp10 == -32768) continue;
-        char line[96];
-        snprintf(line, sizeof(line), "%lu,%s,%.1f,%d,%d", now / 1000UL, z.name,
-                 z.temp10 / 10.0f, z.humidity, z.battery);
-        if (!sd_->exists("/logs/zb.csv"))
-          sd_->enqueueAppend("/logs/zb.csv", "uptime_s,name,temp_c,rh,bat");
-        sd_->enqueueAppend("/logs/zb.csv", line, NOCT_SD_DIARY_MAX);
-      }
-    }
+    /* The on-card archive is written by main(), which has the NTP clock; this
+     * only raises the flag that a reading changed. The old log here stamped
+     * rows with UPTIME, which cannot be ordered across a reboot and so was not
+     * history at all — see ClimateLog. */
+    logDue_ = true;
   }
   if (dirty_ && now - lastSave_ > 60000UL) {
     lastSave_ = now;

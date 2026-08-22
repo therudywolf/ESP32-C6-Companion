@@ -35,6 +35,9 @@ public:
   /* ИСТОРИЯ scale, read into UiCtx by main so the scene can pick a series.
    * 0 = hour, 1 = day, 2 = the card archive. */
   int historyMode() const { return histMode_; }
+  /* ДОМ trend window; main loads the matching series from the card. */
+  int homeMode() const { return homeMode_; }
+  void setHomeMode(int m) { homeMode_ = (m < 0 || m > 2) ? 0 : m; }
   /* Backlight is owned by main(): it folds the dim state, quiet hours and the
    * user setting into ONE value per frame, so no path can fight another. */
   bool screenDimmed() const { return dimmed_; }
@@ -119,6 +122,8 @@ private:
   int obsX_[kObstacles] = {0};
   int obsH_[kObstacles] = {0};
   int histMode_ = 0;     /* ИСТОРИЯ: 0 hour, 1 day, 2 card archive */
+  /* ДОМ trend window: 0 last reports (RAM), 1 today, 2 the week (card). */
+  int homeMode_ = 0;
   unsigned long resetArmedUntil_ = 0; /* factory reset needs a 2nd confirm */
   bool shotRequested_ = false;
   bool zbJoinRequested_ = false;

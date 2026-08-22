@@ -420,6 +420,13 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
       toast(histMode_ == 0   ? "история: час"
             : histMode_ == 1 ? "история: сутки"
                              : "история: архив с карты");
+    } else if (scene_ == SCENE_HOME) {
+      /* live -> today -> week -> live. The card rungs only appear with a card
+       * in, because that is the only place the dated rows live. */
+      homeMode_ = (homeMode_ + 1) % (ui.st.link.sdOk ? 3 : 1);
+      toast(homeMode_ == 0   ? "график: последние отчёты"
+            : homeMode_ == 1 ? "график: сутки с карты"
+                             : "график: неделя с карты");
     } else if (scene_ != SCENE_FORZA) {
       /* pin / unpin this scene as the TRIPLE-press "home" (reversible) */
       Settings &s = ui.st.settings;
