@@ -42,12 +42,12 @@ jobs:
       - name: Build firmware
         run: pio run -e nocturne-c6
 
-      # min_spiffs.csv gives 1.875 MB per OTA slot. Fail loudly BEFORE the
-      # image stops fitting, not when a flash aborts on the desk.
-      - name: Check OTA headroom
+      # One 3.62 MB app partition (the Zigbee coordinator took the OTA slots).
+      # Fail loudly BEFORE the image stops fitting.
+      - name: Check app partition headroom
         run: |
           size=$(stat -c%s .pio/build/nocturne-c6/firmware.bin)
-          limit=$((1966080))
+          limit=$((3801088))
           pct=$((size * 100 / limit))
           echo "firmware $size B = ${pct}% of a $limit B app slot"
           if [ "$pct" -gt 90 ]; then

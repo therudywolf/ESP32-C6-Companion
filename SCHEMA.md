@@ -57,14 +57,12 @@ node: `{id, name, st, cpu, ram, disk, extra}`
 | `extra` | string | ≤16 | free badge text |
 
 ### `zb` — smart-home sensors `{n, list:[…]}` (≤4)
-Whatever owns the Zigbee radio forwards readings here. The **board is
-deliberately not that coordinator**: measured, the stack costs 380 KB of flash
-(a bare WiFi + coordinator sketch already overflows Espressif's own 1.25 MB
-Zigbee app slot) and Yandex Smart Home needs a cloud skill — OAuth 2.0 plus a
-public HTTPS endpoint that Yandex calls — which a device on a LAN cannot be. A
-server has to sit in the chain either way, so the coordinator belongs there.
-This block is source-agnostic: Zigbee2MQTT, Home Assistant or a poller against a
-Yandex hub's API all fill it the same.
+Sensor readings for the ПОГОДА tile. Since v1.14.0 **the board itself is a
+Zigbee coordinator** (channel 25, +380 KB flash, single app partition — OTA was
+traded away for it) and fills these readings locally from paired sensors. The
+payload block still works exactly as before, so a server-side producer
+(Zigbee2MQTT, Home Assistant, a Yandex-hub poller) can feed the same screen on
+boards built without the stack (`nocturne-c6-nozb`).
 
 entry: `{name, t, h, b, age}`
 | key | type | size | meaning |
@@ -169,7 +167,7 @@ Every field is optional; the sentinel means "no change this time".
 | `slot` | 0..2 | -1 | switch the active theme slot |
 | `night` | 0/1 | -1 | quiet hours on/off |
 | `nightfrom`, `nightto` | 0..23 | -1 | quiet-hour bounds (wraps past midnight) |
-| `ota` | string | "" | pull-OTA image URL — **see below** |
+| `ota` | string | — | **removed in v1.14.0** — the Zigbee build has one app partition and no OTA slots; the key is ignored |
 
 > **`ota` is the one field that can execute code.** Telemetry is unauthenticated
 > plain TCP on the LAN, so the firmware does not take the URL on faith:
@@ -211,6 +209,10 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 ## Device → server (uplink)
 - `HELO`, `screen:N`, `cmd:claude|status`
 - `wolf:` — pet stats (hunger/joy/energy/mood/alive/sleeping/age)
+- `zbs:` — one line per locally-paired Zigbee sensor, once a minute:
+  `zbs:name,temp10,humidity,battery,age_sec` (temp ×10; -1 = unknown; names come
+  from `nocturne.ini` and must not contain commas). This is how the server —
+  and through it a Yandex Smart Home skill — learns what the coordinator hears.
 - `cfg:` — CSV mirror of device settings, so the panel reflects the board.
   Fields, in order:
 

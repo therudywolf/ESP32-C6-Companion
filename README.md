@@ -92,19 +92,27 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   it, the high score is on the board for good. Меню → Волк → Игра.
 - **An alarm clock**, because the board has a clock, a light and something that
   talks — `[alarm] at = 07:30` in `nocturne.ini`.
-- **Smart-home sensors on the ПОГОДА screen** — "за окном" and "дома" side by
-  side, with humidity and a battery bar. The board is deliberately **not** the
-  Zigbee coordinator: measured, that stack is +380 KB of flash (a bare
-  WiFi + coordinator sketch already overflows Espressif's own 1.25 MB Zigbee app
-  slot) and it would cost OTA. Yandex Smart Home needs a cloud skill — OAuth 2.0
-  plus a public HTTPS endpoint that Yandex calls — which a device on a LAN cannot
-  be, so a server sits in the chain regardless and the coordinator belongs there.
-  The `zb` block is source-agnostic: Zigbee2MQTT, Home Assistant or a poller
-  against a Yandex hub all fill it the same. A reading older than an hour dims
-  the whole tile, because battery sensors go quiet and a stale number presented
-  as current is the same lie "no signal" exists to prevent.
+- **The board is a Zigbee hub.** A real 802.15.4 coordinator on channel 25,
+  living alongside WiFi on one shared radio — which took four genuine bug fixes
+  to make true: an lwIP DNS thread-safety bug in arduino-esp32's `hostByName`
+  (patched via linker wrap), uplink writes that could hang the render loop when
+  RX stalled (non-blocking now), `esp_coex_wifi_i154_enable()` that **nobody in
+  the whole stack ever calls** (without it 15.4 squats on the antenna and WiFi
+  receives nothing), and an RF-calibration quirk where the boot after a Zigbee
+  session cannot associate (cured by an automatic sub-second erase-and-restart).
+  Pair a sensor via **Меню → Система → Подключить датчик** or `zb join`;
+  temperature, humidity and Aqara's proprietary battery TLV are parsed, the
+  readings show on the ПОГОДА tile ("за окном" and "дома" side by side) and go
+  upstream as `zbs:` lines — the server, and through it a Yandex Smart Home
+  skill, hears what the coordinator hears. The measured cost: +380 KB flash and
+  the OTA slots (**updates are by cable now**) plus ~55 KB RAM, guarded so a
+  TLS fetch skips rather than OOMs. A reading older than an hour dims the whole
+  tile, because battery sensors go quiet and a stale number presented as current
+  is the same lie "no signal" exists to prevent. (`nocturne-c6-nozb` builds
+  without the stack and takes its `zb` block from a server instead.)
 - **A USB console.** `help`, `info`, `ls`, `cat`, `ach`, `say`, `eat`, `shot`,
-  `theme`, `bright`, `feed <json>`, `reboot` on the same serial port as the logs.
+  `theme`, `bright`, `feed <json>`, `zb [join|reset]`, `mem`, `probe`, `phy`,
+  `reboot` on the same serial port as the logs.
   `feed` pushes a raw payload through the real parser, so a producer for this
   schema can be developed against the board with no server in the middle. Most of a
   debugging session is asking the board questions it could simply answer.
@@ -126,17 +134,10 @@ pio run -e nocturne-c6                # build
 pio run -e nocturne-c6 -t upload      # flash (USB-Serial/JTAG)
 ```
 
-**Over the air** — after the first USB flash you never need the cable again:
-
-```bash
-pio run -e nocturne-c6 -t upload --upload-port 192.168.1.42
-```
-
-The device's IP is on the **Меню → Система → Инфо системы** screen. Set
-`OTA_PASSWORD` in `secrets.h` on any shared network (then add
-`--upload-flags --auth=...`). The server can also push an update itself via the
-`rc` block's `ota` field; the firmware only accepts an image URL on `PC_IP` or a
-private-range host, because telemetry is an unauthenticated LAN channel.
+**No OTA in the Zigbee build.** The coordinator stack needed a single 3.62 MB
+app partition, so the two OTA slots are gone and updates go over
+USB-Serial/JTAG. A measured, deliberate trade — a bare WiFi + coordinator
+sketch already overflows Espressif's own Zigbee OTA layout.
 
 **Tests** (host-side, no board needed):
 

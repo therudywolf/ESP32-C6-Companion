@@ -42,6 +42,13 @@ public:
   bool joining(unsigned long now) const { return (long)(joinUntil_ - now) > 0; }
   int deviceCount() const;
   bool running() const { return running_; }
+  /* One-shot: a sensor reported for the first time (fresh pairing, or first
+   * words after a reboot). main() turns it into a toast and a wolf remark. */
+  bool takeNewSensor() {
+    bool r = newSensor_;
+    newSensor_ = false;
+    return r;
+  }
   /* Forget the network and every paired device — the Zigbee equivalent of the
    * factory reset in the menu. Reboots, because the stack cannot re-form a
    * network in place. */
@@ -58,6 +65,8 @@ private:
   unsigned long lastSave_ = 0;
   unsigned long lastLog_ = 0;
   bool dirty_ = false;
+  int knownCount_ = 0;
+  bool newSensor_ = false;
 };
 
 #endif
