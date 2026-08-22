@@ -251,6 +251,19 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   so this is the only figure that can be measured rather than invented, and it
   is labelled as loop duty, not CPU. `heap_min` matters more than `heap_free` —
   the low-water mark is what decides whether the next TLS handshake fits.
+- `zbtr:` — barometric tendency over 3 h, every 5 min:
+  `zbtr:dPress_tenths_hpa,dTemp_tenths_c,dHum_percent`, computed from the card
+  archive rather than from the last two reports. Sent separately from the
+  readings because **the rate is what forecasts weather; the absolute pressure
+  only tells you your altitude.** Three hours is the meteorological standard —
+  the tendency METAR reports, and the interval every published threshold is
+  quoted against.
+
+  > Pressure is the one reading here that is about the OUTDOORS. A building is
+  > not airtight, so indoor pressure tracks the atmosphere within a fraction of
+  > a hPa — which is why a barometer indoors forecasts while an indoor
+  > thermometer only ever describes the radiator. The temperature and humidity
+  > deltas ride along for completeness; do not build weather hints on them.
 - `zbst:` — the coordinator's own account of itself, every 15 s:
   `zbst:up,channel,join_left_sec,devices,last_heard_sec` (-1 = never heard).
   A hub that is up with no sensors and a hub that is down look identical from

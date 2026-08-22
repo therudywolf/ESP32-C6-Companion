@@ -43,6 +43,7 @@
 #include "pet/wolf_sprites.h"
 #include "storage/Archive.h"
 #include "storage/CardConfig.h"
+#include "core/Barometer.h"
 #include "storage/ClimateLog.h"
 #include "storage/SdStore.h"
 #include "ui/Display.h"
@@ -1342,6 +1343,27 @@ void loop() {
     char date[12], hm[8];
     if (clockParts(date, sizeof(date), hm, sizeof(hm)))
       climateLog.append(date, hm, state.zb.list[0]);
+  }
+
+  /* Barometric tendency, recomputed every five minutes. The sensor speaks
+   * roughly hourly, so anything faster would re-read the card to learn the
+   * same answer — and each read walks the card on the render loop. */
+  {
+    static unsigned long lastTrend = 0;
+    if (state.zb.count > 0 && (lastTrend == 0 || now - lastTrend > 300000UL)) {
+      lastTrend = now;
+      int dT = 0, dH = 0, dP = 0;
+      state.zbTrendOk = climateLog.trend(3, dT, dH, dP);
+      state.zbTemp10Delta3h = dT;
+      state.zbHumDelta3h = dH;
+      state.zbPress10Delta3h = dP;
+      if (state.zbTrendOk) {
+        tcp.sendZbTrend(dP, dT, dH);
+        auto t = barometer::classify(dP, 3);
+        Serial.printf("[BARO] 3h: %+d.%d hPa - %s\n", dP / 10, abs(dP % 10),
+                      barometer::forecast(t));
+      }
+    }
   }
 
   /* input */

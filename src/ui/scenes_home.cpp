@@ -22,6 +22,7 @@
  */
 #include <limits.h>
 
+#include "core/Barometer.h"
 #include "core/config.h"
 #include "ui/Scenes.h"
 #include "ui/Theme.h"
@@ -276,13 +277,14 @@ void drawHome(UiCtx &ui) {
   }
 
   /* ── ДАТЧИК: everything secondary on one honest row ──────────────────── */
-  panel(g, tx, 114, 308, 36, "ДАТЧИК");
+  /* The sensor's name goes in the TAB, not in the row: the row has to fit a
+   * battery, a pressure, a forecast and an age, and a name is the one item
+   * that never changes and so gains nothing from being re-read each glance. */
+  panel(g, tx, 114, 308, 36,
+        z.name[0] ? z.name : NOCT_ZB_NET_NAME);
   {
     g.setFont(&F_TEXT);
     int x = tx + 10;
-    textAt(g, x, 126, z.name[0] ? z.name : NOCT_ZB_NET_NAME,
-           stale ? DIM : ORANGE);
-    x += g.textWidth(z.name[0] ? z.name : NOCT_ZB_NET_NAME) + 14;
 
     if (z.battery >= 0) {
       bool lowBat = s.zbBattMin > 0 && z.battery <= s.zbBattMin;
@@ -294,24 +296,55 @@ void drawHome(UiCtx &ui) {
     /* Only the WSDCGQ11LM has a barometer; the cheaper models do not, so this
      * appears only when there is a reading behind it. */
     if (z.pressure > 0) {
-      snprintf(v, sizeof(v), "%d мм", (z.pressure * 3) / 4);
-      textAt(g, x, 126, v, DIM);
+      /* Pressure is the one reading here that is about the OUTDOORS — a
+       * building leaks, so the needle tracks the atmosphere. Hence the arrow:
+       * the absolute value means little to anyone, the direction means
+       * weather. */
+      auto tend = ui.st.zbTrendOk
+                      ? barometer::classify(ui.st.zbPress10Delta3h, 3)
+                      : barometer::TEND_UNKNOWN;
+      snprintf(v, sizeof(v), "%d мм %s", (z.pressure * 3) / 4,
+               barometer::arrow(tend));
+      uint16_t pc = tend == barometer::TEND_FALL_FAST   ? WARN
+                    : tend == barometer::TEND_RISE_FAST ? INFO
+                                                        : DIM;
+      textAt(g, x, 126, v, stale ? DIM : pc);
+      x += g.textWidth(v) + 14;
     }
 
     /* 30-60 % is the band everyone agrees on; outside it, say which way. The
      * colour on the number already carries the alert; this carries the plain
      * reading of it, and there is no room for it beside a 64 px hero. */
-    if (z.humidity >= 0) {
-      const char *verdict = z.humidity < 30   ? "сухо"
-                            : z.humidity > 60 ? "сыро"
-                                              : "норма";
-      uint16_t vc = (z.humidity < 30 || z.humidity > 60) ? WARN : GOOD;
-      textAt(g, x + 60, 126, verdict, stale ? DIM : vc);
+    /* The barometric forecast earns this slot over the humidity verdict: the
+     * verdict repeats what the colour on the number already says, while the
+     * forecast is the only thing on this screen the room cannot tell you by
+     * looking at it. The verdict falls back in when there is no trend yet. */
+    const char *tail = nullptr;
+    uint16_t tailColor = DIM;
+    if (ui.st.zbTrendOk) {
+      auto tend = barometer::classify(ui.st.zbPress10Delta3h, 3);
+      if (tend != barometer::TEND_STEADY) {
+        tail = barometer::forecastShort(tend);
+        tailColor = barometer::headacheWatch(tend) ? WARN : DIM;
+      }
     }
-
+    if (!tail && z.humidity >= 0) {
+      tail = z.humidity < 30 ? "сухо" : z.humidity > 60 ? "сыро" : "норма";
+      tailColor = (z.humidity < 30 || z.humidity > 60) ? WARN : GOOD;
+    }
+    /* Clipped against what is actually left before the age, measured rather
+     * than assumed: the row already ran into the age once. */
     char age[40];
     fmtAge(z, age, sizeof(age));
+    int ageW = g.textWidth(age);
+    int room = (tx + 308 - 10 - ageW - 12) - x;
+    if (tail && room > 30) {
+      char clipped[40];
+      clipW(g, tail, clipped, sizeof(clipped), room);
+      textAt(g, x, 126, clipped, stale ? DIM : tailColor);
+    }
     textRight(g, tx + 308 - 10, 126, age, stale ? CRIT : DIM);
+
   }
 
   /* More sensors than this screen shows: say so rather than hide them. */

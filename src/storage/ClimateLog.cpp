@@ -131,3 +131,84 @@ bool ClimateLog::loadSeries(int days, Series &out) {
                 out.rows, out.filled);
   return out.filled > 0;
 }
+
+bool ClimateLog::trend(int hours, int &dTemp10, int &dHum, int &dPress10) {
+  dTemp10 = dHum = dPress10 = 0;
+  if (!sd_ || !sd_->ok()) return false;
+  if (hours < 1) hours = 1;
+  time_t nowT = time(nullptr);
+  if (nowT < 1700000000L) return false;
+
+  struct tm nowTm;
+  localtime_r(&nowT, &nowTm);
+  const long nowMin = nowTm.tm_hour * 60L + nowTm.tm_min;
+  const long wantAge = (long)hours * 60L;
+
+  /* Newest row, and the row closest to `hours` ago. Closest rather than
+   * "first older than": a sensor that speaks hourly may have nothing at
+   * exactly -3 h, and refusing to answer because the sample is at -3 h 20 min
+   * would mean never answering at all. */
+  bool haveNew = false, haveOld = false;
+  long newAge = 1 << 30, oldErr = 1 << 30;
+  int nT = 0, nH = 0, nP = 0, oT = 0, oH = 0, oP = 0;
+
+  /* Two files at most: a 3-hour window at 01:00 reaches into yesterday. */
+  for (int d = 0; d <= 1; d++) {
+    time_t t = nowT - (time_t)d * 86400;
+    struct tm tmv;
+    if (!localtime_r(&t, &tmv)) continue;
+    char date[12], path[40];
+    strftime(date, sizeof(date), "%Y-%m-%d", &tmv);
+    snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), date);
+    if (!sd_->exists(path)) continue;
+    String text;
+    if (!sd_->readAll(path, text, NOCT_SD_READ_MAX) || !text.length()) continue;
+
+    int start = 0;
+    while (start < (int)text.length()) {
+      int nl = text.indexOf('\n', start);
+      String line = (nl < 0) ? text.substring(start) : text.substring(start, nl);
+      start = (nl < 0) ? text.length() : nl + 1;
+      line.trim();
+      if (!line.length() || line.startsWith("time")) continue;
+
+      int c1 = line.indexOf(',');
+      if (c1 < 4) continue;
+      long age = (long)d * 1440L +
+                 (nowMin - (line.substring(0, 2).toInt() * 60L +
+                            line.substring(3, 5).toInt()));
+      if (age < 0) continue; /* a row stamped in the future: clock moved */
+
+      int c2 = line.indexOf(',', c1 + 1);
+      if (c2 < 0) continue;
+      int c3 = line.indexOf(',', c2 + 1);
+      int c4 = (c3 < 0) ? -1 : line.indexOf(',', c3 + 1);
+      float tc = line.substring(c1 + 1, c2).toFloat();
+      int t10 = (int)(tc * 10.0f + (tc < 0 ? -0.5f : 0.5f));
+      int rh = (c3 < 0) ? -1 : line.substring(c2 + 1, c3).toInt();
+      int hpa = (c4 < 0) ? -1 : line.substring(c4 + 1).toInt();
+
+      if (age < newAge) {
+        newAge = age;
+        nT = t10; nH = rh; nP = hpa;
+        haveNew = true;
+      }
+      long err = age > wantAge ? age - wantAge : wantAge - age;
+      if (err < oldErr) {
+        oldErr = err;
+        oT = t10; oH = rh; oP = hpa;
+        haveOld = true;
+      }
+    }
+  }
+
+  /* The comparison point has to actually be old. Half the requested window is
+   * the loosest thing still worth calling a trend; below that the two samples
+   * are the same weather and the "change" is sensor noise. */
+  if (!haveNew || !haveOld || oldErr > wantAge / 2) return false;
+
+  dTemp10 = nT - oT;
+  if (nH >= 0 && oH >= 0) dHum = nH - oH;
+  if (nP > 0 && oP > 0) dPress10 = (nP - oP) * 10;
+  return true;
+}

@@ -139,6 +139,17 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   reading fell into leaves a gap in the line rather than a straight segment
   across six silent hours, because that segment would be a claim the sensor
   never made.
+- **A barometer that forecasts.** The WSDCGQ11LM's pressure is the only reading
+  on this device that is about the world outside — a building leaks, so the
+  needle tracks the atmosphere. The board reads its own card archive for the
+  **3-hour tendency** (the interval METAR reports and every published threshold
+  is quoted against), classifies it on the WMO bands, and says what to expect:
+  falling means a low approaching — cloud, wind, rain; rising means a high
+  building — clearing, and colder nights because clear skies radiate heat away.
+  A fast fall also carries the note that this is the change weather-sensitive
+  people report noticing; it states what the pressure did and does not diagnose
+  anyone. Announced on a change of state with six hours of quiet after, because
+  a front is news once, not every five minutes for three hours.
 - **Climate alerts.** Thresholds set from the web panel — too warm, too cold,
   too damp, too dry, battery running out. They fire on the **edge**, not on the
   fact of being out of range, with a degree of hysteresis so a room sitting on

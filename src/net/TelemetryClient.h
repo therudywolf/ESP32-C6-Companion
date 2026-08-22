@@ -31,6 +31,11 @@ public:
    * so the server side (and through it the Yandex skill) learns the readings
    * from us - the reverse of the zb payload block, one line per sensor. */
   void sendZbSensor(const ZbSensor &z);
+  /* Barometric tendency over 3 h, tenths of a hPa. Sent separately from the
+   * readings because it is derived from the CARD archive, not from the last
+   * report — and because a server-side alert rule needs the rate, not the
+   * absolute pressure, to say anything about the weather. */
+  void sendZbTrend(int dPress10, int dTemp10, int dHum);
   /* Hub state for the panel's "check connection" button: is the
    * coordinator up, on what channel, is the network open for joining, how
    * many sensors, and how long since any of them last spoke. */

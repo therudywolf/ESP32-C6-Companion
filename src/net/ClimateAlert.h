@@ -48,6 +48,11 @@ private:
   bool tempHigh_ = false, tempLow_ = false;
   bool humHigh_ = false, humLow_ = false;
   bool battLow_ = false;
+  /* The last barometric state announced. Weather changes over hours, so this
+   * fires on a CHANGE OF STATE rather than on the condition holding — a front
+   * arriving is news once, not every five minutes for three hours. */
+  int lastTend_ = 0;
+  unsigned long tendQuietUntil_ = 0;
   int lastTemp10_ = -32768;
   int lastHum_ = -1;
   unsigned long battNagUntil_ = 0;
