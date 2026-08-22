@@ -33,18 +33,8 @@ namespace scenes {
 using namespace theme;
 using namespace widgets;
 
-/* y to pass to textAt so the visible glyph TOP lands at wantTop. The u8g2
- * logisoso line box is taller than the digits — leading sits above — and
- * without this the heroes punched through the bottom of their tiles. Same
- * helper the CPU/GPU screens use; duplicated rather than shared because it is
- * four lines and scenes_hw.cpp keeps it file-local. */
-static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
-  int off = g.fontHeight() - inkH;
-  if (off < 0) off = 0;
-  return wantTop - off / 2;
-}
-
 static bool isStale(const ZbSensor &z) {
+  /* Over an hour: the sensor has missed at least one reporting interval. */
   return z.ageSec < 0 || z.ageSec > 3600;
 }
 
@@ -57,97 +47,46 @@ static void fmtAge(const ZbSensor &z, char *out, size_t cap) {
   else snprintf(out, cap, "%d дн назад", z.ageSec / 86400);
 }
 
-static void batteryBar(LGFX_Sprite &g, int x, int y, int w, int pct,
-                       bool stale) {
-  const int h = 8;
-  uint16_t frame = stale ? DIM : ORANGE_DIM;
-  g.drawRect(x, y, w - 3, h, frame);
-  g.fillRect(x + w - 3, y + 2, 2, h - 4, frame); /* the nub */
-  int fill = (w - 5) * pct / 100;
-  if (fill < 1 && pct > 0) fill = 1;
-  uint16_t c = pct <= 20 ? CRIT : (pct <= 40 ? WARN : GOOD);
-  g.fillRect(x + 1, y + 1, fill, h - 2, stale ? DIM : c);
+/* y to pass to textAt so the visible glyph TOP lands at wantTop. The u8g2
+ * logisoso line box is taller than the digits — leading sits above — and
+ * without this the heroes punched through the bottom of their tiles. Same
+ * helper the CPU/GPU screens use; duplicated rather than shared because it is
+ * four lines and scenes_hw.cpp keeps it file-local. */
+static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
+  int off = g.fontHeight() - inkH;
+  if (off < 0) off = 0;
+  return wantTop - off / 2;
 }
 
-/* One half of the trend strip, over the live RAM series. */
-static void liveTrend(LGFX_Sprite &g, int x, int y, int w, int h,
-                      const RollingGraph &gr, int div, int flatSpan,
-                      uint16_t ink) {
-  if (gr.count < 2) {
-    /* A dotted baseline rather than a word: "график будет здесь" needs no
-     * text, and a truncated one ("копит") reads as a rendering fault. */
-    for (int i = 0; i < w - 22; i += 4) g.drawPixel(x + i, y + h - 10, DIM);
-    return;
-  }
-  g.setFont(&F_SMALL);
-  int lo = gr.at(0), hi = gr.at(0);
-  for (int i = 1; i < gr.count; i++) {
-    int v = gr.at(i);
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
-  }
-  /* A steady room should look steady: without a floor on the span, a tenth of
-   * a degree of sensor noise fills the box and reads as a storm. */
-  if (hi - lo < flatSpan) {
-    int mid = (hi + lo) / 2;
-    lo = mid - flatSpan / 2;
-    hi = mid + flatSpan / 2;
-  }
-  char t[12];
-  snprintf(t, sizeof(t), "%d", hi / div);
-  textRight(g, x + w, y - 2, t, DIM);
-  snprintf(t, sizeof(t), "%d", lo / div);
-  textRight(g, x + w, y + h - 8, t, DIM);
-
-  /* The line gets the whole box; only the two scale labels are inset. */
-  const int gy = y, gh = h - 8, gw = w - 22;
-  for (int i = 1; i < gr.count; i++) {
-    int x0 = x + (i - 1) * gw / (gr.count - 1);
-    int x1 = x + i * gw / (gr.count - 1);
-    int y0 = gy + gh - (gr.at(i - 1) - lo) * gh / (hi - lo);
-    int y1 = gy + gh - (gr.at(i) - lo) * gh / (hi - lo);
-    g.drawLine(x0, y0, x1, y1, ink);
-  }
+/* 64 px hero with a small unit beside it, ink-anchored — the same shape
+ * heroTemp() draws on CPU and GPU, so this screen sits at the same optical
+ * height as the rest of the ring. */
+static void hero(LGFX_Sprite &g, int x, int y, const char *num,
+                 const char *unit, uint16_t c) {
+  g.setFont(&F_HUGE);
+  g.setTextSize(2);
+  int vw = g.textWidth(num);
+  textAt(g, x, inkTop(g, y, 64), num, c);
+  g.setTextSize(1);
+  g.setFont(&F_MED);
+  if (unit) textAt(g, x + vw + 4, y + 44, unit, DIM);
 }
 
-/* The same, over a series loaded from the card — which HAS GAPS. A bucket no
- * reading fell into lifts the pen instead of drawing through, because a
- * straight segment across six silent hours is a claim the sensor never made. */
-static void cardTrend(LGFX_Sprite &g, int x, int y, int w, int h,
-                      const int *vals, int cols, int div, int flatSpan,
-                      uint16_t ink) {
-  g.setFont(&F_SMALL);
-  int lo = 0, hi = 0;
-  bool any = false;
-  for (int i = 0; i < cols; i++) {
-    int v = vals[i];
-    if (v == INT_MIN || v < -1000) continue;
-    if (!any) { lo = hi = v; any = true; }
-    else { if (v < lo) lo = v; if (v > hi) hi = v; }
-  }
-  if (!any) return;
-  if (hi - lo < flatSpan) {
-    int mid = (hi + lo) / 2;
-    lo = mid - flatSpan / 2;
-    hi = mid + flatSpan / 2;
-  }
-  char t[12];
-  snprintf(t, sizeof(t), "%d", hi / div);
-  textRight(g, x + w, y - 2, t, DIM);
-  snprintf(t, sizeof(t), "%d", lo / div);
-  textRight(g, x + w, y + h - 8, t, DIM);
-
-  const int gy = y, gh = h - 8, gw = w - 22;
-  int px = -1, py = 0;
-  for (int i = 0; i < cols; i++) {
-    int v = vals[i];
-    if (v == INT_MIN || v < -1000) { px = -1; continue; } /* gap: lift the pen */
-    int cx = x + i * gw / (cols - 1);
-    int cy = gy + gh - (v - lo) * gh / (hi - lo);
-    if (px >= 0) g.drawLine(px, py, cx, cy, ink);
-    else g.drawPixel(cx, cy, ink);
-    px = cx;
-    py = cy;
+/* Big number + small unit on one baseline. Mirrors bigVal() in scenes_hw.cpp
+ * for the same reason as inkTop: file-local there, and worth matching exactly
+ * so the two screens line up. */
+static void bigVal(LGFX_Sprite &g, int x, int y, const char *num,
+                   const char *unit, uint16_t c, bool rightAlign = false) {
+  g.setFont(&F_BIG);
+  int nw = g.textWidth(num);
+  g.setFont(&F_TEXT);
+  int uw = unit ? g.textWidth(unit) : 0;
+  int x0 = rightAlign ? x - nw - uw - 4 : x;
+  g.setFont(&F_BIG);
+  textAt(g, x0, y, num, c);
+  if (unit) {
+    g.setFont(&F_TEXT);
+    textAt(g, x0 + nw + 4, y + 13, unit, DIM);
   }
 }
 
@@ -195,19 +134,18 @@ void drawHome(UiCtx &ui) {
   bool stale = isStale(z);
   char v[48];
 
-  /* Tiles sized by what goes IN them rather than split down the middle: the
-   * temperature carries a decimal and a trend, the humidity carries neither.
-   * Two equal boxes left the humidity one two-thirds empty and squeezed the
-   * temperature's fraction against the frame. */
-  const int tx = 6, tw = 186, hx = 196, hw = 118, ty = 26, th = 84;
+  auto tend = ui.st.zbTrendOk
+                  ? barometer::classify(ui.st.zbPress10Delta3h, 3)
+                  : barometer::TEND_UNKNOWN;
 
-  /* ── ТЕМПЕРАТУРА ─────────────────────────────────────────────────────── */
-  /* The tile title carries the trend window, so a long press has feedback that
-   * outlives the toast and the graph is never unlabelled. */
-  const char *tTitle = ui.homeMode == 1   ? "ТЕМПЕРАТУРА / СУТКИ"
-                       : ui.homeMode == 2 ? "ТЕМПЕРАТУРА / НЕДЕЛЯ"
-                                          : "ТЕМПЕРАТУРА";
-  panel(g, tx, ty, tw, th, tTitle);
+  /* Laid out on the CPU screen's grid, tile for tile: a tall hero on the left,
+   * two stacked tiles on the right, one full-width strip along the bottom.
+   * Same rhythm means the eye already knows where to look after ОБЗОР or CPU —
+   * a screen that invents its own composition costs the reader a moment every
+   * time it comes round the ring. */
+
+  /* ── left, tall: the temperature ─────────────────────────────────────── */
+  panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
   {
     uint16_t c = TEXT;
     if (!stale && s.zbAlert) {
@@ -215,45 +153,25 @@ void drawHome(UiCtx &ui) {
       else if (s.zbTempMin > -99 && z.temp10 < s.zbTempMin * 10) c = INFO;
     }
     if (stale) c = DIM;
-
     if (z.temp10 != -32768) {
       int whole = z.temp10 / 10, frac = z.temp10 % 10;
       if (frac < 0) frac = -frac;
-      g.setFont(&F_HUGE);
-      g.setTextSize(2);
       snprintf(v, sizeof(v), "%d", whole);
-      int vw = g.textWidth(v);
-      /* Ink-anchored the way heroTemp does it on CPU/GPU: the glyph box is
-       * taller than the ink, so centring on the box sits the number low. */
-      textAt(g, tx + 10, inkTop(g, ty + 16, 64), v, c);
-      g.setTextSize(1);
-      g.setFont(&F_BIG);
+      hero(g, 14, 36, v, "C", c);
+      /* The tenth under the unit, out of the hero's way. A room moves by
+       * tenths, so dropping it would cost the screen its resolution. */
+      g.setFont(&F_TEXT);
       snprintf(v, sizeof(v), ",%d", frac);
-      textAt(g, tx + 12 + vw, ty + 52, v, stale ? DIM : ORANGE);
-      g.setFont(&F_MED);
-      textAt(g, tx + 12 + vw, ty + 20, "C", DIM);
+      textAt(g, 14, 96, v, stale ? DIM : ORANGE);
     } else {
       g.setFont(&F_BIG);
-      textAt(g, tx + 10, ty + 34, "-", DIM);
+      textAt(g, 14, 56, "-", DIM);
     }
-
-    /* The trend rides INSIDE the tile, the way НАГРУЗКА does on the CPU
-     * screen. A separate strip below left both boxes half empty. */
-    /* Clear of the fraction: "23" is 64 px wide and ",0" another 30, so a
-     * graph starting at +116 was touching the comma. */
-    const int gx = tx + 128, gw2 = 50, gy = ty + 24, gh = 44;
-    if (ui.homeMode > 0 && ui.climate && ui.climate->filled >= 2)
-      cardTrend(g, gx, gy, gw2, gh, ui.climate->temp10, ui.climate->cols, 10, 5,
-                stale ? DIM : ORANGE);
-    else if (ui.homeMode > 0) {
-      for (int i = 0; i < gw2 - 22; i += 4)
-        g.drawPixel(gx + i, gy + gh - 10, DIM);
-    } else
-      liveTrend(g, gx, gy, gw2, gh, ui.gr.zbTemp, 10, 5, stale ? DIM : ORANGE);
+    trendArrow(g, 118, 32, ui.gr.zbTemp, 6, 2);
   }
 
-  /* ── ВЛАЖНОСТЬ ───────────────────────────────────────────────────────── */
-  panel(g, hx, ty, hw, th, "ВЛАЖНОСТЬ");
+  /* ── right upper: humidity, with its own trend ───────────────────────── */
+  panel(g, 140, 26, 176, 50, "ВЛАЖНОСТЬ");
   {
     if (z.humidity >= 0) {
       uint16_t c = INFO;
@@ -262,96 +180,86 @@ void drawHome(UiCtx &ui) {
         else if (s.zbHumMin >= 0 && z.humidity < s.zbHumMin) c = WARN;
       }
       if (stale) c = DIM;
-      g.setFont(&F_HUGE);
+      g.setFont(&F_VALUE);
       g.setTextSize(2);
-      snprintf(v, sizeof(v), "%d", z.humidity);
-      int vw = g.textWidth(v);
-      textAt(g, hx + 10, inkTop(g, ty + 16, 64), v, c);
+      snprintf(v, sizeof(v), "%d%%", z.humidity);
+      textAt(g, 148, 36, v, c);
       g.setTextSize(1);
-      g.setFont(&F_MED);
-      textAt(g, hx + 12 + vw, ty + 20, "%", DIM);
+      trendArrow(g, 218, 34, ui.gr.zbHum, 6, 2);
+      sparkline(g, 232, 34, 76, 34, ui.gr.zbHum, stale ? DIM : INFO);
     } else {
       g.setFont(&F_BIG);
-      textAt(g, hx + 10, ty + 34, "-", DIM);
+      textAt(g, 148, 38, "-", DIM);
     }
   }
 
-  /* ── ДАТЧИК: everything secondary on one honest row ──────────────────── */
-  /* The sensor's name goes in the TAB, not in the row: the row has to fit a
-   * battery, a pressure, a forecast and an age, and a name is the one item
-   * that never changes and so gains nothing from being re-read each glance. */
-  panel(g, tx, 114, 308, 36,
-        z.name[0] ? z.name : NOCT_ZB_NET_NAME);
+  /* ── right lower: the two secondary numbers ──────────────────────────── */
+  panel(g, 140, 82, 176, 32, "ДАВЛЕНИЕ / БАТАРЕЯ");
   {
-    g.setFont(&F_TEXT);
-    int x = tx + 10;
-
-    if (z.battery >= 0) {
-      bool lowBat = s.zbBattMin > 0 && z.battery <= s.zbBattMin;
-      batteryBar(g, x, 128, 28, z.battery, stale);
-      snprintf(v, sizeof(v), "%d%%", z.battery);
-      textAt(g, x + 32, 126, v, stale ? DIM : (lowBat ? CRIT : DIM));
-      x += 32 + g.textWidth(v) + 14;
-    }
-    /* Only the WSDCGQ11LM has a barometer; the cheaper models do not, so this
-     * appears only when there is a reading behind it. */
     if (z.pressure > 0) {
       /* Pressure is the one reading here that is about the OUTDOORS — a
-       * building leaks, so the needle tracks the atmosphere. Hence the arrow:
-       * the absolute value means little to anyone, the direction means
-       * weather. */
-      auto tend = ui.st.zbTrendOk
-                      ? barometer::classify(ui.st.zbPress10Delta3h, 3)
-                      : barometer::TEND_UNKNOWN;
-      snprintf(v, sizeof(v), "%d мм %s", (z.pressure * 3) / 4,
-               barometer::arrow(tend));
+       * building leaks, so the needle tracks the atmosphere. mmHg because that
+       * is the unit a Russian forecast quotes. */
+      snprintf(v, sizeof(v), "%d", (z.pressure * 3) / 4);
       uint16_t pc = tend == barometer::TEND_FALL_FAST   ? WARN
                     : tend == barometer::TEND_RISE_FAST ? INFO
-                                                        : DIM;
-      textAt(g, x, 126, v, stale ? DIM : pc);
-      x += g.textWidth(v) + 14;
+                                                        : TEXT;
+      bigVal(g, 148, 86, v, "мм", stale ? DIM : pc);
     }
+    if (z.battery >= 0) {
+      bool lowBat = s.zbBattMin > 0 && z.battery <= s.zbBattMin;
+      snprintf(v, sizeof(v), "%d", z.battery);
+      bigVal(g, 308, 86, v, "%", stale ? DIM : (lowBat ? CRIT : TEXT), true);
+    }
+  }
 
-    /* 30-60 % is the band everyone agrees on; outside it, say which way. The
-     * colour on the number already carries the alert; this carries the plain
-     * reading of it, and there is no room for it beside a 64 px hero. */
-    /* The barometric forecast earns this slot over the humidity verdict: the
-     * verdict repeats what the colour on the number already says, while the
-     * forecast is the only thing on this screen the room cannot tell you by
-     * looking at it. The verdict falls back in when there is no trend yet. */
-    const char *tail = nullptr;
-    uint16_t tailColor = DIM;
+  /* ── bottom, full width: what the sky is doing, and how fresh this is ─── */
+  /* The tab carries the trend window so a long press has feedback that
+   * outlives the toast. */
+  const char *strip = ui.homeMode == 1   ? "ПРОГНОЗ / СУТКИ"
+                      : ui.homeMode == 2 ? "ПРОГНОЗ / НЕДЕЛЯ"
+                                         : "ПРОГНОЗ / БАРОМЕТР";
+  panel(g, 4, 120, 312, 48, strip);
+  {
+    g.setFont(&F_MED);
+    g.setTextSize(1);
+    const char *line = nullptr;
+    uint16_t lc = TEXT;
     if (ui.st.zbTrendOk) {
-      auto tend = barometer::classify(ui.st.zbPress10Delta3h, 3);
-      if (tend != barometer::TEND_STEADY) {
-        tail = barometer::forecastShort(tend);
-        tailColor = barometer::headacheWatch(tend) ? WARN : DIM;
-      }
+      line = barometer::forecast(tend);
+      lc = barometer::headacheWatch(tend) ? WARN
+           : tend == barometer::TEND_RISE_FAST ? INFO
+                                               : TEXT;
+    } else {
+      /* No trend yet is not "steady" — say which, or the screen claims the
+       * weather is settled when it simply has not been watching long enough. */
+      line = "барометр копит историю";
+      lc = DIM;
     }
-    if (!tail && z.humidity >= 0) {
-      tail = z.humidity < 30 ? "сухо" : z.humidity > 60 ? "сыро" : "норма";
-      tailColor = (z.humidity < 30 || z.humidity > 60) ? WARN : GOOD;
-    }
-    /* Clipped against what is actually left before the age, measured rather
-     * than assumed: the row already ran into the age once. */
+    char clipped[48];
+    clipW(g, line, clipped, sizeof(clipped), 300);
+    textAt(g, 12, 128, clipped, stale ? DIM : lc);
+
+    /* Second row: the sensor, its freshness, and the 3-hour delta that the
+     * forecast above was derived from — the claim and its evidence together. */
+    g.setFont(&F_TEXT);
     char age[40];
     fmtAge(z, age, sizeof(age));
-    int ageW = g.textWidth(age);
-    int room = (tx + 308 - 10 - ageW - 12) - x;
-    if (tail && room > 30) {
-      char clipped[40];
-      clipW(g, tail, clipped, sizeof(clipped), room);
-      textAt(g, x, 126, clipped, stale ? DIM : tailColor);
+    textAt(g, 12, 150, z.name[0] ? z.name : NOCT_ZB_NET_NAME,
+           stale ? DIM : ORANGE);
+    if (ui.st.zbTrendOk) {
+      int dp = ui.st.zbPress10Delta3h;
+      snprintf(v, sizeof(v), "%+d.%d гПа/3ч", dp / 10, abs(dp % 10));
+      textAt(g, 120, 150, v, DIM);
     }
-    textRight(g, tx + 308 - 10, 126, age, stale ? CRIT : DIM);
-
+    textRight(g, 308, 150, age, stale ? CRIT : DIM);
   }
 
   /* More sensors than this screen shows: say so rather than hide them. */
   if (ui.st.zb.count > 1) {
     g.setFont(&F_SMALL);
     snprintf(v, sizeof(v), "+%d на ПОГОДЕ", ui.st.zb.count - 1);
-    textRight(g, NOCT_W - 8, 156, v, DIM);
+    textRight(g, NOCT_W - 8, 22, v, DIM);
   }
 }
 
