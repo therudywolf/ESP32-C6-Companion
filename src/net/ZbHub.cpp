@@ -10,6 +10,10 @@
 /* No Zigbee in this build: everything degrades to nothing, exactly like the SD
  * card does when absent. The `zb` block still works — a server can fill it. */
 bool ZbHub::begin(SdStore *, const CardConfig *) { return false; }
+bool ZbHub::pollNow() { return false; }
+bool ZbHub::setReportInterval(int, int) { return false; }
+int ZbHub::lastHeardSec(unsigned long) const { return -1; }
+int ZbHub::channel() const { return 0; }
 void ZbHub::tick(unsigned long, AppState &st, Graphs &) {
   /* No local hub in this build: whatever the server relayed IS the list. */
   st.zb = st.zbRemote;
@@ -38,6 +42,7 @@ struct Slot {
   int temp10 = -32768;
   int humidity = -1;
   int battery = -1;
+  int pressure = -1;
   unsigned long tempAt = 0; /* millis of the last report, 0 = never */
   unsigned long humAt = 0;
 };
@@ -93,6 +98,12 @@ public:
     esp_zb_cluster_list_add_humidity_meas_cluster(
         _cluster_list, esp_zb_humidity_meas_cluster_create(NULL),
         ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    /* The WSDCGQ11LM measures pressure too. Without this cluster declared, its
+     * barometer reports arrive and are dropped on the floor — the sensor would
+     * be sending a number nobody ever asked to hear. */
+    esp_zb_cluster_list_add_pressure_meas_cluster(
+        _cluster_list, esp_zb_pressure_meas_cluster_create(NULL),
+        ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
     esp_zb_cluster_list_add_power_config_cluster(
         _cluster_list, esp_zb_power_config_cluster_create(NULL),
         ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
@@ -139,6 +150,24 @@ public:
         s->humidity = raw / 100;
         s->humAt = millis();
         gDirty = true;
+      }
+    } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT &&
+               attribute->id == ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_ID &&
+               attribute->data.type == ESP_ZB_ZCL_ATTR_TYPE_S16 &&
+               attribute->data.value) {
+      int16_t raw = *(int16_t *)attribute->data.value;
+      if (raw != (int16_t)0x8000) {
+        /* ZCL says kPa; Xiaomi reports hPa in the same field, and the two are
+         * a factor of ten apart. Rather than trust either reading of the spec,
+         * take whichever interpretation lands in the range the atmosphere
+         * actually occupies (roughly 870 hPa in a hurricane to 1085 at a
+         * Siberian high; 300 covers anyone reading this from a mountain). */
+        int hpa = raw;
+        if (hpa >= 30 && hpa <= 110) hpa *= 10; /* it was kPa after all */
+        if (hpa >= 300 && hpa <= 1200) {
+          s->pressure = hpa;
+          gDirty = true;
+        }
       }
     } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_BASIC &&
                attribute->id == 0xFF01 && attribute->data.value &&
@@ -279,6 +308,100 @@ int ZbHub::deviceCount() const {
   return n;
 }
 
+/* The clusters worth asking about, and the one attribute each that carries
+ * the reading. Battery is deliberately absent: the WSDCGQ11LM answers battery
+ * only inside its proprietary basic-cluster blob, which it volunteers rather
+ * than serves on request. */
+namespace {
+struct PollTarget {
+  uint16_t cluster;
+  uint16_t attr;
+};
+const PollTarget kPoll[] = {
+    {ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT, 0x0000},
+    {ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, 0x0000},
+    {ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT, 0x0000},
+};
+} // namespace
+
+bool ZbHub::pollNow() {
+  if (!running_) return false;
+  int asked = 0;
+  for (const auto &s : gSlots) {
+    if (s.addr == 0xFFFF) continue;
+    for (const auto &t : kPoll) {
+      uint16_t attr = t.attr;
+      esp_zb_zcl_read_attr_cmd_t req = {};
+      req.zcl_basic_cmd.dst_addr_u.addr_short = s.addr;
+      req.zcl_basic_cmd.dst_endpoint = s.ep;
+      req.zcl_basic_cmd.src_endpoint = NOCT_ZB_ENDPOINT;
+      req.address_mode = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT;
+      req.clusterID = t.cluster;
+      req.attr_number = 1;
+      req.attr_field = &attr;
+      esp_zb_lock_acquire(portMAX_DELAY);
+      esp_zb_zcl_read_attr_cmd_req(&req);
+      esp_zb_lock_release();
+      asked++;
+    }
+  }
+  Serial.printf("[ZB] polled %d attribute(s); a sleeping sensor answers on "
+                "its own schedule\n", asked);
+  return asked > 0;
+}
+
+bool ZbHub::setReportInterval(int minSec, int maxSec) {
+  if (!running_) return false;
+  if (minSec < 1) minSec = 1;
+  if (maxSec < minSec) maxSec = minSec;
+  if (maxSec > 3600) maxSec = 3600;
+  int sent = 0;
+  for (const auto &s : gSlots) {
+    if (s.addr == 0xFFFF) continue;
+    for (const auto &t : kPoll) {
+      esp_zb_zcl_config_report_record_t rec = {};
+      rec.direction = ESP_ZB_ZCL_REPORT_DIRECTION_SEND;
+      rec.attributeID = t.attr;
+      rec.attrType = t.cluster == ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT
+                         ? ESP_ZB_ZCL_ATTR_TYPE_U16
+                         : ESP_ZB_ZCL_ATTR_TYPE_S16;
+      rec.min_interval = (uint16_t)minSec;
+      rec.max_interval = (uint16_t)maxSec;
+      rec.reportable_change = nullptr; /* keep the device's own delta */
+
+      esp_zb_zcl_config_report_cmd_t cmd = {};
+      cmd.zcl_basic_cmd.dst_addr_u.addr_short = s.addr;
+      cmd.zcl_basic_cmd.dst_endpoint = s.ep;
+      cmd.zcl_basic_cmd.src_endpoint = NOCT_ZB_ENDPOINT;
+      cmd.address_mode = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT;
+      cmd.clusterID = t.cluster;
+      cmd.record_number = 1;
+      cmd.record_field = &rec;
+      esp_zb_lock_acquire(portMAX_DELAY);
+      esp_zb_zcl_config_report_cmd_req(&cmd);
+      esp_zb_lock_release();
+      sent++;
+    }
+  }
+  Serial.printf("[ZB] requested reporting %d-%d s on %d cluster(s)\n",
+                minSec, maxSec, sent);
+  return sent > 0;
+}
+
+int ZbHub::lastHeardSec(unsigned long now) const {
+  unsigned long newest = 0;
+  for (const auto &s : gSlots) {
+    if (s.addr == 0xFFFF) continue;
+    if (s.tempAt > newest) newest = s.tempAt;
+    if (s.humAt > newest) newest = s.humAt;
+  }
+  return newest ? (int)((now - newest) / 1000UL) : -1;
+}
+
+int ZbHub::channel() const {
+  return running_ ? (int)esp_zb_get_current_channel() : 0;
+}
+
 void ZbHub::factoryReset() {
   Serial.println("[ZB] forgetting the network and every paired device");
   if (sd_) sd_->remove(kStatePath);
@@ -310,6 +433,7 @@ void ZbHub::tick(unsigned long now, AppState &st, Graphs &g) {
     out.temp10 = s.temp10;
     out.humidity = s.humidity;
     out.battery = s.battery;
+    out.pressure = s.pressure;
     /* Age from the freshest of the two measurements: a sensor that reports
      * temperature but not humidity is still alive. */
     unsigned long newest = s.tempAt > s.humAt ? s.tempAt : s.humAt;

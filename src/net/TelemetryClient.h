@@ -31,6 +31,11 @@ public:
    * so the server side (and through it the Yandex skill) learns the readings
    * from us - the reverse of the zb payload block, one line per sensor. */
   void sendZbSensor(const ZbSensor &z);
+  /* Hub state for the panel's "check connection" button: is the
+   * coordinator up, on what channel, is the network open for joining, how
+   * many sensors, and how long since any of them last spoke. */
+  void sendZbStatus(bool up, int channel, int joinLeft, int devices,
+                    int lastHeard);
   /* Report the SD card's health upstream. The board is the only thing that can
    * see the card, and "the archive has a hole in it" is discovered months
    * later unless the failures are visible while they happen. */

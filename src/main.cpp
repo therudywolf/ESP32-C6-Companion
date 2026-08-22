@@ -32,6 +32,7 @@
 #include "net/LlmClient.h"
 #include "net/CoverClient.h"
 #include "net/LiteClient.h"
+#include "net/ClimateAlert.h"
 #include "net/ZbHub.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
@@ -69,6 +70,7 @@ static Histories histories;
 static AppState state;
 static SceneManager sceneMgr;
 static ZbHub zb;
+static ClimateAlert climate;
 static CardConfig cardCfg;
 static Archive archive;
 static Achievements ach;
@@ -84,6 +86,7 @@ static int llmEpCount = 0;
 static InputSystem *input = nullptr;
 static IntervalTimer frameTimer(NOCT_FRAME_MS);
 static bool prevTcpConnected = false;
+static bool shotFromConsole = false; /* who asked, so the reply goes back */
 
 /* One place decides what the backlight is: the user setting, folded with the
  * screensaver dim and quiet hours. Every other path just changes an input to
@@ -455,7 +458,7 @@ static void consoleExec(String line) {
     int code = -100;
     if (http.begin(url)) code = http.GET();
     http.end();
-    Serial.printf("probe %s -> %d in %lu ms\r\n", url, code, millis() - t0);
+    Serial.printf("probe %s -> %d in %lu ms\n", url, code, millis() - t0);
   } else if (cmd == "lite") {
     /* fire the exact DNS+TLS path that used to panic the Zigbee build */
     liteClient.debugFetchNow();
@@ -494,11 +497,11 @@ static void consoleExec(String line) {
       sd.syncBusNow();
       File f = SD.open(arg.c_str(), FILE_READ);
       if (!f) {
-        Serial.printf("dump: %s not found\r\n", arg.c_str());
+        Serial.printf("dump: %s not found\n", arg.c_str());
       } else {
         static const char *b64 =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        Serial.printf("---BEGIN %s %u---\r\n", arg.c_str(), (unsigned)f.size());
+        Serial.printf("---BEGIN %s %u---\n", arg.c_str(), (unsigned)f.size());
         uint8_t in[3];
         char out[5];
         out[4] = 0;
@@ -524,11 +527,24 @@ static void consoleExec(String line) {
           if ((f.position() & 0xFFF) == 0) esp_task_wdt_reset();
         }
         f.close();
-        Serial.printf("\r\n---END %s---\r\n", arg.c_str());
+        Serial.printf("\n---END %s---\n", arg.c_str());
       }
     }
+  } else if (cmd == "snooze") {
+    unsigned long sec = arg.length() ? (unsigned long)arg.toInt() : 300;
+    if (sec < 1) sec = 1;
+    if (sec > 3600) sec = 3600;
+    sceneMgr.snoozeAlert(sec * 1000UL);
+    Serial.printf("alert takeover snoozed for %lu s\n", sec);
   } else if (cmd == "shot") {
-    Serial.println(saveScreenshot() ? "saved" : "failed");
+    /* Route through the SAME request the menu uses, so the capture always
+     * happens right after a complete draw()+push(). Taking it straight from
+     * here read the sprite mid-frame — the console is serviced BEFORE the frame
+     * block — and produced torn screenshots with two different frames stacked
+     * in one image. Which is a nasty way to be misled: the tool you reach for
+     * to check the layout is the one lying about it. */
+    shotFromConsole = true;
+    sceneMgr.requestShot();
   } else if (cmd == "phy") {
     /* RF calibration lives in NVS and is shared ground between WiFi and
      * 802.15.4. Running the Zigbee stack rewrote it, after which WiFi could
@@ -930,6 +946,36 @@ void loop() {
       }
       persist = true;
     }
+    /* One-shot sensor actions from the panel. Not persisted: "pair now" and
+     * "poll now" are events, and re-running them on the next unrelated command
+     * would re-open the network behind the owner's back. */
+    if (state.rcZbJoin > 0) {
+      zb.permitJoin(state.rcZbJoin);
+      sceneMgr.toast(zb.running() ? "жду датчик" : "zigbee не запущен");
+      state.rcZbJoin = -1;
+    }
+    if (state.rcZbPoll > 0) {
+      bool asked = zb.pollNow();
+      sceneMgr.toast(asked ? "опрашиваю датчик" : "некого опрашивать");
+      state.rcZbPoll = -1;
+    }
+    if (state.rcZbInt > 0) {
+      /* min = a tenth of the window, so the sensor may still report early on a real
+       * change; max = what the owner asked for. */
+      zb.setReportInterval(state.rcZbInt / 10 + 1, state.rcZbInt);
+      state.rcZbInt = -1;
+    }
+    if (state.rcZbAlert >= 0) {
+      cfg.zbAlert = state.rcZbAlert != 0;
+      persist = true;
+    }
+    /* -1000 means "not in this command": every other value, including 0 and
+     * negatives, is a legitimate threshold. */
+    if (state.rcZbTempMin > -1000) { cfg.zbTempMin = state.rcZbTempMin; persist = true; }
+    if (state.rcZbTempMax > -1000) { cfg.zbTempMax = state.rcZbTempMax; persist = true; }
+    if (state.rcZbHumMin > -1000) { cfg.zbHumMin = state.rcZbHumMin; persist = true; }
+    if (state.rcZbHumMax > -1000) { cfg.zbHumMax = state.rcZbHumMax; persist = true; }
+    if (state.rcZbBattMin > -1000) { cfg.zbBattMin = state.rcZbBattMin; persist = true; }
     if (state.rcNight >= 0) {
       cfg.nightMode = state.rcNight != 0;
       persist = true;
@@ -1048,6 +1094,15 @@ void loop() {
   /* The card's health, same cadence. Cheap, and it turns "why is the archive
    * short" into a number you can watch climb instead of a discovery made
    * months later. */
+  /* Hub state upstream, so the panel's "check connection" shows the board's
+   * answer rather than the server's guess. */
+  static unsigned long lastZbStatus = 0;
+  if (tcp.connected() && now - lastZbStatus > 15000UL) {
+    lastZbStatus = now;
+    tcp.sendZbStatus(zb.running(), zb.channel(), zb.joinSecsLeft(now),
+                     zb.deviceCount(), zb.lastHeardSec(now));
+  }
+
   sd.refreshUsage(now); /* self-rate-limited; fills in what the mount missed */
   static unsigned long lastSdReport = 0;
   if (tcp.connected() && now - lastSdReport > 60000UL) {
@@ -1232,6 +1287,9 @@ void loop() {
   zb.tick(now, state, graphs);
   state.link.zbUp = zb.running();
   state.zbJoinSecs = zb.joinSecsLeft(now);
+  /* Thresholds the owner set in the panel; edge-triggered, hysteretic, and
+   * deliberately silent while the sensor is stale. */
+  climate.tick(now, state, brain, sceneMgr);
 
   /* input */
   input->setRepeatEnabled(sceneMgr.wantsButtonRepeat());
@@ -1264,6 +1322,10 @@ void loop() {
       bool okShot = saveScreenshot();
       if (okShot) ach.bump(Achievements::ACH_SHOT);
       sceneMgr.toast(okShot ? "снимок сохранён" : "снимок: нет карты");
+      if (shotFromConsole) {
+        shotFromConsole = false;
+        Serial.println(okShot ? "saved" : "failed");
+      }
     }
 
     static unsigned long lastFlush = 0;

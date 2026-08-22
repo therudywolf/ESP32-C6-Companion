@@ -228,16 +228,23 @@ void statusBar(UiCtx &ui, const char *title, int scene, int sceneCount) {
   /* 12px corner inset: the physical panel corners are rounded */
   textAt(g, 12, 0, title, ORANGE);
 
-  /* data-source badge so frozen numbers aren't mistaken for live ones:
-   *   "резерв"  — PC off but the fallback endpoint is feeding (data is real)
-   *   "устарело" — data is going stale and no fallback is covering it */
+  /* Data-source badge, so frozen numbers are never mistaken for live ones. A
+   * DOT rather than a word: the words sat next to the scene title and read as
+   * part of it ("СЕТЬ устарело"), and at a glance a coloured pip carries the
+   * same one bit without competing with the heading for attention.
+   *   blue  — the PC is off but the fallback endpoint is feeding (data is real)
+   *   amber — data is going stale and nothing is covering it
+   * Nothing is drawn when the feed is healthy; an always-present indicator is
+   * one the eye stops seeing. */
   {
-    int bx = 12 + g.textWidth(title) + 10;
-    if (ui.st.link.liteActive)
-      textAt(g, bx, 0, "резерв", INFO);
-    else if ((!ui.st.link.tcpConnected || ui.st.link.signalLost) &&
-             !ui.st.link.dataDead)
-      textAt(g, bx, 0, "устарело", WARN);
+    int bx = 12 + g.textWidth(title) + 9;
+    int cy = g.fontHeight() / 2;
+    if (ui.st.link.liteActive) {
+      g.fillCircle(bx, cy, 3, INFO);
+    } else if ((!ui.st.link.tcpConnected || ui.st.link.signalLost) &&
+               !ui.st.link.dataDead) {
+      g.fillCircle(bx, cy, 3, WARN);
+    }
   }
 
   int x = NOCT_W - 12;
