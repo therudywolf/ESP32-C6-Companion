@@ -1299,7 +1299,7 @@ void loop() {
         led.flash(0, 160, 40, 4000);
         brain.notice("будильник хозяина зазвонил - подними его и не дай "
                      "выключить");
-        sceneMgr.toast("подъём!");
+        sceneMgr.toast("подъем!");
       }
     }
   }
@@ -1423,7 +1423,7 @@ void loop() {
     if (sceneMgr.takeShotRequest()) {
       bool okShot = saveScreenshot();
       if (okShot) ach.bump(Achievements::ACH_SHOT);
-      sceneMgr.toast(okShot ? "снимок сохранён" : "снимок: нет карты");
+      sceneMgr.toast(okShot ? "снимок сохранен" : "снимок: нет карты");
       if (shotFromConsole) {
         shotFromConsole = false;
         Serial.println(okShot ? "saved" : "failed");
