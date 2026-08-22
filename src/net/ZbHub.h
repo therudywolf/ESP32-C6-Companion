@@ -27,14 +27,22 @@
 
 class SdStore;
 class CardConfig;
+struct Graphs;
 
 class ZbHub {
 public:
   /* Start the coordinator. `sd` may be null; names come from the card config.
    * Returns false when the build has no Zigbee (then everything else no-ops). */
   bool begin(SdStore *sd, const CardConfig *cfg);
-  /* Copy fresh readings into st.zb and age them. Cheap; call every loop. */
-  void tick(unsigned long now, AppState &st);
+  /* Copy fresh readings into st.zb and age them. Cheap; call every loop.
+   * `g` receives one sample per genuinely new reading, for the ДОМ sparkline. */
+  void tick(unsigned long now, AppState &st, Graphs &g);
+  /* Seconds left in the pairing window, 0 when closed — the ДОМ screen shows
+   * this so "press the button on the sensor NOW" has a deadline on it. */
+  int joinSecsLeft(unsigned long now) const {
+    long ms = (long)(joinUntil_ - now);
+    return ms > 0 ? (int)(ms / 1000) : 0;
+  }
 
   /* Open the network so a sensor can join, for `seconds`. A coordinator that
    * is always joinable is a coordinator anyone can join. */
@@ -66,6 +74,8 @@ private:
   unsigned long lastLog_ = 0;
   bool dirty_ = false;
   int knownCount_ = 0;
+  int lastTemp_ = -32768; /* last value pushed to the sparkline */
+  int lastHum_ = -1;
   bool newSensor_ = false;
 };
 

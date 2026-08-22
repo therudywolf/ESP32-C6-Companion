@@ -52,10 +52,12 @@ bool SdStore::begin() {
      * Printing "0 MB used / 0 MB" underneath a passing write test reads like a
      * failure, so say nothing rather than something wrong. */
     uint64_t total = SD.totalBytes();
-    if (total > 0)
-      Serial.printf("[SD] %llu MB used / %llu MB\n",
-                    SD.usedBytes() / (1024ULL * 1024ULL),
-                    total / (1024ULL * 1024ULL));
+    if (total > 0) {
+      totalMB_ = (uint32_t)(total / (1024ULL * 1024ULL));
+      usedMB_ = (uint32_t)(SD.usedBytes() / (1024ULL * 1024ULL));
+      Serial.printf("[SD] %lu MB used / %lu MB\n", (unsigned long)usedMB_,
+                    (unsigned long)totalMB_);
+    }
     break;
   }
   if (!ok_) Serial.println("[SD] no card / unusable - running without SD");
@@ -64,15 +66,39 @@ bool SdStore::begin() {
 
 /* One place decides whether an operation was slow, whether it failed, and
  * whether enough of them have failed that the card should be considered gone. */
+void SdStore::refreshUsage(unsigned long now) {
+  if (!ok_) return;
+  /* Unknown -> retry soon; known -> every 10 min, because usedBytes() walks the
+   * FAT and this runs on the render loop like every other card call. */
+  unsigned long gap = totalMB_ ? 600000UL : 15000UL;
+  if (lastUsage_ && now - lastUsage_ < gap) return;
+  lastUsage_ = now;
+  sync();
+  unsigned long t0 = millis();
+  uint64_t total = SD.totalBytes();
+  if (total == 0) {
+    track("usage", t0, false);
+    return;
+  }
+  totalMB_ = (uint32_t)(total / (1024ULL * 1024ULL));
+  usedMB_ = (uint32_t)(SD.usedBytes() / (1024ULL * 1024ULL));
+  track("usage", t0, true);
+}
+
 bool SdStore::track(const char *what, unsigned long t0, bool good) {
   unsigned long ms = millis() - t0;
-  if (ms >= NOCT_SD_SLOW_MS)
+  lastOpMs_ = (uint32_t)ms;
+  writes_++;
+  if (ms >= NOCT_SD_SLOW_MS) {
+    slowOps_++;
     Serial.printf("[SD] slow %s: %lu ms (frame budget is %d ms)\n", what, ms,
                   NOCT_FRAME_MS);
+  }
   if (good) {
     failStreak_ = 0;
     return true;
   }
+  failTotal_++;
   if (++failStreak_ >= NOCT_SD_FAIL_LIMIT) {
     /* Card pulled, or the bus went bad. Stop pretending: every later call
      * returns immediately and the UI shows SD as absent, instead of the board

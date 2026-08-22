@@ -1409,6 +1409,7 @@ void SceneManager::draw(UiCtx &ui) {
   case SCENE_SERVICES: scenes::drawServices(ui); break;
   case SCENE_EVENTS: scenes::drawEvents(ui); break;
   case SCENE_HISTORY: scenes::drawHistory(ui); break;
+  case SCENE_HOME: scenes::drawHome(ui); break;
   case SCENE_FORZA: scenes::drawForza(ui); break;
   }
 

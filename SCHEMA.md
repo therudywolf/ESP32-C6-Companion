@@ -213,7 +213,15 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   `zbs:name,temp10,humidity,battery,age_sec` (temp ×10; -1 = unknown; names come
   from `nocturne.ini` and must not contain commas). This is how the server —
   and through it a Yandex Smart Home skill — learns what the coordinator hears.
+- `sd:` — the card's health, once a minute:
+  `sd:ok,clock_hz,used_mb,total_mb,writes,slow,fails,queue,last_ms`. The board
+  is the only thing that can see its own card, so without this a card that has
+  quietly failed forty writes looks exactly like a healthy one until someone
+  opens the archive and finds a hole in it.
 - `cfg:` — CSV mirror of device settings, so the panel reflects the board.
+  **Twenty fields since v1.12** — the panel's key list must match position for
+  position, because a short list silently drops the tail (which is exactly what
+  happened to `pinned`/`slot`/`night*` until v1.14.1).
   Fields, in order:
 
   `petllm, wchat, wtone, led, flip, bglight, bright, carousel, timeout,

@@ -751,8 +751,8 @@ void drawSysInfo(UiCtx &ui) {
            ui.st.zb.count);
   textAt(g, 18, y, v, TEXT);
   y += rowH;
-  snprintf(v, sizeof(v), "SD: %s   LLM: %s", ui.st.link.sdOk ? "GOOD" : "—",
-           ui.st.link.llmOk ? "GOOD" : "—");
+  snprintf(v, sizeof(v), "SD: %s   LLM: %s", ui.st.link.sdOk ? "GOOD" : "-",
+           ui.st.link.llmOk ? "GOOD" : "-");
   textAt(g, 18, y, v, TEXT);
   y += rowH;
   snprintf(v, sizeof(v), "возраст волка: %lu дней",

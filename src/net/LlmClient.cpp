@@ -216,6 +216,18 @@ String LlmClient::sanitize(const String &raw) {
       s.trim();
     }
   }
+  /* Punctuation the panel cannot draw. The u8g2 Cyrillic face has no em dash,
+   * en dash or typographic quotes, and a model writing Russian reaches for all
+   * three constantly — each one came out as an empty box mid-sentence. Swap
+   * them for ASCII the font actually has, rather than shipping a wider font. */
+  s.replace("—", "-");
+  s.replace("–", "-");
+  s.replace("«", "\"");
+  s.replace("»", "\"");
+  s.replace("“", "\"");
+  s.replace("”", "\"");
+  s.replace("…", "...");
+
   /* hard truncate at a UTF-8 boundary */
   if (s.length() > NOCT_LLM_REPLY_MAX) {
     int cut = NOCT_LLM_REPLY_MAX;

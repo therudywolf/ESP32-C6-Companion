@@ -4,6 +4,7 @@
 #include <esp_system.h>
 
 #include "core/config.h"
+#include "ui/SceneIds.h"
 
 namespace settings {
 
@@ -40,7 +41,19 @@ void load(Settings &s) {
   p.getBytes("slot0", s.slot[0], sizeof(s.slot[0]));
   p.getBytes("slot1", s.slot[1], sizeof(s.slot[1]));
   p.getBytes("slot2", s.slot[2], sizeof(s.slot[2]));
+  /* Scene mask, with a migration. A saved mask is a snapshot of the ring as it
+   * was THEN: the companion panel writes it clamped to the scene count it knew
+   * about, so every scene added later arrives switched OFF and looks broken —
+   * which is exactly what ДОМ did on this board (stored 0xFFFF, bit 16 clear).
+   * scnBits records how wide the ring was when the mask was written; anything
+   * added since defaults to on, the same as a fresh install gets. */
   s.sceneMask = p.getUInt("scnMask", 0xFFFFFFFFu) | 1u; /* DEN always on */
+  int savedBits = p.getInt("scnBits", 16); /* 16 = the ring before ДОМ */
+  if (savedBits < SCENE_FORZA) {
+    for (int i = savedBits; i < SCENE_FORZA; i++) s.sceneMask |= (1u << i);
+    Serial.printf("[CFG] ring grew %d -> %d scenes; new ones enabled\n",
+                  savedBits, (int)SCENE_FORZA);
+  }
   s.nightMode = p.getBool("night", false);
   s.nightFrom = p.getInt("nightF", 23);
   s.nightTo = p.getInt("nightT", 8);
@@ -85,6 +98,7 @@ void save(const Settings &s) {
   p.putBytes("slot1", s.slot[1], sizeof(s.slot[1]));
   p.putBytes("slot2", s.slot[2], sizeof(s.slot[2]));
   p.putUInt("scnMask", s.sceneMask | 1u);
+  p.putInt("scnBits", (int)SCENE_FORZA);
   p.putBool("night", s.nightMode);
   p.putInt("nightF", s.nightFrom);
   p.putInt("nightT", s.nightTo);
