@@ -426,7 +426,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
       /* live -> today -> week -> live. The card rungs only appear with a card
        * in, because that is the only place the dated rows live. */
       homeMode_ = (homeMode_ + 1) % (ui.st.link.sdOk ? 3 : 1);
-      toast(homeMode_ == 0   ? "график: последние отчёты"
+      toast(homeMode_ == 0   ? "график: последние отчеты"
             : homeMode_ == 1 ? "график: сутки с карты"
                              : "график: неделя с карты");
     } else if (scene_ != SCENE_FORZA) {
@@ -487,7 +487,7 @@ void SceneManager::menuRowValue(int row, const Settings &s, char *out,
     snprintf(out, cap, "%s", theme::bgStyleName(s.bgStyle));
     break;
   case MI_BGLIGHT:
-    snprintf(out, cap, "%s", s.bgLight ? "светлый" : "тёмный");
+    snprintf(out, cap, "%s", s.bgLight ? "светлый" : "темный");
     break;
   case MI_SLOT:
     snprintf(out, cap, "#%d%s", s.activeSlot + 1,
@@ -617,7 +617,7 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
   case MI_BGLIGHT:
     s.bgLight = !s.bgLight;
     theme::setBgLight(s.bgLight);
-    toast(s.bgLight ? "светлый фон" : "тёмный фон");
+    toast(s.bgLight ? "светлый фон" : "темный фон");
     break;
   case MI_SLOT: { /* cycle 1-2-3, load that saved palette if it exists */
     s.activeSlot = (s.activeSlot + 1) % 3;
@@ -763,7 +763,7 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
       return; /* factoryReset already rewrote NVS */
     }
     resetArmedUntil_ = ui.now + 4000;
-    toast("ещё раз - сброс");
+    toast("еще раз - сброс");
     return; /* nothing changed yet - don't spend an NVS write */
   }
   settings::save(s);

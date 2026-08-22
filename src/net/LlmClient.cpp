@@ -227,6 +227,10 @@ String LlmClient::sanitize(const String &raw) {
   s.replace("“", "\"");
   s.replace("”", "\"");
   s.replace("…", "...");
+  /* Ё is not in the u8g2 cyrillic subset either, and a model writing Russian
+   * produces it constantly. Е reads correctly; an empty box does not. */
+  s.replace("Ё", "Е");
+  s.replace("ё", "е");
 
   /* hard truncate at a UTF-8 boundary */
   if (s.length() > NOCT_LLM_REPLY_MAX) {
