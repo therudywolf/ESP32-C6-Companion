@@ -7,6 +7,8 @@
  * network only. WiFi/lwIP run in their own IDF tasks.
  */
 #include <Arduino.h>
+#include <HTTPClient.h>
+#include <Preferences.h>
 #include <SD.h>
 #include <SPI.h>
 #include <esp_core_dump.h>
@@ -30,7 +32,7 @@
 #include "net/LlmClient.h"
 #include "net/CoverClient.h"
 #include "net/LiteClient.h"
-#include "net/OtaManager.h"
+#include "net/ZbHub.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
 #include "pet/Achievements.h"
@@ -43,6 +45,7 @@
 #include "storage/SdStore.h"
 #include "ui/Display.h"
 #include "ui/SceneManager.h"
+
 
 static const WifiCred kWifiNets[] = WIFI_NETWORKS;
 static const int kWifiCount = sizeof(kWifiNets) / sizeof(kWifiNets[0]);
@@ -65,7 +68,7 @@ static Graphs graphs;
 static Histories histories;
 static AppState state;
 static SceneManager sceneMgr;
-static OtaManager ota;
+static ZbHub zb;
 static CardConfig cardCfg;
 static Archive archive;
 static Achievements ach;
@@ -332,6 +335,7 @@ static void consoleHelp() {
       "  say <text>      make the wolf say something\n"
       "  feed|play|pet|talk\n"
       "  shot            screenshot to the card\n"
+      "  zb [join|reset]  Zigbee coordinator\n"
       "  reboot"));
 }
 
@@ -426,6 +430,58 @@ static void consoleExec(String line) {
                       state.zb.list[i].battery, state.zb.list[i].ageSec);
       Serial.println();
     }
+  } else if (cmd == "mem") {
+    Serial.printf("heap %u KB free (min %u), largest block %u B\n",
+                  (unsigned)(ESP.getFreeHeap() / 1024),
+                  (unsigned)(ESP.getMinFreeHeap() / 1024),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    static const char *tn[] = {"loopTask", "llm", "lite", "cover",
+                               "Zigbee_main"};
+    for (auto n : tn) {
+      TaskHandle_t h = xTaskGetHandle(n);
+      if (h)
+        Serial.printf("  %-12s stack headroom %u B\n", n,
+                      (unsigned)uxTaskGetStackHighWaterMark(h));
+    }
+  } else if (cmd == "probe") {
+    /* Plain HTTP GET to the control panel: a bounded, cheap RX truth-teller.
+     * If this returns a code, WiFi receive is alive, whatever else claims. */
+    HTTPClient http;
+    char url[64];
+    snprintf(url, sizeof(url), "http://%s:8899/", activeHost);
+    http.setConnectTimeout(2000);
+    http.setTimeout(2000);
+    unsigned long t0 = millis();
+    int code = -100;
+    if (http.begin(url)) code = http.GET();
+    http.end();
+    Serial.printf("probe %s -> %d in %lu ms\r\n", url, code, millis() - t0);
+  } else if (cmd == "lite") {
+    /* fire the exact DNS+TLS path that used to panic the Zigbee build */
+    liteClient.debugFetchNow();
+    Serial.println("lite fetch forced - watch for [LITE]");
+  } else if (cmd == "zb") {
+    if (arg == "join") {
+      if (zb.running()) {
+        zb.permitJoin(NOCT_ZB_JOIN_SEC);
+        Serial.printf("network open %d s - press pair on the sensor\n",
+                      NOCT_ZB_JOIN_SEC);
+      } else {
+        Serial.println("coordinator not up yet (starts once WiFi connects)");
+      }
+    } else if (arg == "reset") {
+      zb.factoryReset();
+    } else {
+      Serial.printf("coordinator %s, %d sensor(s), %s\n",
+                    zb.running() ? "up" : "down", zb.deviceCount(),
+                    zb.joining(millis()) ? "OPEN for joining" : "closed");
+      for (int i = 0; i < state.zb.count; i++) {
+        const ZbSensor &z = state.zb.list[i];
+        Serial.printf("  %s: %.1fC rh %d%% bat %d%% age %ds\n", z.name,
+                      z.temp10 / 10.0f, z.humidity, z.battery, z.ageSec);
+      }
+      Serial.println("  zb join | zb reset");
+    }
   } else if (cmd == "shot") {
     Serial.println(saveScreenshot() ? "saved" : "failed");
   } else if (cmd == "phy") {
@@ -486,6 +542,30 @@ void setup() {
   Serial.printf("\n[BOOT] Nocturne C6 v%s\n", NOCT_VERSION);
 
   settings::readBootInfo(state.boot); /* why we restarted, before anything else */
+#ifdef NOCT_ZIGBEE
+  /* A boot that FOLLOWS a session in which the coordinator ran cannot
+   * associate with WiFi - reproduced on every such boot, six timeouts in a
+   * row, all networks. The one cure that works every time is erasing the RF
+   * calibration and REBOOTING; erasing without the extra reboot measurably
+   * does not help, so whatever the 802.15.4 session leaves behind is not just
+   * the NVS data. Do the cure preemptively: the session that starts the
+   * coordinator sets a flag, and the next boot restarts itself in its first
+   * second - one quick double-boot instead of two minutes of doomed attempts.
+   * The 120 s auto-heal in the loop stays as the backstop. */
+  {
+    Preferences pp;
+    pp.begin("nocturne", false);
+    if (pp.getBool("zbRan", false)) {
+      pp.putBool("zbRan", false);
+      pp.end();
+      Serial.println("[PHY] post-zigbee boot: erase calibration + quick restart");
+      esp_phy_erase_cal_data_in_nvs();
+      delay(50);
+      esp_restart();
+    }
+    pp.end();
+  }
+#endif
   settings::load(state.settings);
   theme::bgStyle = state.settings.bgStyle;
   theme::bgLight = state.settings.bgLight;
@@ -585,19 +665,10 @@ void setup() {
 
   wifi.begin(activeNets, activeNetCount, state.settings.netSel);
   tcp.setServer(activeHost, activePort);
-#ifdef OTA_PASSWORD
-  ota.begin(NOCT_OTA_HOSTNAME, OTA_PASSWORD, activeHost);
-#else
-  ota.begin(NOCT_OTA_HOSTNAME, nullptr, activeHost);
-#endif
-  /* Flash is being written while this runs, so the normal frame loop is stalled:
-   * the callback draws + pushes the panel itself and feeds the watchdog. */
-  ota.setUiCallback([](int pct, const char *msg) {
-    state.otaPct = pct;
-    esp_task_wdt_reset();
-    UiCtx ui{display.fb, state, graphs, pet, brain, millis()};
-    sceneMgr.drawOtaScreen(ui, pct, msg);
-  });
+  /* Zigbee starts LATER, from the loop, once WiFi has associated. Espressif's
+   * own WiFi+Zigbee gateway example brings WiFi up first, and starting the
+   * 802.15.4 stack ahead of it left WiFi unable to associate at all on this
+   * board. See ZbHub. */
   coverClient.begin(activeHost,
                     cardCfg.panelPort() ? cardCfg.panelPort() : 8899);
 #if defined(LITE_URL) && defined(LITE_TOKEN)
@@ -618,7 +689,6 @@ void setup() {
    * just died is copied off before anything can overwrite it, and only then do
    * we consider replacing the firmware. */
   saveCoreDump();
-  ota.installFromCard(&sd); /* reboots on success; returns on any failure */
 
   UiCtx ui{display.fb, state, graphs, pet, brain, millis()};
   sceneMgr.bootAnimation(ui);
@@ -678,9 +748,39 @@ void loop() {
     ntpInit = true;
     /* the address you point `--upload-port` at — also on the СИСТЕМА screen,
      * but having it in the boot log means OTA never needs the panel first */
-    Serial.printf("[NET] ip %s — OTA on :%d\n",
-                  WiFi.localIP().toString().c_str(), NOCT_OTA_PORT);
+    Serial.printf("[NET] ip %s\n", WiFi.localIP().toString().c_str());
   }
+  /* The 802.15.4 stack rewrites the RF calibration WiFi shares, and a bad
+   * one survives reflashing: the board scans networks but never associates,
+   * indistinguishable from dead hardware. If WiFi has not associated once in
+   * two minutes, erase the calibration and reboot - once, guarded by an NVS
+   * flag so a genuine outage cannot loop it. */
+  static bool phyHealDone = false;
+  if (!phyHealDone) {
+    if (wifi.connected()) {
+      phyHealDone = true;
+      Preferences hp;
+      hp.begin("nocturne", false);
+      if (hp.getBool("phyheal", false)) hp.putBool("phyheal", false);
+      hp.end();
+    } else if (now > 120000UL) {
+      phyHealDone = true;
+      Preferences hp;
+      hp.begin("nocturne", false);
+      bool tried = hp.getBool("phyheal", false);
+      if (!tried) {
+        hp.putBool("phyheal", true);
+        hp.end();
+        Serial.println("[PHY] no association in 120 s - erasing RF calibration "
+                       "and rebooting (one shot)");
+        esp_phy_erase_cal_data_in_nvs();
+        delay(200);
+        esp_restart();
+      }
+      hp.end();
+    }
+  }
+
   /* The boot record needs a real clock, so it waits for SNTP rather than being
    * written in setup(). One attempt: if the clock never arrives, no record. */
   static bool bootLogged = false;
@@ -797,12 +897,6 @@ void loop() {
       cfg.nightTo = state.rcNightTo;
       persist = true;
     }
-    if (state.rcOtaUrl.length()) {
-      /* the URL is validated inside (private/trusted hosts only) — telemetry is
-       * an unauthenticated LAN channel, so this must never be taken on faith */
-      if (!ota.requestPull(state.rcOtaUrl)) sceneMgr.toast(ota.message());
-      state.rcOtaUrl = "";
-    }
     if (state.rcTimeout >= 0) {
       cfg.displayTimeoutSec = state.rcTimeout;
       persist = true;
@@ -890,6 +984,22 @@ void loop() {
     settings::save(state.settings); /* coalesced RC settings write */
   }
 
+  /* A sensor spoke for the first time: say so on the glass and let the wolf
+   * react - pairing feedback is the whole difference between "is it working?"
+   * and knowing. */
+  if (zb.takeNewSensor()) {
+    sceneMgr.toast("датчик на связи!");
+    brain.notice("к тебе привязали новый датчик климата - обнюхай и одобри");
+  }
+
+  /* Local sensors go upstream too, so the server (and через него навык Алисы)
+   * sees what the coordinator hears. One line per sensor per minute. */
+  static unsigned long lastZbReport = 0;
+  if (tcp.connected() && state.zb.count > 0 && now - lastZbReport > 60000UL) {
+    lastZbReport = now;
+    for (int i = 0; i < state.zb.count; i++) tcp.sendZbSensor(state.zb.list[i]);
+  }
+
   /* report wolf state upstream every 2 s so the companion app can show it */
   static unsigned long lastWolfReport = 0;
   if (tcp.connected() && now - lastWolfReport > 2000) {
@@ -916,7 +1026,8 @@ void loop() {
   bool forzaLive = forza.connected(now);
   state.forzaLive = forzaLive;
 
-  /* full radio power only while racing (UDP latency); else modem sleep */
+  /* full radio power only while racing (UDP latency); else modem sleep —
+   * which the WiFi/802.15.4 coexistence scheme also expects to see */
   static bool wifiFast = false;
   if (forzaLive != wifiFast && wifi.connected()) {
     wifiFast = forzaLive;
@@ -1054,7 +1165,14 @@ void loop() {
   }
 
   serviceConsole();
-  ota.tick(wifi.connected());
+  /* Bring the coordinator up only after WiFi has a link: with both stacks on
+   * one radio, whichever starts first appears to keep it. */
+  static bool zbStarted = false;
+  if (!zbStarted && wifi.connected()) {
+    zbStarted = true;
+    zb.begin(&sd, &cardCfg);
+  }
+  zb.tick(now, state);
 
   /* input */
   input->setRepeatEnabled(sceneMgr.wantsButtonRepeat());
@@ -1079,6 +1197,10 @@ void loop() {
     display.push();
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
      * doing it every frame at 25 fps was a periodic hitch ("тупнячки") */
+    if (sceneMgr.takeZbJoinRequest()) {
+      zb.permitJoin(NOCT_ZB_JOIN_SEC);
+      sceneMgr.toast(zb.running() ? "жду датчик 3 мин" : "zigbee не запущен");
+    }
     if (sceneMgr.takeShotRequest()) {
       bool okShot = saveScreenshot();
       if (okShot) ach.bump(Achievements::ACH_SHOT);

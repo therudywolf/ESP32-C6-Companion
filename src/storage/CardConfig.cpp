@@ -52,6 +52,14 @@ void CardConfig::apply(const String &section, const String &key,
     }
     return;
   }
+  if (section == "zigbee") {
+    int i = keyIndex(key, "name", 4);
+    if (i && i <= 4) {
+      zbName_[i - 1] = val;
+      applied_++;
+    }
+    return;
+  }
   if (section == "wolf") {
     if (key == "skin") { skin_ = val; applied_++; }
     return;

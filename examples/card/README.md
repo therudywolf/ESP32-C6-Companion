@@ -13,7 +13,6 @@ firmware creates the rest itself on first boot.
 | `/nocturne.ini` | WiFi, server address, LM Studio endpoint, wolf skin — overrides `secrets.h` key by key |
 | `/themes/1.thm` … `8.thm` | extra palettes, appended after the built-in presets |
 | `/skins/<name>.wolf` | 512 raw bytes: four 128-byte 32×32 XBM frames (idle, blink, aggressive, funny) |
-| `/firmware.bin` | flashed at the next boot, then renamed to `firmware.installed.bin`. The recovery path when WiFi is down and USB is far away |
 
 ## What the board writes there
 
