@@ -53,8 +53,15 @@ public:
   /* Names for the paired Zigbee sensors, in join order. "" falls back to
    * "датчик N" — a short address is not something anyone wants to read. */
   const char *zbName(int i) const {
-    return (i >= 0 && i < 4) ? zbName_[i].c_str() : "";
+    return (i >= 0 && i < 5) ? zbName_[i].c_str() : "";
   }
+  /* Rename a sensor slot and write the [zigbee] section back to the card, so
+   * the name survives a reboot and a reflash the way every other card setting
+   * does. Needed because motion sensors make the NAME the reading: "движение
+   * 2 мин назад" is only useful once you know it was the hallway. Returns
+   * false if there is no card to persist to - the in-memory name still
+   * changes, so the screen updates either way. */
+  bool setZbName(SdStore *sd, int i, const String &name);
 
 private:
   void apply(const String &section, const String &key, const String &val);
@@ -67,7 +74,7 @@ private:
   String host_, llm_, llmModel_, llmKey_, skin_;
   uint16_t port_ = 0, panelPort_ = 0;
   int alarm_ = -1;
-  String zbName_[4];
+  String zbName_[5];
   bool loaded_ = false;
   int applied_ = 0;
 };
