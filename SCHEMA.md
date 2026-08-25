@@ -64,7 +64,7 @@ payload block still works exactly as before, so a server-side producer
 (Zigbee2MQTT, Home Assistant, a Yandex-hub poller) can feed the same screen on
 boards built without the stack (`nocturne-c6-nozb`).
 
-entry: `{name, t, h, b, age, p}`
+entry: `{name, t, h, b, age, p, lux, mo}`
 | key | type | size | meaning |
 |---|---|---|---|
 | `name` | string | ≤16 | room / sensor label, shown on the ПОГОДА tile |
@@ -73,6 +73,25 @@ entry: `{name, t, h, b, age, p}`
 | `b` | int | | battery %, -1 = unknown; under 20 the bar turns red |
 | `age` | int | | seconds since the sensor last reported, -1 = unknown |
 | `p` | int | | atmospheric pressure **hPa**, -1 = this sensor has no barometer |
+| `lux` | int | | ambient light, **raw lux**, -1 = no light sensor on this device |
+| `mo` | int | | **seconds since** motion was last seen, -1 = not a motion sensor |
+
+> `lux` and `mo` are the Aqara RTCGQ11LM. They are how a consumer tells a
+> motion sensor from a climate one: the kind is read from which fields a
+> device populates, not from a type byte nobody sets. A device that has
+> neither has no PIR; a device that has no `t` has no thermometer.
+>
+> `mo` is deliberately a DURATION and never a 0/1 occupancy flag. The
+> RTCGQ11LM reports when its PIR fires and stays silent otherwise — it has no
+> "unoccupied" report at all — so silence means "empty room" and "someone
+> sitting still" equally. A boolean would be the producer inventing a fact the
+> hardware never sent. Whoever renders this picks its own quiet threshold.
+>
+> `lux` is raw lux, not the ZCL log encoding (`10^((raw-1)/10000)`). Aqara's
+> own sensors send raw, which is also how Zigbee2MQTT reads them; applying the
+> compliant formula puts a dim room at "1" and a bright one at "4". Note the
+> reading is taken when the device WAKES on motion, so it is the brightness at
+> the moment someone walked past, not the brightness now.
 
 > `age` is not optional in spirit. Battery Zigbee sensors go quiet for hours;
 > a last-known reading presented as current is the same lie the "no signal"
@@ -242,6 +261,17 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 - `zbs:` gained a sixth field in v1.16: `…,age_sec,pressure_hpa` (-1 = the
   sensor has no barometer). The Aqara WSDCGQ11LM has one; the WSDCGQ01LM does
   not, so consumers must treat it as optional rather than assume zero.
+- `zbs:` gained a seventh and eighth in v1.23: `…,lux,motion_age_sec`, both -1
+  when the device does not measure that. Full line:
+  `zbs:name,temp10,humidity,battery,age_sec,pressure_hpa,lux,motion_age_sec`.
+
+  **Parse this line from the RIGHT.** The trailing fields are all integers and
+  the name is whatever precedes them, so a consumer should peel integers off
+  the end rather than split on a fixed count. The server did the latter and
+  broke silently the moment the line grew: `rsplit(",", 5)` against an
+  eight-field line returned the name as `ForestHome,230,56` and the
+  temperature as the battery, with no error anywhere. A fixed field count is
+  a promise between two repositories that nothing checks at runtime.
 - `brd:` — the board's own vitals, every 15 s:
   `brd:temp,temp_max,load,fps,heap_free_kb,heap_min_kb,heap_largest_kb,
   uptime_s,cpu_mhz,rssi,boots,faults,reason`. The device watched a PC all day
