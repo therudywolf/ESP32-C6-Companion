@@ -53,8 +53,8 @@ void CardConfig::apply(const String &section, const String &key,
     return;
   }
   if (section == "zigbee") {
-    int i = keyIndex(key, "name", 4);
-    if (i && i <= 4) {
+    int i = keyIndex(key, "name", 5);
+    if (i && i <= 5) {
       zbName_[i - 1] = val;
       applied_++;
     }
@@ -114,4 +114,60 @@ bool CardConfig::load(SdStore *sd) {
   Serial.printf("[CFG] /nocturne.ini: %d key(s), %d wifi net(s)%s\n", applied_,
                 netCount_, applied_ ? "" : " - nothing recognised");
   return applied_ > 0;
+}
+
+/* Rewrite only the [zigbee] section, preserving every other line of the file
+ * byte for byte. A config file the owner hand-edited must not be reformatted
+ * by a rename: their comments, their key order and their wifi passwords all
+ * stay exactly as typed. If there is no file yet, one is created containing
+ * nothing but this section, which leaves secrets.h in charge of everything
+ * else - an absent key means "not configured here", not "configured empty". */
+bool CardConfig::setZbName(SdStore *sd, int i, const String &name) {
+  if (i < 0 || i >= 5) return false;
+  zbName_[i] = name;
+  zbName_[i].trim();
+  if (!sd) return false;
+
+  String text;
+  if (!sd->readAll("/nocturne.ini", text, 4096)) text = "";
+
+  /* Copy every line that is not inside [zigbee]. */
+  String out;
+  bool inZb = false;
+  int pos = 0;
+  while (pos <= (int)text.length()) {
+    int nlAt = text.indexOf('\n', pos);
+    String line = nlAt < 0 ? text.substring(pos) : text.substring(pos, nlAt);
+    String t = line;
+    t.trim();
+    if (t.startsWith("[")) {
+      String sec = t.substring(1, t.indexOf(']'));
+      sec.toLowerCase();
+      inZb = (sec == "zigbee");
+    }
+    if (!inZb && (nlAt >= 0 || t.length())) {
+      out += line;
+      out += "\n";
+    }
+    if (nlAt < 0) break;
+    pos = nlAt + 1;
+  }
+
+  /* Then append the section, rebuilt from the names now in memory.
+   * Unconditionally: whether the file had a [zigbee] section before
+   * does not change what it must contain after. */
+  out += "[zigbee]\n";
+  for (int k = 0; k < 5; k++) {
+    if (!zbName_[k].length()) continue;
+    out += "name";
+    out += String(k + 1);
+    out += "=";
+    out += zbName_[k];
+    out += "\n";
+  }
+  bool ok = sd->writeBlob("/nocturne.ini", out.c_str(), out.length());
+  Serial.printf("[CFG] slot %d renamed to '%s'%s%s", i + 1,
+                zbName_[i].c_str(), ok ? " (saved)" : " (NOT saved)",
+                "\n");
+  return ok;
 }

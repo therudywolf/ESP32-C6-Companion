@@ -43,8 +43,17 @@ struct Slot {
   int humidity = -1;
   int battery = -1;
   int pressure = -1;
+  int lux = -1;
   unsigned long tempAt = 0; /* millis of the last report, 0 = never */
   unsigned long humAt = 0;
+  /* The RTCGQ11LM measures light only when it wakes to report motion, so a
+   * lux stamp is a second proof of life for a device that has no temperature
+   * to prove it with. */
+  unsigned long luxAt = 0;
+  /* The RTCGQ11LM only ever reports "occupied": Aqara firmware never sends a
+   * clear, so 0 legitimately means "booted, nothing seen yet" and is not
+   * confused with "no motion" the way tempAt/humAt's 0 works above. */
+  unsigned long motionAt = 0;
 };
 
 Slot gSlots[ZigbeeData::kMax];
@@ -103,6 +112,16 @@ public:
      * be sending a number nobody ever asked to hear. */
     esp_zb_cluster_list_add_pressure_meas_cluster(
         _cluster_list, esp_zb_pressure_meas_cluster_create(NULL),
+        ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    /* Both clusters below are what the RTCGQ11LM motion+illuminance sensor
+     * speaks. One endpoint serves every sensor kind: which cluster a given
+     * device actually reports on is up to that device, not to how many
+     * clusters this sink declares. */
+    esp_zb_cluster_list_add_occupancy_sensing_cluster(
+        _cluster_list, esp_zb_occupancy_sensing_cluster_create(NULL),
+        ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    esp_zb_cluster_list_add_illuminance_meas_cluster(
+        _cluster_list, esp_zb_illuminance_meas_cluster_create(NULL),
         ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
     esp_zb_cluster_list_add_power_config_cluster(
         _cluster_list, esp_zb_power_config_cluster_create(NULL),
@@ -168,6 +187,34 @@ public:
           s->pressure = hpa;
           gDirty = true;
         }
+      }
+    } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_OCCUPANCY_SENSING &&
+               attribute->id ==
+                   ESP_ZB_ZCL_ATTR_OCCUPANCY_SENSING_OCCUPANCY_ID &&
+               attribute->data.value) {
+      /* Bitmap8, bit 0 = occupied. The RTCGQ11LM never clears it — Aqara
+       * firmware has no "unoccupied" report at all, only silence — so the
+       * only fact worth latching is WHEN motion was last seen. */
+      uint8_t raw = *(uint8_t *)attribute->data.value;
+      if (raw & 0x01) {
+        s->motionAt = millis();
+        gDirty = true;
+      }
+    } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_ILLUMINANCE_MEASUREMENT &&
+               attribute->id ==
+                   ESP_ZB_ZCL_ATTR_ILLUMINANCE_MEASUREMENT_MEASURED_VALUE_ID &&
+               attribute->data.type == ESP_ZB_ZCL_ATTR_TYPE_U16 &&
+               attribute->data.value) {
+      uint16_t raw = *(uint16_t *)attribute->data.value;
+      /* The compliant ZCL formula is lux = 10^((raw-1)/10000), but Aqara's
+       * own motion sensors report raw lux directly — Zigbee2MQTT's converter
+       * treats it exactly this way, and a log-scale reading would put a
+       * dim room at "1 lux" and a bright one at "4". 0xFFFF is the ZCL
+       * "invalid" marker. */
+      if (raw != 0xFFFF) {
+        s->lux = raw;
+        s->luxAt = millis();
+        gDirty = true;
       }
     } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_BASIC &&
                attribute->id == 0xFF01 && attribute->data.value &&
@@ -316,21 +363,40 @@ namespace {
 struct PollTarget {
   uint16_t cluster;
   uint16_t attr;
+  uint8_t attrType;
   /* The smallest change worth a radio message, in the attribute's OWN units.
    * ZCL calls this the reportable change, and for an ANALOG attribute type it
    * is mandatory - the stack serialises it into the Configure Reporting
    * packet by dereferencing the pointer it is given. Passing nullptr here is
    * not "keep the device default", it is a null dereference inside
-   * zb_zcl_put_value_to_packet, which is exactly how this crashed. */
+   * zb_zcl_put_value_to_packet, which is exactly how this crashed.
+   * Meaningless when attrType is discrete (bitmap/bool/enum/string) - those
+   * types must NOT carry a reportable_change pointer at all, and analog_
+   * below is what decides whether this field is even looked at. */
   uint16_t delta;
+  bool analog;
 };
 const PollTarget kPoll[] = {
     /* temperature is S16 in hundredths of a degree: 10 = 0.1 C */
-    {ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT, 0x0000, 10},
+    {ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT, 0x0000,
+     ESP_ZB_ZCL_ATTR_TYPE_S16, 10, true},
     /* humidity is U16 in hundredths of a percent: 100 = 1 % */
-    {ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, 0x0000, 100},
+    {ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, 0x0000,
+     ESP_ZB_ZCL_ATTR_TYPE_U16, 100, true},
     /* pressure is S16 in whole hPa: 1 = 1 hPa, the smallest it can express */
-    {ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT, 0x0000, 1},
+    {ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT, 0x0000,
+     ESP_ZB_ZCL_ATTR_TYPE_S16, 1, true},
+    /* illuminance is U16 raw lux (see the attribute handler): 10 lux is
+     * worth a message, a flickering shadow is not. */
+    {ESP_ZB_ZCL_CLUSTER_ID_ILLUMINANCE_MEASUREMENT, 0x0000,
+     ESP_ZB_ZCL_ATTR_TYPE_U16, 10, true},
+    /* occupancy is bitmap8 - DISCRETE. This is the attribute the null-pointer
+     * crash was about: an analog reportable_change on a discrete type is not
+     * merely optional, the pointer must not be given at all, so analog=false
+     * here means "leave reportable_change null", the one case where null is
+     * correct rather than fatal. */
+    {ESP_ZB_ZCL_CLUSTER_ID_OCCUPANCY_SENSING, 0x0000,
+     ESP_ZB_ZCL_ATTR_TYPE_8BITMAP, 0, false},
 };
 } // namespace
 
@@ -380,17 +446,16 @@ bool ZbHub::setReportInterval(int minSec, int maxSec) {
       esp_zb_zcl_config_report_record_t rec = {};
       rec.direction = ESP_ZB_ZCL_REPORT_DIRECTION_SEND;
       rec.attributeID = t.attr;
-      rec.attrType = t.cluster == ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT
-                         ? ESP_ZB_ZCL_ATTR_TYPE_U16
-                         : ESP_ZB_ZCL_ATTR_TYPE_S16;
+      rec.attrType = t.attrType;
       rec.min_interval = (uint16_t)minSec;
       rec.max_interval = (uint16_t)maxSec;
       /* Must outlive the call and match attrType's width: the stack reads two
        * bytes through this pointer while building the packet. It is the one
        * field in the record that is a pointer rather than a value, and the
-       * one that must never be null for an analog type. */
+       * one that must never be null for an ANALOG type - and must never be
+       * given at all for a discrete one, which is what t.analog picks. */
       uint16_t delta = t.delta;
-      rec.reportable_change = &delta;
+      rec.reportable_change = t.analog ? &delta : nullptr;
 
       esp_zb_zcl_config_report_cmd_t cmd = {};
       cmd.zcl_basic_cmd.dst_addr_u.addr_short = s.addr;
@@ -419,6 +484,8 @@ int ZbHub::lastHeardSec(unsigned long now) const {
     if (s.addr == 0xFFFF) continue;
     if (s.tempAt > newest) newest = s.tempAt;
     if (s.humAt > newest) newest = s.humAt;
+    if (s.motionAt > newest) newest = s.motionAt;
+    if (s.luxAt > newest) newest = s.luxAt;
   }
   return newest ? (int)((now - newest) / 1000UL) : -1;
 }
@@ -450,18 +517,32 @@ void ZbHub::tick(unsigned long now, AppState &st, Graphs &g) {
       /* The first sensor IS the house, so it carries the network's name. */
       snprintf(out.name, sizeof(out.name), "%s", NOCT_ZB_NET_NAME);
     } else {
-      /* n is 1..3 here, but the compiler assumes the whole int range and warns
-       * about the field width, so bound it explicitly. */
-      char idx[2] = {(char)('1' + (n & 3)), 0};
+      /* n is 1..4 here (kMax-1), but the compiler assumes the whole int range
+       * and warns about the field width, so bound it explicitly. & 7 rather
+       * than & 3: with kMax raised to 5 for two motion sensors, masking to 3
+       * used to fold slot 4's suffix back onto slot 0's ("1"), making two
+       * different sensors show the same fallback name. */
+      char idx[2] = {(char)('1' + (n & 7)), 0};
       snprintf(out.name, sizeof(out.name), "%s %s", NOCT_ZB_NET_NAME, idx);
     }
     out.temp10 = s.temp10;
     out.humidity = s.humidity;
     out.battery = s.battery;
     out.pressure = s.pressure;
-    /* Age from the freshest of the two measurements: a sensor that reports
-     * temperature but not humidity is still alive. */
-    unsigned long newest = s.tempAt > s.humAt ? s.tempAt : s.humAt;
+    out.lux = s.lux;
+    /* Seconds since motion was last seen. Never a "no motion" verdict: the
+     * device cannot report one, so the cutoff belongs to whoever reads this. */
+    out.motionAgeSec = s.motionAt ? (int)((now - s.motionAt) / 1000UL) : -1;
+    /* Age from the freshest measurement of ANY kind this device sends. It
+     * used to consider temperature and humidity only, which is fine for a
+     * climate sensor and wrong for a motion sensor: an RTCGQ11LM has neither,
+     * so its age stayed -1 forever and every screen drew it as stale - dimmed
+     * and disbelieved seconds after it had actually reported. */
+    unsigned long newest = 0;
+    if (s.tempAt > newest) newest = s.tempAt;
+    if (s.humAt > newest) newest = s.humAt;
+    if (s.motionAt > newest) newest = s.motionAt;
+    if (s.luxAt > newest) newest = s.luxAt;
     out.ageSec = newest ? (int)((now - newest) / 1000UL) : -1;
     n++;
   }
@@ -542,11 +623,18 @@ void ZbHub::restore() {
     if (s.addr == 0xFFFF) continue;
     restored++;
     if (gap < 0) {
-      s.tempAt = s.humAt = 0; /* unknown age is honest; a fake one is not */
+      /* unknown age is honest; a fake one is not */
+      s.tempAt = s.humAt = s.motionAt = s.luxAt = 0;
     } else {
       unsigned long back = (unsigned long)gap * 1000UL;
       s.tempAt = s.tempAt ? (millis() > back ? millis() - back : 1) : 0;
       s.humAt = s.humAt ? (millis() > back ? millis() - back : 1) : 0;
+      /* Motion survives a reboot the same way a temperature does. Without
+       * this rebase a restored motion stamp kept its pre-reboot millis and
+       * read as motion seen just now - the board would claim somebody walked
+       * past during the reboot it just performed. */
+      s.motionAt = s.motionAt ? (millis() > back ? millis() - back : 1) : 0;
+      s.luxAt = s.luxAt ? (millis() > back ? millis() - back : 1) : 0;
     }
   }
   if (restored)

@@ -130,11 +130,13 @@ void TelemetryClient::sendCfg(const Settings &s) {
 
 void TelemetryClient::sendZbSensor(const ZbSensor &z) {
   if (!tcpConnected_) return;
-  /* zbs:name,temp10,humidity,battery,age_sec - names come from nocturne.ini
-   * and must not contain commas (documented there). */
-  char b[96];
-  snprintf(b, sizeof(b), "zbs:%s,%d,%d,%d,%d,%d\n", z.name, z.temp10,
-           z.humidity, z.battery, z.ageSec, z.pressure);
+  /* zbs:name,temp10,humidity,battery,age_sec,pressure,lux,motion_age_sec -
+   * names come from nocturne.ini and must not contain commas (documented
+   * there). lux/motion_age_sec are -1 for a climate sensor, same convention
+   * as pressure on a sensor with no barometer. */
+  char b[112];
+  snprintf(b, sizeof(b), "zbs:%s,%d,%d,%d,%d,%d,%d,%d\n", z.name, z.temp10,
+           z.humidity, z.battery, z.ageSec, z.pressure, z.lux, z.motionAgeSec);
   sendLine(b);
 }
 
@@ -418,6 +420,8 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
         e.battery = list[i]["b"] | -1;
         e.ageSec = list[i]["age"] | -1;
         e.pressure = list[i]["p"] | -1;
+        e.lux = list[i]["lux"] | -1;
+        e.motionAgeSec = list[i]["mo"] | -1;
       } else {
         e = ZbSensor();
       }

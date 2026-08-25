@@ -31,6 +31,7 @@ const char *title(int scene) {
   case SCENE_HISTORY: return "ИСТОРИЯ / ЧАС";
   case SCENE_HOME: return "ДОМ";
   case SCENE_BOARD: return "ПЛАТА C6";
+  case SCENE_MOTION: return "ДВИЖЕНИЕ";
   case SCENE_FORZA: return "FORZA";
   default: return "NOCTURNE";
   }

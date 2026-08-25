@@ -31,6 +31,10 @@ enum SceneId {
   /* The board's own vitals. Appended before FORZA for the same reason ДОМ
    * was: every existing index, saved scnMask bit and screen:N stays put. */
   SCENE_BOARD,
+  /* ДВИЖЕНИЕ. Appended before FORZA for the third time and the same reason:
+   * every existing scene index, saved scnMask bit and server screen:N keeps
+   * the number it already had. */
+  SCENE_MOTION,
   SCENE_FORZA,
   SCENE_COUNT
 };
@@ -52,6 +56,9 @@ inline bool sceneNeedsPc(int s) {
   case SCENE_HISTORY:
   case SCENE_HOME:
   case SCENE_BOARD:
+  /* Motion sensors are Zigbee: they keep reporting with the PC dark, which is
+   * exactly when knowing whether anyone walked past matters most. */
+  case SCENE_MOTION:
   case SCENE_FORZA:
     return false;
   default:
@@ -70,6 +77,7 @@ inline int sceneFromServerName(const char *name) {
       {"DISKS", SCENE_DISKS}, {"MEDIA", SCENE_MEDIA},
       {"FANS", SCENE_FANS},   {"MOTHERBOARD", SCENE_MB},
       {"HOME", SCENE_HOME},   {"BOARD", SCENE_BOARD},
+      {"MOTION", SCENE_MOTION},
   };
   for (auto &m : map)
     if (strcmp(name, m.n) == 0) return m.s;

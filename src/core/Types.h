@@ -135,10 +135,25 @@ struct ZbSensor {
    * WSDCGQ11LM carries one, the cheaper WSDCGQ01LM does not, so every consumer
    * must treat it as optional rather than assume zero. */
   int pressure = -1;
+  /* Below: the Aqara RTCGQ11LM motion+illuminance sensor. Neither field means
+   * anything for a climate sensor, so -1 is "not this kind of device" rather
+   * than "sensor idle" — a screen tells the two apart by which fields are
+   * populated, the same convention `pressure` already uses. */
+  int lux = -1;         /* ambient light, lux; -1 = no light sensor on this device */
+  /* Seconds since the sensor last reported motion, -1 = never (or not a
+   * motion sensor). The RTCGQ11LM only ever reports "occupied" — Aqara
+   * firmware never sends a clear — so "how long since" is the one honest
+   * thing to show; a fixed "no motion" cutoff belongs to whoever reads this,
+   * not to the field. Hardware retrigger lockout is 60 s: two motion events
+   * closer together than that are physically impossible to tell apart. */
+  int motionAgeSec = -1;
 };
 
 struct ZigbeeData {
-  static const int kMax = 4;
+  /* One ForestHome climate sensor plus two motion sensors is the concrete
+   * ask; a fourth slot costs 76 bytes and avoids hard-coding "3" the moment
+   * someone adds a door sensor. */
+  static const int kMax = 5;
   int count = 0;
   ZbSensor list[kMax];
 };

@@ -562,6 +562,22 @@ static void consoleExec(String line) {
     sceneMgr.setHomeMode(arg.toInt());
     Serial.printf("home window = %d (0 live, 1 day, 2 week)\n",
                   sceneMgr.homeMode());
+  } else if (cmd == "zbname") {
+    /* zbname <1..5> <text> - name a paired sensor. The name is what makes a
+     * motion reading useful: "движение 2 минуты назад" says nothing until you
+     * know it was the hallway. Persisted to /nocturne.ini on the card, so it
+     * survives both a reboot and a reflash. */
+    int sp = arg.indexOf(' ');
+    int slot = (sp > 0 ? arg.substring(0, sp) : arg).toInt();
+    String nm = sp > 0 ? arg.substring(sp + 1) : String("");
+    nm.trim();
+    if (slot < 1 || slot > 5) {
+      Serial.println("zbname <1..5> <name>  -  empty name clears the slot");
+    } else {
+      cardCfg.setZbName(&sd, slot - 1, nm);
+      for (int i = 1; i <= 5; i++)
+        Serial.printf("  %d: %s\n", i, cardCfg.zbName(i - 1));
+    }
   } else if (cmd == "snooze") {
     unsigned long sec = arg.length() ? (unsigned long)arg.toInt() : 300;
     if (sec < 1) sec = 1;
