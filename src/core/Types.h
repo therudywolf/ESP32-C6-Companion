@@ -8,6 +8,8 @@
 
 #include <Arduino.h>
 
+#include "core/ClimateAnalysis.h"
+
 #define NOCT_HDD_COUNT 4
 #define NOCT_FAN_COUNT 4
 
@@ -278,6 +280,26 @@ struct AppState {
   bool zbTrendOk = false;
   int zbTemp10Delta3h = 0;
   int zbHumDelta3h = 0;
+  /* ── multi-window climate analysis ──────────────────────────────────────
+   * Recomputed off the card every five minutes. The three-hour numbers above
+   * stay exactly as they were - they are the WMO standard and half the code
+   * reads them - and these sit alongside rather than replacing them, because
+   * a second window is only useful while the first is still there to
+   * disagree with.
+   *
+   * Findings hold POINTERS to string literals, not copies: the strings live
+   * in flash for the life of the program and copying them into this struct
+   * would cost 600 bytes of RAM to say the same thing. */
+  analysis::Windows zbWin;
+  static const int kMaxFindings = 6;
+  analysis::Finding zbFind[kMaxFindings];
+  int zbFindCount = 0;
+  int zbDewPoint10 = -9999; /* tenths of a degree, -9999 = not computable */
+  int zbPressPct = -1;      /* percentile against the board's own archive */
+  /* Rows uploaded by the archive export, and how many days are still to go.
+   * -1 in `zbExportLeft` means no export is running. */
+  int zbExportRows = 0;
+  int zbExportLeft = -1;
   /* The PC has been silent long enough that its numbers are no longer worth
    * showing, and no fallback is covering. Distinct from link.dataDead only in
    * that it also accounts for the lite endpoint: when THAT is feeding, the
@@ -357,6 +379,10 @@ struct AppState {
   int rcZbJoin = -1;   /* seconds to open the network, one-shot */
   int rcZbPoll = -1;   /* 1 = read the sensor now, one-shot */
   int rcZbInt = -1;    /* requested reporting cadence, seconds */
+  /* Days of climate archive to upload, one-shot. The archive is the board's
+   * alone while the PC sleeps, so this is the only way it ever reaches
+   * anywhere it can be plotted or exported. */
+  int rcZbDump = -1;
   int rcZbAlert = -1;
   int rcZbTempMin = -1000, rcZbTempMax = -1000;
   int rcZbHumMin = -1000, rcZbHumMax = -1000;
