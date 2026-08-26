@@ -458,7 +458,10 @@ void backdrop(LGFX_Sprite &g, int y0, int y1) {
   int sweepDiv = 13 - energy / 12; /* 13..~5: faster under load */
   if (sweepDiv < 4) sweepDiv = 4;
   if (bgStyle == 1) {
-    uint16_t sl = lerp565(BG, tint, (bgLight ? 14 : 5) + energy / 18);
+    /* 5/255 is two percent: scanlines were being drawn and could not be seen.
+     * The sweep carried the whole effect and the texture under it was a
+     * theoretical exercise. */
+    uint16_t sl = lerp565(BG, tint, (bgLight ? 26 : 22) + energy / 18);
     for (int y = y0; y < y1; y += 4) g.drawFastHLine(0, y, 320, sl);
     int sheen = 14 + energy / 8; /* brighter sheen under load */
     int sx = (int)((nowMs / sweepDiv) % (320 + 90)) - 45;
@@ -478,8 +481,16 @@ void backdrop(LGFX_Sprite &g, int y0, int y1) {
       }
     }
   } else {
-    /* drifting dot grid — drifts faster and brightens with load */
-    uint16_t dot = lerp565(BG, tint, (bgLight ? 28 : 12) + energy / 10);
+    /* Drifting dot grid — drifts faster and brightens with load.
+     *
+     * The blend was 12/255, under five percent. SINGLE PIXELS need far more
+     * separation than a filled area to register at all: at that strength the
+     * grid measured 1.07 against the background, which is not a faint
+     * texture, it is nothing. The spacing was never the problem — 18 px puts
+     * about 150 dots on the screen — so "there is no grid" was a colour
+     * fault, not a missing feature. 70 gives roughly 2:1, which reads as
+     * texture without competing with the data on top of it. */
+    uint16_t dot = lerp565(BG, tint, (bgLight ? 84 : 70) + energy / 10);
     int ds = 90 - energy / 2;
     if (ds < 28) ds = 28;
     int ox = (int)((nowMs / ds) % 18), oy = (int)((nowMs / (ds + 40)) % 18);

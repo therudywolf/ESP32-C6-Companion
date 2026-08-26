@@ -147,14 +147,23 @@
 #define NOCT_HIST_SAVE_MS 60000UL
 
 /* ── Board thermals (temperatureRead(), the C6's own die sensor) ──────── */
-/* MEASURED on this board: 49.3 C steady, 51.3 C peak, at full brightness in
- * normal operation. So "warm" starts 20 C above anything normal — it is meant
- * to catch a real fault (blocked vent, a panel cooking itself, a sunny
- * windowsill), not to trip on a busy afternoon. The panel's thermal cliff is
- * why NOCT_BRIGHT_MAX exists at all; until now that cap was a single
- * measurement made once and trusted forever. */
-#define NOCT_BOARD_WARM_C 70.0f  /* start pulling the backlight down */
-#define NOCT_BOARD_HOT_C 80.0f   /* hold it at the dim floor */
+/* RE-MEASURED 2026-08-26, with the Zigbee coordinator running: 67.3 C steady,
+ * 68.3 C peak at full brightness. The old numbers here — 49.3 steady, 51.3
+ * peak — were taken BEFORE the 802.15.4 radio existed, and the comment then
+ * claimed "warm starts 20 C above anything normal". Coexistence with WiFi
+ * costs about 17 C of die temperature, so that margin had quietly become
+ * 2.7 C and the guard was tripping during ordinary use: the backlight kept
+ * being pulled from 210 to 150 for no fault at all, which is precisely what
+ * "the screen is too dim" turned out to be.
+ *
+ * A limit calibrated against a machine that no longer exists is worse than no
+ * limit, because it fires and looks like a hardware problem. 78/88 restores
+ * the intent — catch a blocked vent, a sunny windowsill, a panel cooking
+ * itself — without firing on the normal state of the board as it is now.
+ * The C6 is specified well past this; the number that protects the PANEL is
+ * NOCT_BRIGHT_MAX, and it is separate. */
+#define NOCT_BOARD_WARM_C 78.0f  /* start pulling the backlight down */
+#define NOCT_BOARD_HOT_C 88.0f   /* hold it at the dim floor */
 #define NOCT_BOARD_WARM_BRIGHT 150
 #define NOCT_BOARD_HOT_BRIGHT 90
 
@@ -166,6 +175,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.27.1"
+#define NOCT_VERSION "1.27.2"
 
 #endif
