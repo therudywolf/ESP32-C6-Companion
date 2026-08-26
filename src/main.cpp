@@ -1576,6 +1576,36 @@ void loop() {
   climate.tick(now, state, brain, sceneMgr);
   /* Somebody at the desk. Inert unless the owner switched it on. */
   presence.tick(now, state, tcp, sceneMgr);
+
+  /* The day's presence, half an hour per bucket.
+   *
+   * Marked on a NEW report rather than on a fresh-looking age: motionAgeSec
+   * counts up, so "age < 60" stays true for a whole minute and would paint
+   * the bucket over and over. What marks an event is the age going DOWN.
+   * Same rule Presence uses, for the same reason. */
+  {
+    time_t nowT = time(nullptr);
+    if (nowT > 1700000000L) {
+      struct tm tmv;
+      if (localtime_r(&nowT, &tmv)) {
+        int bucket = (tmv.tm_hour * 60 + tmv.tm_min) / 30;
+        int seen = 0;
+        for (int i = 0; i < state.zb.count && seen < 2; i++) {
+          const ZbSensor &z = state.zb.list[i];
+          if (z.motionAgeSec < 0 && z.lux < 0) continue; /* not a PIR */
+          MotionDay &d = state.motionDay[seen];
+          d.advance(bucket);
+          int was = state.motionAgeWas[seen];
+          if (z.motionAgeSec >= 0 &&
+              ((was >= 0 && z.motionAgeSec < was) ||
+               (was < 0 && z.motionAgeSec <= 60)))
+            d.mark(bucket);
+          state.motionAgeWas[seen] = z.motionAgeSec;
+          seen++;
+        }
+      }
+    }
+  }
   /* One row per genuinely new reading, stamped with the wall clock. A
    * WSDCGQ11LM speaks on change plus roughly hourly, so this is 30-80 rows a
    * day — about 2 KB, under a megabyte a year. */
