@@ -630,6 +630,16 @@ static void consoleExec(String line) {
     } else {
       Serial.printf("uploading %d day(s) of archive\n", days);
     }
+  } else if (cmd == "testcard") {
+    /* The only check this project cannot make on its own: screenshots come
+     * from the sprite, and the panel's inversion, RGB order, gamma and
+     * backlight all live downstream of it. */
+    unsigned long sec = arg.length() ? (unsigned long)arg.toInt() : 30;
+    if (sec < 3) sec = 3;
+    if (sec > 300) sec = 300;
+    sceneMgr.showTestCard(sec * 1000UL);
+    Serial.printf("test card up for %lu s - look at the GLASS, not a "
+                  "screenshot\n", sec);
   } else if (cmd == "analyse") {
     /* Print what the analyser currently makes of the room. The card is only
      * re-read every five minutes, so this shows the last verdict rather than
