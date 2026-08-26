@@ -296,14 +296,16 @@ bool ClimateLog::exportNextRow(char *out, size_t cap) {
   }
 }
 
-int ClimateLog::pressurePercentile(int days, int press) {
-  if (!sd_ || !sd_->ok() || press <= 0) return -1;
+bool ClimateLog::percentiles(int days, int temp10, int rh, int press,
+                             int &pTemp, int &pHum, int &pPress) {
+  pTemp = pHum = pPress = -1;
+  if (!sd_ || !sd_->ok()) return false;
   if (days < 1) days = 1;
   if (days > 60) days = 60;
   time_t nowT = time(nullptr);
-  if (nowT < 1700000000L) return -1;
+  if (nowT < 1700000000L) return false;
 
-  long below = 0, total = 0;
+  long belowT = 0, totT = 0, belowH = 0, totH = 0, belowP = 0, totP = 0;
   for (int d = 0; d < days; d++) {
     time_t t = nowT - (time_t)d * 86400;
     struct tm tmv;
@@ -323,18 +325,42 @@ int ClimateLog::pressurePercentile(int days, int press) {
       start = (nl < 0) ? text.length() : nl + 1;
       line.trim();
       if (!line.length() || line.startsWith("time")) continue;
-      /* HH:MM,temp,rh,bat,press - pressure is the last field. */
-      int lastComma = line.lastIndexOf(',');
-      if (lastComma < 0) continue;
-      int p = line.substring(lastComma + 1).toInt();
-      if (p <= 0) continue; /* -1 means this sensor has no barometer */
-      total++;
-      if (p < press) below++;
+
+      /* HH:MM,temp,rh,bat,press */
+      int c1 = line.indexOf(',');
+      if (c1 < 4) continue;
+      int c2 = line.indexOf(',', c1 + 1);
+      if (c2 < 0) continue;
+      int c3 = line.indexOf(',', c2 + 1);
+      if (c3 < 0) continue;
+      int c4 = line.indexOf(',', c3 + 1);
+      if (c4 < 0) continue;
+
+      float tc = line.substring(c1 + 1, c2).toFloat();
+      int t10 = (int)(tc * 10.0f + (tc < 0 ? -0.5f : 0.5f));
+      int h = line.substring(c2 + 1, c3).toInt();
+      int p = line.substring(c4 + 1).toInt();
+
+      if (temp10 != -32768) {
+        totT++;
+        if (t10 < temp10) belowT++;
+      }
+      if (rh >= 0 && h >= 0) {
+        totH++;
+        if (h < rh) belowH++;
+      }
+      /* -1 is "this sensor has no barometer", not a reading of -1 hPa. */
+      if (press > 0 && p > 0) {
+        totP++;
+        if (p < press) belowP++;
+      }
     }
   }
   /* Under a day of readings is not a distribution, it is a handful of
    * numbers, and a percentile computed from it would look authoritative
    * while meaning nothing. */
-  if (total < 24) return -1;
-  return (int)(below * 100 / total);
+  if (totT >= 24) pTemp = (int)(belowT * 100 / totT);
+  if (totH >= 24) pHum = (int)(belowH * 100 / totH);
+  if (totP >= 24) pPress = (int)(belowP * 100 / totP);
+  return pTemp >= 0 || pHum >= 0 || pPress >= 0;
 }

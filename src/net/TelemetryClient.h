@@ -42,7 +42,8 @@ public:
    * consumer can treat the pair as one atomic report rather than guessing
    * whether a finding belongs to the numbers it just saw. */
   void sendClimatePatterns(const analysis::Finding *f, int n, int dew10,
-                           int pressPct, const analysis::Windows &w);
+                           int pressPct, int tempPct, int humPct, int absHum10,
+                           const analysis::Windows &w);
   /* Archive export: a begin line, then one row per reading, then an end line
    * carrying the total so the receiver can tell a finished transfer from a
    * dropped connection. */

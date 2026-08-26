@@ -307,6 +307,14 @@ struct AppState {
   int zbFindCount = 0;
   int zbDewPoint10 = -9999; /* tenths of a degree, -9999 = not computable */
   int zbPressPct = -1;      /* percentile against the board's own archive */
+  /* The same yardstick for the room's own two readings. "Warm for this flat"
+   * is a fact about this flat; a threshold picked once by hand is a guess. */
+  int zbTempPct = -1;
+  int zbHumPct = -1;
+  /* Water actually in the air, tenths of g/m3. Relative humidity is a ratio
+   * against a capacity that doubles every ten degrees, so it moves when the
+   * heating comes on and nothing has dried. This does not. */
+  int zbAbsHum10 = -9999;
   /* Rows uploaded by the archive export, and how many days are still to go.
    * -1 in `zbExportLeft` means no export is running. */
   int zbExportRows = 0;
