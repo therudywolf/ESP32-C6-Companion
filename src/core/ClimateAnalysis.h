@@ -355,8 +355,17 @@ inline int analyse(const Windows &w, int temp10, int rh, int hourLocal,
           "воды в воздухе больше: готовка, сушка белья или люди");
     /* RH down, water flat: the capacity grew, nothing dried. Worth saying
      * out loud, because this is the reading that sends people out to buy a
-     * humidifier in January when the answer is the radiator. */
-    if (w.dH_1h <= -4 && dAh10 > -4 && dAh10 < 4 && w.okT1 && w.dT10_1h >= 5)
+     * humidifier in January when the answer is the radiator.
+     *
+     * "Flat" is 0.6 g/m3, and that number is the SENSOR'S, not a taste. The
+     * WSDCGQ11LM is quoted at about +-3 % RH and +-0.3 C, which at room
+     * conditions works out to roughly +-0.6 g/m3 of uncertainty in absolute
+     * humidity. Demanding tighter agreement than the instrument can deliver
+     * would make this pattern fire only by luck - which it did: at +1.5 C
+     * and -6 points the arithmetic gives -0.45 g/m3, real heating that a
+     * +-0.4 g/m3 window called water loss. Still well clear of the 0.8 that
+     * marks water actually moving, so the three stay disjoint. */
+    if (w.dH_1h <= -4 && dAh10 > -6 && dAh10 < 6 && w.okT1 && w.dT10_1h >= 5)
       add(PAT_DRY_IS_JUST_HEAT, 0, "Это не сушь, а нагрев",
           "влажность упала от прогрева, воды в воздухе столько же");
   }

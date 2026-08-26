@@ -213,6 +213,16 @@ static void test_heating_does_not_dry_the_air() {
   /* and it must NOT claim water arrived or left */
   TEST_ASSERT_FALSE(has(n, analysis::PAT_WATER_ENTERING));
   TEST_ASSERT_FALSE(has(n, analysis::PAT_AIRED_OUT));
+
+  /* The same RH fall with the room NOT warming is real drying, and must not
+   * be excused as heat. This is the pair that makes the pattern mean
+   * something rather than just matching any fall in humidity. */
+  analysis::Windows c;
+  c.okT1 = c.okH1 = c.okP1 = true;
+  c.dT10_1h = 0;
+  c.dH_1h = -6;
+  n = analysis::analyse(c, 230, 40, 12, -1, -1, -1, gF, 8);
+  TEST_ASSERT_FALSE(has(n, analysis::PAT_DRY_IS_JUST_HEAT));
 }
 
 static void test_water_entering_and_airing_out_are_opposites() {
