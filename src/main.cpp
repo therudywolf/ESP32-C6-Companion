@@ -502,8 +502,20 @@ static void consoleExec(String line) {
                     zb.joining(millis()) ? "OPEN for joining" : "closed");
       for (int i = 0; i < state.zb.count; i++) {
         const ZbSensor &z = state.zb.list[i];
-        Serial.printf("  %s: %.1fC rh %d%% bat %d%% age %ds\n", z.name,
-                      z.temp10 / 10.0f, z.humidity, z.battery, z.ageSec);
+        /* Print what the device MEASURES, not every field of the struct. A
+         * motion sensor has no thermometer, and rendering its -32768 marker
+         * as "-3276.8C rh -1%" made a healthy sensor look broken — which is
+         * exactly the wrong impression for the listing people reach for when
+         * they suspect something is broken. */
+        Serial.printf("  %s:", z.name);
+        if (z.temp10 != -32768) Serial.printf(" %.1fC", z.temp10 / 10.0f);
+        if (z.humidity >= 0) Serial.printf(" rh %d%%", z.humidity);
+        if (z.pressure > 0) Serial.printf(" %d hPa", z.pressure);
+        if (z.lux >= 0) Serial.printf(" %d lx", z.lux);
+        if (z.motionAgeSec >= 0)
+          Serial.printf(" motion %ds ago", z.motionAgeSec);
+        if (z.battery >= 0) Serial.printf(" bat %d%%", z.battery);
+        Serial.printf(" age %ds\n", z.ageSec);
       }
       zb.debugSlots();
       Serial.printf("  local %d of %d listed\n", state.zb.localCount,
