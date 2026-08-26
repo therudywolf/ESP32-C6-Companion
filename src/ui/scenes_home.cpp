@@ -75,12 +75,18 @@ static void hero(LGFX_Sprite &g, int x, int y, const char *num,
    * than as part of the reading. A room moves by tenths, so the digit has to
    * stay; it just has to stay ATTACHED. */
   if (frac) {
-    g.setFont(&F_TEXT);
-    textAt(g, x + vw + 4, y + 40, frac, c);
+    /* F_MED, not F_TEXT. The tenth is part of the reading, not a footnote:
+     * a room moves BY tenths, so this is the digit that changes while the
+     * two big ones sit still. Drawn in the smallest face on the screen it
+     * was invisible from the far side of the room - which is where this
+     * board is read from. Same colour as the number it belongs to, for the
+     * same reason. */
+    g.setFont(&F_MED);
+    textAt(g, x + vw + 4, y + 36, frac, c);
   }
   if (unit) {
     g.setFont(&F_MED);
-    textAt(g, x + vw + 4, frac ? y + 58 : y + 44, unit, DIM);
+    textAt(g, x + vw + 4, frac ? y + 60 : y + 44, unit, DIM);
   }
 }
 
@@ -204,8 +210,12 @@ void drawHome(UiCtx &ui) {
       if (ui.gr.zbHum.count >= 2) {
         sparkline(g, 232, 34, 76, 34, ui.gr.zbHum, stale ? DIM : INFO);
       } else {
-        g.setFont(&F_SMALL);
-        textAt(g, 240, 44, "график копится", DIM);
+        /* F_TEXT rather than F_SMALL: this is the tile explaining itself,
+         * and an explanation nobody can read is worse than an empty box,
+         * because it looks like it said something. */
+        g.setFont(&F_TEXT);
+        textAt(g, 236, 44, "график", DIM);
+        textAt(g, 236, 58, "копится", DIM);
       }
     } else {
       g.setFont(&F_BIG);

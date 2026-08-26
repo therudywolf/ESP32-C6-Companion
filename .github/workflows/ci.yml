@@ -36,6 +36,9 @@ jobs:
       - name: Wire schema check
         run: python tools/check_schema.py
 
+      - name: Theme contrast check
+        run: python tools/check_contrast.py
+
       - name: Host unit tests
         run: pio test -e native
 

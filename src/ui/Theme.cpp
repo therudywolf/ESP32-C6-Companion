@@ -54,7 +54,7 @@ static const Preset kPresets[THEME_PRESETS] = {
      rgb(255, 90, 60), rgb(0, 240, 150), rgb(180, 255, 120)},
     /* 2 Amber — retro terminal on dark brown */
     {"Amber", rgb(24, 14, 2), rgb(255, 176, 0), rgb(255, 226, 165),
-     rgb(180, 130, 50), rgb(52, 32, 6), rgb(150, 230, 90), rgb(255, 200, 40),
+     rgb(190, 142, 64), rgb(52, 32, 6), rgb(150, 230, 90), rgb(255, 200, 40),
      rgb(255, 80, 40), rgb(255, 160, 50), rgb(255, 210, 90)},
     /* 3 Synthwave — magenta/cyan on deep purple */
     {"Synthwave", rgb(22, 6, 38), rgb(255, 43, 214), rgb(245, 235, 255),
@@ -74,15 +74,15 @@ static const Preset kPresets[THEME_PRESETS] = {
      rgb(251, 73, 52), rgb(142, 192, 124), rgb(211, 134, 155)},
     /* 7 Dracula — purple/pink on dracula bg */
     {"Dracula", rgb(40, 42, 54), rgb(189, 147, 249), rgb(248, 248, 242),
-     rgb(120, 134, 180), rgb(58, 62, 80), rgb(80, 250, 123), rgb(241, 250, 140),
+     rgb(160, 176, 200), rgb(58, 62, 80), rgb(80, 250, 123), rgb(241, 250, 140),
      rgb(255, 85, 85), rgb(139, 233, 253), rgb(255, 121, 198)},
     /* 8 Nord — cool blue/grey on polar night */
     {"Nord", rgb(38, 44, 56), rgb(136, 192, 208), rgb(236, 239, 244),
-     rgb(140, 158, 180), rgb(58, 66, 82), rgb(163, 190, 140), rgb(235, 203, 139),
+     rgb(160, 180, 192), rgb(58, 66, 82), rgb(163, 190, 140), rgb(235, 203, 139),
      rgb(208, 110, 120), rgb(129, 161, 193), rgb(180, 142, 173)},
     /* 9 Blood — aggressive red on black-red */
     {"Blood", rgb(26, 4, 4), rgb(255, 40, 40), rgb(255, 235, 235),
-     rgb(190, 110, 110), rgb(60, 12, 12), rgb(0, 230, 130), rgb(255, 180, 0),
+     rgb(192, 116, 112), rgb(60, 12, 12), rgb(0, 230, 130), rgb(255, 180, 0),
      rgb(255, 0, 0), rgb(255, 130, 130), rgb(255, 90, 90)},
     /* 10 Forest — green/earth on deep forest */
     {"Forest", rgb(8, 26, 12), rgb(130, 210, 90), rgb(232, 248, 224),
@@ -103,7 +103,7 @@ static const Preset kPresets[THEME_PRESETS] = {
      * on all night should have as little of it as possible. Even the "info"
      * role is pulled to warm gold rather than cyan. */
     {"Свеча", rgb(20, 10, 2), rgb(255, 158, 46), rgb(255, 232, 190),
-     rgb(168, 120, 66), rgb(44, 24, 8), rgb(196, 214, 92), rgb(255, 190, 60),
+     rgb(176, 132, 80), rgb(44, 24, 8), rgb(196, 214, 92), rgb(255, 190, 60),
      rgb(255, 96, 40), rgb(240, 178, 88), rgb(255, 206, 130)},
 
     /* 13 Бумага — dark ink on light paper, for a sunlit room. Every other
@@ -112,23 +112,33 @@ static const Preset kPresets[THEME_PRESETS] = {
      * to stop trying and use the backlight as paper instead. Roles keep their
      * meaning but are darkened until they read against white. */
     {"Бумага", rgb(238, 236, 230), rgb(28, 42, 72), rgb(20, 22, 26),
-     rgb(104, 110, 120), rgb(250, 249, 245), rgb(22, 122, 60),
+     rgb(96, 100, 112), rgb(250, 249, 245), rgb(22, 122, 60),
      rgb(176, 110, 0), rgb(190, 30, 40), rgb(28, 88, 160), rgb(70, 90, 130)},
 
     /* 14 Ночь — deep red only. Red light preserves dark adaptation, which is
      * why instrument panels and observatories use it; this is the palette for
-     * a screen you glance at without waking up. Deliberately low contrast —
-     * legible, never bright. */
-    {"Ночь", rgb(10, 0, 0), rgb(190, 40, 40), rgb(225, 90, 80),
-     rgb(120, 34, 34), rgb(30, 6, 6), rgb(180, 70, 50), rgb(220, 90, 50),
-     rgb(255, 70, 60), rgb(170, 60, 60), rgb(200, 80, 70)},
+     * a screen you glance at without waking up.
+     *
+     * It used to be dim as well as red, and those are different things. Rod
+     * cells are what dark adaptation lives in and they are nearly blind to
+     * long wavelengths, so a BRIGHT red costs night vision very little — it
+     * is the green and blue that ruin it. Lowering the red instead bought
+     * nothing and made the screen unreadable: 2.0 against the ground, where
+     * 4.5 is the floor for small print.
+     *
+     * So the red is now strong and the grounds are nearly black: contrast
+     * comes from the ink, not from lifting everything. Green and blue stay
+     * minimal, which is the part that actually matters at 3 a.m. */
+    {"Ночь", rgb(8, 0, 0), rgb(255, 56, 48), rgb(255, 130, 116),
+     rgb(216, 82, 72), rgb(20, 2, 2), rgb(230, 96, 64), rgb(255, 128, 56),
+     rgb(255, 80, 68), rgb(226, 84, 76), rgb(255, 110, 90)},
 
     /* 15 Мох — muted green and clay, nothing saturated. A climate device is
      * furniture: it is in the corner of your eye for hours, and a HUD palette
      * that is exciting for ten minutes is tiring for ten hours. Alert roles
      * stay vivid so they still cut through the calm. */
     {"Мох", rgb(14, 20, 16), rgb(142, 176, 120), rgb(228, 236, 220),
-     rgb(122, 140, 118), rgb(30, 40, 32), rgb(150, 200, 130),
+     rgb(128, 152, 128), rgb(30, 40, 32), rgb(150, 200, 130),
      rgb(224, 178, 92), rgb(214, 96, 74), rgb(140, 180, 175),
      rgb(178, 196, 150)},
 
@@ -157,14 +167,14 @@ static const Preset kPresets[THEME_PRESETS] = {
     /* 19 Кофе — cream on espresso. Reads like paper in a dim room, where the
      * light Бумага theme would be a lamp in your face. */
     {"Кофе", rgb(26, 18, 14), rgb(214, 172, 124), rgb(245, 232, 214),
-     rgb(156, 132, 110), rgb(48, 34, 26), rgb(166, 194, 128),
+     rgb(160, 140, 120), rgb(48, 34, 26), rgb(166, 194, 128),
      rgb(230, 176, 96), rgb(214, 104, 82), rgb(182, 168, 208),
      rgb(224, 196, 158)},
 
     /* 20 Хвоя — pine and brass. Forest is bright green; this is the dark
      * needle-green of a winter wood, with warm metal for the accents. */
     {"Хвоя", rgb(8, 20, 16), rgb(206, 174, 106), rgb(226, 238, 226),
-     rgb(112, 138, 122), rgb(18, 40, 32), rgb(122, 196, 132),
+     rgb(128, 148, 136), rgb(18, 40, 32), rgb(122, 196, 132),
      rgb(226, 186, 96), rgb(224, 104, 84), rgb(128, 186, 170),
      rgb(186, 176, 128)},
 
@@ -172,7 +182,7 @@ static const Preset kPresets[THEME_PRESETS] = {
      * grey with a temperature, which keeps the alert roles from looking like
      * the only colours on the screen. */
     {"Сталь", rgb(18, 22, 28), rgb(150, 178, 204), rgb(232, 240, 248),
-     rgb(126, 142, 160), rgb(34, 42, 52), rgb(126, 206, 168),
+     rgb(136, 148, 168), rgb(34, 42, 52), rgb(126, 206, 168),
      rgb(230, 196, 110), rgb(238, 108, 108), rgb(140, 186, 232),
      rgb(178, 198, 220)},
 };

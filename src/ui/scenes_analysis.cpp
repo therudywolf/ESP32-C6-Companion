@@ -34,12 +34,20 @@ using namespace widgets;
  * numbers. */
 static void drawWindow(LGFX_Sprite &g, int cx, const char *label, int d10,
                        bool ok, int maxAbs10) {
+  /* y=35, not 30. panel() punches its title tab through the frame from
+   * y-5 to y+6, so for a tile starting at 26 everything above 32 is the
+   * title's. The window labels were landing inside it - "1 ч" sat on top of
+   * "ДАВЛЕНИЕ ПО ОКНАМ" and read as a rendering fault. */
   g.setFont(&F_SMALL);
-  textCenter(g, cx, 30, label, DIM);
+  textCenter(g, cx, 35, label, DIM);
 
   if (!ok) {
-    g.setFont(&F_TEXT);
-    textCenter(g, cx, 46, "-", DIM);
+    /* An empty window is a fact worth its own word. A bare dash reads as a
+     * drawing bug, and this screen shows one at 1 h most of the time: the
+     * sensor speaks roughly hourly, so an hour-old sample often does not
+     * exist. */
+    g.setFont(&F_SMALL);
+    textCenter(g, cx, 50, "нет", DIM);
     return;
   }
   char v[12];
@@ -50,12 +58,16 @@ static void drawWindow(LGFX_Sprite &g, int cx, const char *label, int d10,
   /* Falling is the direction worth noticing, so it wears the warn colour; a
    * rise is good news and stays neutral rather than shouting. */
   uint16_t c = d10 <= -16 ? WARN : (d10 >= 16 ? GOOD : TEXT);
+  /* F_MED, not F_TEXT: this number IS the panel. It was drawn in the same
+   * face as its own unit label, so the eye had nothing to land on and the
+   * whole row read as small print. */
+  g.setFont(&F_MED);
+  textCenter(g, cx, 45, v, c);
   g.setFont(&F_TEXT);
-  textCenter(g, cx, 42, v, c);
 
   /* The bar grows from a common midline, so up and down are told apart by
    * direction rather than by reading the sign. */
-  const int mid = 62, maxH = 10;
+  const int mid = 74, maxH = 8;
   if (maxAbs10 < 5) maxAbs10 = 5;
   int h = (int)((long)abs(d10) * maxH / maxAbs10);
   if (h > maxH) h = maxH;
@@ -72,7 +84,7 @@ void drawAnalysis(UiCtx &ui) {
   char v[80];
 
   /* ── the windows ──────────────────────────────────────────────────────── */
-  panel(g, 4, 26, 312, 48, "ДАВЛЕНИЕ ПО ОКНАМ, гПа");
+  panel(g, 4, 26, 312, 54, "ДАВЛЕНИЕ ПО ОКНАМ, гПа");
   {
     const analysis::Windows &w = st.zbWin;
     struct Col {
@@ -95,23 +107,23 @@ void drawAnalysis(UiCtx &ui) {
   }
 
   /* ── the findings ─────────────────────────────────────────────────────── */
-  panel(g, 4, 80, 312, 88, "ЧТО ЭТО ЗНАЧИТ");
+  panel(g, 4, 86, 312, 82, "ЧТО ЭТО ЗНАЧИТ");
   {
     if (st.zbFindCount <= 0) {
       g.setFont(&F_MED);
-      textAt(g, 14, 96, "Ничего примечательного", DIM);
+      textAt(g, 14, 100, "Ничего примечательного", DIM);
       g.setFont(&F_TEXT);
-      textAt(g, 14, 120, "все окна в пределах спокойного хода", DIM);
+      textAt(g, 14, 124, "все окна в пределах спокойного хода", DIM);
       /* Even a quiet verdict should show its evidence, or the screen reads as
        * broken rather than as calm. */
       if (st.zbDewPoint10 != -9999) {
         snprintf(v, sizeof(v), "точка росы %d.%d C", st.zbDewPoint10 / 10,
                  abs(st.zbDewPoint10 % 10));
-        textAt(g, 14, 140, v, DIM);
+        textAt(g, 14, 142, v, DIM);
       }
       if (st.zbPressPct >= 0) {
         snprintf(v, sizeof(v), "по архиву: выше %d%% показаний", st.zbPressPct);
-        textAt(g, 14, 154, v, DIM);
+        textAt(g, 14, 156, v, DIM);
       }
       return;
     }
@@ -119,7 +131,7 @@ void drawAnalysis(UiCtx &ui) {
     /* Two findings fit legibly; a third would need a font nobody can read
      * across a room, and the rest are on the web panel anyway. */
     int shown = st.zbFindCount > 2 ? 2 : st.zbFindCount;
-    int y = 92;
+    int y = 96;
     for (int i = 0; i < shown; i++) {
       const analysis::Finding &f = st.zbFind[i];
       uint16_t c = f.severity >= 2 ? CRIT : (f.severity == 1 ? WARN : GOOD);
