@@ -151,6 +151,45 @@ struct ZbSensor {
   int motionAgeSec = -1;
 };
 
+/* When motion happened, not just how long ago.
+ *
+ * A PIR is an EVENT source, and one number — "seventeen minutes" — throws
+ * away everything interesting about it. The room being busy all morning and
+ * dead since three is the fact worth having, and it takes six bytes.
+ *
+ * Forty-eight buckets of half an hour: one day, one bit each. Kept in RAM
+ * only. It could go on the card, but a day of presence is not history worth
+ * a write cycle every half hour, and losing it to a reboot costs a day of
+ * texture rather than a day of measurements. */
+struct MotionDay {
+  static const int kBuckets = 48;
+  uint64_t bits = 0;   /* bucket N set = motion was seen in it */
+  int lastBucket = -1; /* which bucket the clock was in last time */
+
+  /* Advance to `bucket`, clearing everything stepped over so yesterday's
+   * marks do not masquerade as today's. Wrapping past the end of the day is
+   * the normal case, not an edge case. */
+  void advance(int bucket) {
+    if (bucket < 0 || bucket >= kBuckets) return;
+    if (lastBucket < 0) { lastBucket = bucket; return; }
+    while (lastBucket != bucket) {
+      lastBucket = (lastBucket + 1) % kBuckets;
+      bits &= ~(1ULL << lastBucket);
+    }
+  }
+  void mark(int bucket) {
+    if (bucket >= 0 && bucket < kBuckets) bits |= (1ULL << bucket);
+  }
+  bool at(int bucket) const {
+    return bucket >= 0 && bucket < kBuckets && (bits >> bucket) & 1ULL;
+  }
+  int count() const {
+    int n = 0;
+    for (int i = 0; i < kBuckets; i++) if (at(i)) n++;
+    return n;
+  }
+};
+
 struct ZigbeeData {
   /* One ForestHome climate sensor plus two motion sensors is the concrete
    * ask; a fourth slot costs 76 bytes and avoids hard-coding "3" the moment
@@ -319,6 +358,11 @@ struct AppState {
    * against a capacity that doubles every ten degrees, so it moves when the
    * heating comes on and nothing has dried. This does not. */
   int zbAbsHum10 = -9999;
+  /* One day of presence per motion sensor, in the order they appear in
+   * zb.list. Two, because that is how many the owner has; a third would show
+   * as a sensor with no timeline rather than crash. */
+  MotionDay motionDay[2];
+  int motionAgeWas[2] = {-1, -1}; /* to spot a NEW report, not a fresh one */
   /* Rows uploaded by the archive export, and how many days are still to go.
    * -1 in `zbExportLeft` means no export is running. */
   int zbExportRows = 0;
