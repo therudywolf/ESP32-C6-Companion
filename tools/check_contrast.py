@@ -12,8 +12,11 @@ Targets used here:
 """
 import io, os, re
 
-src = io.open(os.path.expanduser(
-    '~/Projects/ESP32-C6-Companion/src/ui/Theme.cpp'), encoding='utf-8').read()
+# Relative to this file, not to a home directory: this started life as a
+# scratch script with an absolute path and CI found that on the first run.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src = io.open(os.path.join(ROOT, 'src', 'ui', 'Theme.cpp'),
+              encoding='utf-8').read()
 i = src.index('static const Preset kPresets[THEME_PRESETS] = {')
 j = src.index('\n};', i)
 body = src[i:j]
