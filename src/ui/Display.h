@@ -111,9 +111,36 @@ public:
   /* single chokepoint: never let any path (menu, rc, boot) drive the backlight
    * past the thermal cap — protects the panel from the black-blob bloom. */
   void setBrightness(uint8_t b) {
-    if (b > NOCT_BRIGHT_MAX) b = NOCT_BRIGHT_MAX;
+    if (b > capNow()) b = capNow();
     tft.setBrightness(b);
   }
+  /* Drive the backlight ABOVE the cap for a while, then let it fall back.
+   *
+   * NOCT_BRIGHT_MAX exists because at full PWM this panel self-heats and the
+   * matrix blooms a dark blob — an observation made once, on a board that did
+   * not yet run a Zigbee radio. Whether 210 is still the right number is a
+   * question about THIS panel in THIS case, and the only instrument that can
+   * settle it is the owner's eye.
+   *
+   * A FORCED VALUE rather than a raised ceiling: the stored setting is
+   * already at the ceiling, so lifting the ceiling alone would change
+   * nothing. And it must not write the setting either — a 255 persisted into
+   * settings outlives the experiment and makes the panel's slider read 121 %.
+   *
+   * It expires by itself. A cap quietly left raised is how the bloom comes
+   * back weeks later with nothing to connect it to. */
+  void forceFor(uint8_t v, unsigned long ms) {
+    forced_ = v;
+    forcedUntil_ = millis() + ms;
+  }
+  bool forcing() const {
+    return forcedUntil_ && (long)(forcedUntil_ - millis()) > 0;
+  }
+  uint8_t forcedValue() const { return forced_; }
+  uint8_t capNow() const { return forcing() ? forced_ : NOCT_BRIGHT_MAX; }
+  uint8_t forced_ = NOCT_BRIGHT_MAX;
+  unsigned long forcedUntil_ = 0;
+
   /* landscape both ways: USB on the left (3, default) or right (1) */
   void setFlipped(bool f) { tft.setRotation(f ? 1 : 3); }
 };

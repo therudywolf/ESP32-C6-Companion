@@ -75,7 +75,15 @@ public:
    * every contrast measurement in the repository and still look wrong on
    * glass. The card names what each patch is supposed to be, so "the colours
    * are off" becomes one specific answer instead of a guess. */
-  void showTestCard(unsigned long ms) { testCardUntil_ = millis() + ms; }
+  /* ms == 0 dismisses it. A card you have to photograph should not be
+   * racing a timer: the first attempt at this expired while the camera was
+   * being fetched. */
+  void showTestCard(unsigned long ms) {
+    testCardUntil_ = ms ? millis() + ms : 0;
+  }
+  bool testCardUp() const {
+    return testCardUntil_ && (long)(testCardUntil_ - millis()) > 0;
+  }
   /* Push the alert takeover aside for a while — the same thing a long press
    * does, reachable from the console. A hardware alert that legitimately holds
    * the screen makes every other scene unverifiable, which matters when the

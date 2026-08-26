@@ -120,9 +120,19 @@ static void applyBacklight(bool dimmed, bool night) {
     Serial.printf("[THERM] board %.1fC - backlight %s\n", state.boardTemp,
                   warm ? "limited" : "released");
   }
+  /* A temporary override wins over the stored setting, and only while it
+   * lasts — see Display::forceFor. */
+  if (display.forcing()) b = display.forcedValue();
+  /* The cap is part of the comparison, not just the value. Without it the
+   * cached `applied` never changes when an override EXPIRES, so the panel
+   * would keep the raised PWM for good and the automatic revert would be a
+   * comment describing something that does not happen. */
   static int applied = -1;
-  if (b != applied) {
+  static int appliedCap = -1;
+  int cap = (int)display.capNow();
+  if (b != applied || cap != appliedCap) {
     applied = b;
+    appliedCap = cap;
     display.setBrightness((uint8_t)b);
   }
 }
@@ -634,12 +644,41 @@ static void consoleExec(String line) {
     /* The only check this project cannot make on its own: screenshots come
      * from the sprite, and the panel's inversion, RGB order, gamma and
      * backlight all live downstream of it. */
-    unsigned long sec = arg.length() ? (unsigned long)arg.toInt() : 30;
-    if (sec < 3) sec = 3;
-    if (sec > 300) sec = 300;
-    sceneMgr.showTestCard(sec * 1000UL);
-    Serial.printf("test card up for %lu s - look at the GLASS, not a "
-                  "screenshot\n", sec);
+    long sec = arg.length() ? arg.toInt() : 600;
+    if (sec == 0) {
+      sceneMgr.showTestCard(0);
+      Serial.println("test card dismissed");
+    } else {
+      if (sec < 3) sec = 3;
+      if (sec > 3600) sec = 3600;
+      sceneMgr.showTestCard((unsigned long)sec * 1000UL);
+      Serial.printf("test card up for %ld s (testcard 0 to dismiss) - look at "
+                    "the GLASS, not a screenshot\n", sec);
+    }
+  } else if (cmd == "blmax") {
+    /* blmax <211..255> [minutes] - lift the backlight cap temporarily.
+     *
+     * The cap is there because this panel blooms a dark blob at full PWM,
+     * measured once, before the Zigbee radio added ~17 C to the die. Whether
+     * 210 is still right is a question about this panel that only the owner's
+     * eye can settle, so: real override, automatic revert. A cap left raised
+     * and forgotten is how the bloom returns weeks later with nothing to
+     * connect it to. */
+    int sp = arg.indexOf(' ');
+    int cap = (sp > 0 ? arg.substring(0, sp) : arg).toInt();
+    long mins = sp > 0 ? arg.substring(sp + 1).toInt() : 15;
+    if (mins < 1) mins = 1;
+    if (mins > 120) mins = 120;
+    if (cap < NOCT_BRIGHT_MAX || cap > 255) {
+      Serial.printf("blmax <%d..255> [minutes]  -  current cap %d\n",
+                    NOCT_BRIGHT_MAX, display.capNow());
+    } else {
+      display.forceFor((uint8_t)cap, (unsigned long)mins * 60000UL);
+      Serial.printf("backlight forced to %d for %ld min, then back to %d\n",
+                    cap, mins, NOCT_BRIGHT_MAX);
+      Serial.println("watch for a dark blob spreading from the middle - that "
+                     "is the reason the cap exists");
+    }
   } else if (cmd == "analyse") {
     /* Print what the analyser currently makes of the room. The card is only
      * re-read every five minutes, so this shows the last verdict rather than
