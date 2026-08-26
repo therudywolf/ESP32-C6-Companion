@@ -492,6 +492,9 @@ static void consoleExec(String line) {
         Serial.printf("  %s: %.1fC rh %d%% bat %d%% age %ds\n", z.name,
                       z.temp10 / 10.0f, z.humidity, z.battery, z.ageSec);
       }
+      zb.debugSlots();
+      Serial.printf("  local %d of %d listed\n", state.zb.localCount,
+                    state.zb.count);
       Serial.println("  zb join | zb reset");
     }
   } else if (cmd == "dump") {
@@ -1234,7 +1237,13 @@ void loop() {
       sentHum = z0.humidity;
       sentBat = z0.battery;
       sentCount = state.zb.count;
-      for (int i = 0; i < state.zb.count; i++)
+      /* Only what this coordinator actually heard. `zbs:` means "what the
+       * board hears" - that is what the server stores it as and what every
+       * consumer downstream assumes. Sending relayed or console-injected
+       * entries too made the board echo the server's own data back at it,
+       * and a `feed` used for testing became a sensor that outlived the test
+       * and sat in the panel as a device that does not exist. */
+      for (int i = 0; i < state.zb.localCount; i++)
         tcp.sendZbSensor(state.zb.list[i]);
     }
   }
