@@ -46,9 +46,12 @@ public:
   /* Archive export: a begin line, then one row per reading, then an end line
    * carrying the total so the receiver can tell a finished transfer from a
    * dropped connection. */
-  void sendClimateCsvBegin(int days);
+  bool sendClimateCsvBegin(int days);
   bool sendClimateCsvRow(const char *row);
-  void sendClimateCsvEnd(int rows, bool complete);
+  /* Returns whether the line reached the socket. The end line matters as
+   * much as the rows: without it the receiver holds an incomplete transfer
+   * and shows nothing at all, which is worse than a short archive. */
+  bool sendClimateCsvEnd(int rows, bool complete);
   /* Hub state for the panel's "check connection" button: is the
    * coordinator up, on what channel, is the network open for joining, how
    * many sensors, and how long since any of them last spoke. */
