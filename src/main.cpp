@@ -1549,6 +1549,35 @@ void loop() {
    * the blocking uplink that tripped the task watchdog once already. Thirty
    * rows at ~50 bytes is 1.5 KB per tick - one TCP segment - and a month
    * finishes in about a minute while the screen keeps drawing. */
+  /* Push the archive up whenever the link comes back.
+   *
+   * The card keeps recording while the PC sleeps; this process only hears the
+   * board while the PC is awake. So every stretch of PC downtime is a hole in
+   * the mirror and no hole at all on the card — and until the archive was
+   * pulled BY HAND, those hours existed nowhere else. A board that dies with
+   * the only copy of its own history is not an archive, it is a single point
+   * of failure with a CSV in it.
+   *
+   * Three days on reconnect covers an ordinary weekend away and costs about
+   * 450 rows, three seconds of wire. Longer outages are a manual pull: the
+   * board cannot know how long the other end was gone, and guessing large
+   * would re-send a month every time the router blinks. The receiver merges
+   * by timestamp, so re-sending what it already has is free of consequence -
+   * only of a little traffic. */
+  static bool wasLinked = false;
+  static unsigned long lastAutoDump = 0;
+  bool linked = tcp.connected();
+  if (linked && !wasLinked && !climateLog.exportActive() &&
+      (lastAutoDump == 0 || now - lastAutoDump > 3600000UL)) {
+    if (climateLog.exportBegin(3) && tcp.sendClimateCsvBegin(3)) {
+      lastAutoDump = now;
+      Serial.println("[CSV] link back: mirroring 3 days of archive");
+    } else {
+      climateLog.exportAbort();
+    }
+  }
+  wasLinked = linked;
+
   static unsigned long lastPump = 0;
   /* The row in flight, kept across iterations so a refused send can retry it. */
   static char exRow[80] = {0};
