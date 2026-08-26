@@ -48,6 +48,15 @@ public:
   /* Backlight is owned by main(): it folds the dim state, quiet hours and the
    * user setting into ONE value per frame, so no path can fight another. */
   bool screenDimmed() const { return dimmed_; }
+  /* Bring the screen back and restart the idle countdown, as if a button had
+   * been pressed. Used by presence: somebody walking up to the desk is the
+   * same event as a hand on the button, and treating it differently would
+   * mean the screen lights and then dims again a second later because the
+   * idle timer never learned that anything happened. */
+  void wakeDisplay() {
+    dimmed_ = false;
+    lastInput_ = millis();
+  }
   unsigned long lastInputMs() const { return lastInput_; }
   /* Something outside asked for attention (the alarm): drop the screensaver
    * and restart the idle clock so the panel is bright when you look at it. */

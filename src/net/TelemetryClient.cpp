@@ -122,10 +122,10 @@ void TelemetryClient::sendCfg(const Settings &s) {
    * and ignores the tail keeps working unchanged. Never reorder — only
    * append, and add the name to the panel's key list in the same commit or the
    * field is parsed off the wire and silently dropped. */
-  char b[220];
+  char b[240];
   snprintf(b, sizeof(b),
            "cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d,"
-           "%d,%d,%d,%d,%d,%d\n",
+           "%d,%d,%d,%d,%d,%d,%d\n",
            s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone, s.ledEnabled ? 1 : 0,
            s.flipped ? 1 : 0, s.bgLight ? 1 : 0, s.brightness,
            s.carouselEnabled ? s.carouselIntervalSec : -1, s.displayTimeoutSec,
@@ -134,7 +134,7 @@ void TelemetryClient::sendCfg(const Settings &s) {
            s.notifShow ? 1 : 0, s.ledMode, s.pinnedScene, s.activeSlot,
            s.nightMode ? 1 : 0, s.nightFrom, s.nightTo,
            s.zbAlert ? 1 : 0, s.zbTempMin, s.zbTempMax, s.zbHumMin,
-           s.zbHumMax, s.zbBattMin);
+           s.zbHumMax, s.zbBattMin, s.pcWake ? 1 : 0);
   sendLine(b);
 }
 
@@ -533,6 +533,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcZbPoll = rc["zbpoll"] | -1;
       state.rcZbInt = rc["zbint"] | -1;
       state.rcZbDump = rc["zbdump"] | -1;
+      state.rcPcWake = rc["pcwake"] | -1;
       state.rcZbAlert = rc["zbalert"] | -1;
       state.rcZbTempMin = rc["zbtmin"] | -1000;
       state.rcZbTempMax = rc["zbtmax"] | -1000;

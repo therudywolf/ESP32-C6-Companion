@@ -81,6 +81,10 @@ void CardConfig::apply(const String &section, const String &key,
     if (key == "skin") { skin_ = val; applied_++; }
     return;
   }
+  if (section == "pc") {
+    if (key == "mac") { pcMac_ = val; applied_++; }
+    return;
+  }
 }
 
 bool CardConfig::load(SdStore *sd) {
@@ -139,18 +143,18 @@ bool CardConfig::load(SdStore *sd) {
  * stay exactly as typed. If there is no file yet, one is created containing
  * nothing but this section, which leaves secrets.h in charge of everything
  * else - an absent key means "not configured here", not "configured empty". */
-bool CardConfig::setZbName(SdStore *sd, int i, const String &name) {
-  if (i < 0 || i >= 5) return false;
-  zbName_[i] = name;
-  zbName_[i].trim();
+bool CardConfig::rewriteSection(SdStore *sd, const char *section,
+                                const String &body) {
   if (!sd) return false;
-
   String text;
   if (!sd->readAll("/nocturne.ini", text, 4096)) text = "";
 
-  /* Copy every line that is not inside [zigbee]. */
+  String want(section);
+  want.toLowerCase();
+
+  /* Copy every line that is not inside the target section. */
   String out;
-  bool inZb = false;
+  bool inTarget = false;
   int pos = 0;
   while (pos <= (int)text.length()) {
     int nlAt = text.indexOf('\n', pos);
@@ -160,9 +164,9 @@ bool CardConfig::setZbName(SdStore *sd, int i, const String &name) {
     if (t.startsWith("[")) {
       String sec = t.substring(1, t.indexOf(']'));
       sec.toLowerCase();
-      inZb = (sec == "zigbee");
+      inTarget = (sec == want);
     }
-    if (!inZb && (nlAt >= 0 || t.length())) {
+    if (!inTarget && (nlAt >= 0 || t.length())) {
       out += line;
       out += "\n";
     }
@@ -170,21 +174,46 @@ bool CardConfig::setZbName(SdStore *sd, int i, const String &name) {
     pos = nlAt + 1;
   }
 
-  /* Then append the section, rebuilt from the names now in memory.
-   * Unconditionally: whether the file had a [zigbee] section before
-   * does not change what it must contain after. */
-  out += "[zigbee]\n";
+  /* Then append it, rebuilt from what is in memory. Unconditionally: whether
+   * the file had this section before does not change what it must contain
+   * after. */
+  out += "[";
+  out += section;
+  out += "]\n";
+  out += body;
+  return sd->writeBlob("/nocturne.ini", out.c_str(), out.length());
+}
+
+bool CardConfig::setZbName(SdStore *sd, int i, const String &name) {
+  if (i < 0 || i >= 5) return false;
+  zbName_[i] = name;
+  zbName_[i].trim();
+  String body;
   for (int k = 0; k < 5; k++) {
     if (!zbName_[k].length()) continue;
-    out += "name";
-    out += String(k + 1);
-    out += "=";
-    out += zbName_[k];
-    out += "\n";
+    body += "name";
+    body += String(k + 1);
+    body += "=";
+    body += zbName_[k];
+    body += "\n";
   }
-  bool ok = sd->writeBlob("/nocturne.ini", out.c_str(), out.length());
-  Serial.printf("[CFG] slot %d renamed to '%s'%s%s", i + 1,
-                zbName_[i].c_str(), ok ? " (saved)" : " (NOT saved)",
-                "\n");
+  bool ok = rewriteSection(sd, "zigbee", body);
+  Serial.printf("[CFG] slot %d renamed to '%s'%s\n", i + 1,
+                zbName_[i].c_str(), ok ? " (saved)" : " (NOT saved)");
+  return ok;
+}
+
+bool CardConfig::setPcMac(SdStore *sd, const String &mac) {
+  pcMac_ = mac;
+  pcMac_.trim();
+  String body;
+  if (pcMac_.length()) {
+    body += "mac=";
+    body += pcMac_;
+    body += "\n";
+  }
+  bool ok = rewriteSection(sd, "pc", body);
+  Serial.printf("[CFG] PC mac '%s'%s\n", pcMac_.c_str(),
+                ok ? " (saved)" : " (NOT saved)");
   return ok;
 }

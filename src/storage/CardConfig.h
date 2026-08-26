@@ -63,8 +63,20 @@ public:
    * changes, so the screen updates either way. */
   bool setZbName(SdStore *sd, int i, const String &name);
 
+  /* The PC's wired MAC, for Wake-on-LAN. Empty when unset, and that is the
+   * only safe default: a magic packet aimed at a guess wakes somebody else's
+   * machine on the same subnet. Lives on the card next to the sensor names
+   * because it is site configuration, not a preference. */
+  const char *pcMac() const { return pcMac_.c_str(); }
+  bool setPcMac(SdStore *sd, const String &mac);
+
 private:
   void apply(const String &section, const String &key, const String &val);
+  /* Replace one [section] of /nocturne.ini and copy every other line through
+   * byte for byte. A config the owner hand-edited must not be reformatted by
+   * a setting change: their comments, their key order and their wifi
+   * passwords all stay exactly as typed. */
+  bool rewriteSection(SdStore *sd, const char *section, const String &body);
 
   /* Backing storage — WifiCred holds bare pointers, so the Strings must
    * outlive it and must not be reallocated after wifiNets() is handed out. */
@@ -75,6 +87,7 @@ private:
   uint16_t port_ = 0, panelPort_ = 0;
   int alarm_ = -1;
   String zbName_[5];
+  String pcMac_;
   bool loaded_ = false;
   int applied_ = 0;
 };

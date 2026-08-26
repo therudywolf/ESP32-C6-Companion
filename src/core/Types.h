@@ -214,6 +214,10 @@ struct Settings {
   /* Which scenes appear in the nav ring / carousel (bit i = SceneId i). DEN
    * (bit 0) is forced on. Default: everything visible. */
   uint32_t sceneMask = 0xFFFFFFFFu; /* "scnMask" */
+  /* Presence acts on the PC. OFF by default and deliberately so: a default
+   * that wakes the owner's computer because somebody walked past is not a
+   * default, it is a surprise. */
+  bool pcWake = false;
   /* Quiet hours: between nightFrom:00 and nightTo:00 the panel drops to
    * NOCT_NIGHT_BRIGHT and the mood LED goes dark. Needs the NTP clock; a
    * button press suspends it briefly. Alerts always override. */
@@ -403,6 +407,7 @@ struct AppState {
    * anywhere it can be plotted or exported. */
   int rcZbDump = -1;
   int rcZbAlert = -1;
+  int rcPcWake = -1;   /* presence -> wake the PC, 0/1 */
   int rcZbTempMin = -1000, rcZbTempMax = -1000;
   int rcZbHumMin = -1000, rcZbHumMax = -1000;
   int rcZbBattMin = -1000;
