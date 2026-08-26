@@ -35,6 +35,10 @@ enum SceneId {
    * every existing scene index, saved scnMask bit and server screen:N keeps
    * the number it already had. */
   SCENE_MOTION,
+  /* АНАЛИЗ. Appended before FORZA for the same reason as the three before
+   * it: every existing scene index, saved scnMask bit and server screen:N
+   * keeps the number it already had. */
+  SCENE_ANALYSIS,
   SCENE_FORZA,
   SCENE_COUNT
 };
@@ -59,6 +63,9 @@ inline bool sceneNeedsPc(int s) {
   /* Motion sensors are Zigbee: they keep reporting with the PC dark, which is
    * exactly when knowing whether anyone walked past matters most. */
   case SCENE_MOTION:
+  /* Every number on it comes off the card and the Zigbee sensor. A dark PC
+   * changes nothing about what the barometer did. */
+  case SCENE_ANALYSIS:
   case SCENE_FORZA:
     return false;
   default:
@@ -77,7 +84,7 @@ inline int sceneFromServerName(const char *name) {
       {"DISKS", SCENE_DISKS}, {"MEDIA", SCENE_MEDIA},
       {"FANS", SCENE_FANS},   {"MOTHERBOARD", SCENE_MB},
       {"HOME", SCENE_HOME},   {"BOARD", SCENE_BOARD},
-      {"MOTION", SCENE_MOTION},
+      {"MOTION", SCENE_MOTION}, {"ANALYSIS", SCENE_ANALYSIS},
   };
   for (auto &m : map)
     if (strcmp(name, m.n) == 0) return m.s;

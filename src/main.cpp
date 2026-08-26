@@ -44,6 +44,7 @@
 #include "storage/Archive.h"
 #include "storage/CardConfig.h"
 #include "core/Barometer.h"
+#include "core/ClimateAnalysis.h"
 #include "storage/ClimateLog.h"
 #include "storage/SdStore.h"
 #include "ui/Display.h"
@@ -549,11 +550,47 @@ static void consoleExec(String line) {
     } else {
       state.zbPress10Delta3h = arg.toInt();
       state.zbTrendOk = true;
-      Serial.printf("trend := %+d.%d hPa/3h -> %s\n",
+      /* Fill the OTHER windows too, or the analysis screen keeps showing the
+       * card's real (calm) numbers while the alerting sees the injected front
+       * - which is exactly what the first screenshot of АНАЛИЗ showed, and it
+       * makes the injection useless for testing the thing it was aimed at.
+       *
+       * The synthetic shape is a steady fall: each longer window scales with
+       * its length, and the one-hour window matches the three-hour rate so no
+       * accelerating/easing pattern fires by accident. Testing a SPECIFIC
+       * shape is what `analyse` plus a hand-edited window would be for; this
+       * is the plain case. */
+      analysis::Windows &w = state.zbWin;
+      const int d3 = state.zbPress10Delta3h;
+      w.dP10_3h = d3;
+      w.dP10_1h = d3 / 3;
+      w.dP10_6h = d3 * 2;
+      w.dP10_12h = d3 * 4;
+      w.dP10_24h = d3 * 8;
+      w.okP1 = w.okP3 = w.okP6 = w.okP12 = w.okP24 = true;
+      w.okT1 = w.okT3 = w.okH1 = w.okH3 = true;
+      {
+        const ZbSensor &z0 = state.zb.list[0];
+        state.zbDewPoint10 = analysis::dewPoint10(z0.temp10, z0.humidity);
+        int hourLocal = -1;
+        time_t nowT = time(nullptr);
+        if (nowT > 1700000000L) {
+          struct tm tmv;
+          if (localtime_r(&nowT, &tmv)) hourLocal = tmv.tm_hour;
+        }
+        state.zbFindCount = analysis::analyse(
+            w, z0.temp10, z0.humidity, hourLocal, state.zbPressPct,
+            state.zbFind, AppState::kMaxFindings);
+      }
+      Serial.printf("trend := %+d.%d hPa/3h -> %s (%d pattern(s))\n",
                     state.zbPress10Delta3h / 10,
                     abs(state.zbPress10Delta3h % 10),
                     barometer::forecast(
-                        barometer::classify(state.zbPress10Delta3h, 3)));
+                        barometer::classify(state.zbPress10Delta3h, 3)),
+                    state.zbFindCount);
+      for (int i = 0; i < state.zbFindCount; i++)
+        Serial.printf("  [%d] %s - %s\n", state.zbFind[i].severity,
+                      state.zbFind[i].title, state.zbFind[i].detail);
     }
   } else if (cmd == "home") {
     /* The ДОМ trend window, same three rungs the long press cycles. Here too
@@ -562,6 +599,31 @@ static void consoleExec(String line) {
     sceneMgr.setHomeMode(arg.toInt());
     Serial.printf("home window = %d (0 live, 1 day, 2 week)\n",
                   sceneMgr.homeMode());
+  } else if (cmd == "dumpcsv") {
+    int days = arg.length() ? arg.toInt() : 7;
+    if (days < 1) days = 1;
+    if (climateLog.exportBegin(days)) {
+      tcp.sendClimateCsvBegin(days);
+      Serial.printf("uploading %d day(s) of archive\n", days);
+    } else {
+      Serial.println("no archive to upload (no card, or no clock)");
+    }
+  } else if (cmd == "analyse") {
+    /* Print what the analyser currently makes of the room. The card is only
+     * re-read every five minutes, so this shows the last verdict rather than
+     * forcing a fresh walk on the render loop. */
+    const analysis::Windows &w = state.zbWin;
+    Serial.printf("dew point %d.%d C | pressure percentile %d\n",
+                  state.zbDewPoint10 / 10, abs(state.zbDewPoint10 % 10),
+                  state.zbPressPct);
+    Serial.printf("dP 1h %+d 3h %+d 6h %+d 12h %+d 24h %+d (tenths hPa)\n",
+                  w.okP1 ? w.dP10_1h : 0, w.okP3 ? w.dP10_3h : 0,
+                  w.okP6 ? w.dP10_6h : 0, w.okP12 ? w.dP10_12h : 0,
+                  w.okP24 ? w.dP10_24h : 0);
+    if (!state.zbFindCount) Serial.println("no patterns match right now");
+    for (int i = 0; i < state.zbFindCount; i++)
+      Serial.printf("  [%d] %s - %s\n", state.zbFind[i].severity,
+                    state.zbFind[i].title, state.zbFind[i].detail);
   } else if (cmd == "zbname") {
     /* zbname <1..5> <text> - name a paired sensor. The name is what makes a
      * motion reading useful: "движение 2 минуты назад" says nothing until you
@@ -1008,6 +1070,15 @@ void loop() {
       sceneMgr.toast(asked ? "опрашиваю датчик" : "некого опрашивать");
       state.rcZbPoll = -1;
     }
+    if (state.rcZbDump > 0) {
+      if (climateLog.exportBegin(state.rcZbDump)) {
+        tcp.sendClimateCsvBegin(state.rcZbDump);
+        sceneMgr.toast("выгружаю архив");
+      } else {
+        sceneMgr.toast("архив недоступен");
+      }
+      state.rcZbDump = -1;
+    }
     if (state.rcZbInt > 0) {
       /* min = a tenth of the window, so the sensor may still report early on a real
        * change; max = what the owner asked for. */
@@ -1397,6 +1468,85 @@ void loop() {
         Serial.printf("[BARO] 3h: %+d.%d hPa - %s\n", dP / 10, abs(dP % 10),
                       barometer::forecast(t));
       }
+
+      /* The other windows. Three hours is the WMO standard and stays exactly
+       * where it was; these sit beside it so the windows can DISAGREE, which
+       * is the whole point - a six-hour fall with the last hour already
+       * rising is a trough that has passed, and no single window can say
+       * that. Five card reads every five minutes; each walks at most two
+       * daily files. */
+      analysis::Windows &w = state.zbWin;
+      w.okP1 = climateLog.trend(1, w.dT10_1h, w.dH_1h, w.dP10_1h);
+      w.okT1 = w.okH1 = w.okP1;
+      w.dP10_3h = dP;
+      w.dT10_3h = dT;
+      w.dH_3h = dH;
+      w.okP3 = w.okT3 = w.okH3 = state.zbTrendOk;
+      int junkT = 0, junkH = 0;
+      w.okP6 = climateLog.trend(6, junkT, junkH, w.dP10_6h);
+      w.okP12 = climateLog.trend(12, junkT, junkH, w.dP10_12h);
+      w.okP24 = climateLog.trend(24, w.dT10_24h, junkH, w.dP10_24h);
+      w.okT24 = w.okP24;
+
+      const ZbSensor &z0 = state.zb.list[0];
+      state.zbDewPoint10 = analysis::dewPoint10(z0.temp10, z0.humidity);
+      /* Thirty days of the board's own readings as the yardstick. Absolute
+       * pressure cannot be judged without an altitude nobody entered; the
+       * room's own distribution needs no calibration. */
+      state.zbPressPct = climateLog.pressurePercentile(30, z0.pressure);
+
+      int hourLocal = -1;
+      time_t nowT = time(nullptr);
+      if (nowT > 1700000000L) {
+        struct tm tmv;
+        if (localtime_r(&nowT, &tmv)) hourLocal = tmv.tm_hour;
+      }
+      state.zbFindCount =
+          analysis::analyse(w, z0.temp10, z0.humidity, hourLocal,
+                            state.zbPressPct, state.zbFind,
+                            AppState::kMaxFindings);
+      for (int i = 0; i < state.zbFindCount; i++)
+        Serial.printf("[PAT] %d %s - %s\n", state.zbFind[i].severity,
+                      state.zbFind[i].title, state.zbFind[i].detail);
+      tcp.sendClimatePatterns(state.zbFind, state.zbFindCount,
+                              state.zbDewPoint10, state.zbPressPct, w);
+    }
+  }
+
+  /* Archive export, a handful of rows per loop iteration.
+   *
+   * Deliberately NOT a loop that drains the whole walk: a month is a couple
+   * of thousand rows, and pushing them all inside one iteration is exactly
+   * the blocking uplink that tripped the task watchdog once already. Thirty
+   * rows at ~50 bytes is 1.5 KB per tick - one TCP segment - and a month
+   * finishes in about a minute while the screen keeps drawing. */
+  static unsigned long lastPump = 0;
+  if (climateLog.exportActive() && now - lastPump >= 100) {
+    lastPump = now;
+    /* Rate limit, not just a burst cap. This block sits in the main loop,
+     * which spins at frame rate - without the 100 ms gate the "30 rows per
+     * call" ran thirty times a second, buried the socket, and sendLine tore a
+     * line in half. Twenty rows per 100 ms is about 10 KB/s: a month of
+     * archive in ten seconds, and the TCP buffer never fills. */
+    char row[80];
+    int sent = 0;
+    while (sent < 20 && climateLog.exportNextRow(row, sizeof(row))) {
+      if (!tcp.sendClimateCsvRow(row)) {
+        /* The socket is backing up. Stop for this tick rather than shovelling
+         * into it - this row is already lost, and losing more would only make
+         * the gap bigger. */
+        Serial.println("[CSV] socket busy, backing off");
+        break;
+      }
+      sent++;
+    }
+    state.zbExportRows = climateLog.exportRowsSent();
+    state.zbExportLeft = climateLog.exportDaysLeft();
+    if (!climateLog.exportActive()) {
+      tcp.sendClimateCsvEnd(state.zbExportRows, true);
+      Serial.printf("[CSV] archive uploaded: %d row(s)\n", state.zbExportRows);
+      sceneMgr.toast("архив выгружен");
+      state.zbExportLeft = -1;
     }
   }
 

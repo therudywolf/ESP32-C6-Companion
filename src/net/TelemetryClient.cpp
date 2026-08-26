@@ -55,14 +55,14 @@ void TelemetryClient::tryConnect(unsigned long now) {
   }
 }
 
-void TelemetryClient::sendLine(const char *line) {
-  if (!tcpConnected_ || !line) return;
+bool TelemetryClient::sendLine(const char *line) {
+  if (!tcpConnected_ || !line) return false;
   int fd = client_.fd();
-  if (fd < 0) return;
+  if (fd < 0) return false;
   size_t len = strlen(line);
   ssize_t n = lwip_send(fd, line, len, 0); /* fd is O_NONBLOCK */
-  if (n == (ssize_t)len) return;           /* the common case */
-  if (n < 0) return;                       /* buffer full: drop the whole line */
+  if (n == (ssize_t)len) return true;      /* the common case */
+  if (n < 0) return false;                 /* buffer full: nothing was sent */
   /* Partial write: a torn line would corrupt the framing, so give the stack a
    * few milliseconds to drain, then give up. This is rare enough that the log
    * line is worth it. */
@@ -72,9 +72,19 @@ void TelemetryClient::sendLine(const char *line) {
     ssize_t m = lwip_send(fd, line + off, len - off, 0);
     if (m > 0) off += (size_t)m;
   }
-  if (off < len)
+  if (off < len) {
+    /* We could not finish the line. Terminating the fragment is not cosmetic:
+     * without a newline the receiver GLUES the tail of this line onto the
+     * head of the next one, so one dropped line silently becomes two corrupt
+     * records - and a corrupt record inside an archive export is a data point
+     * that never existed. A lone fragment fails to parse and is discarded,
+     * which is the outcome we want. */
+    lwip_send(fd, "\n", 1, 0);
     Serial.printf("[NET] uplink line torn at %u/%u B\n", (unsigned)off,
                   (unsigned)len);
+    return false;
+  }
+  return true;
 }
 
 void TelemetryClient::sendScreen(int n) {
@@ -522,6 +532,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcZbJoin = rc["zbjoin"] | -1;
       state.rcZbPoll = rc["zbpoll"] | -1;
       state.rcZbInt = rc["zbint"] | -1;
+      state.rcZbDump = rc["zbdump"] | -1;
       state.rcZbAlert = rc["zbalert"] | -1;
       state.rcZbTempMin = rc["zbtmin"] | -1000;
       state.rcZbTempMax = rc["zbtmax"] | -1000;
@@ -577,4 +588,53 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   }
 
   graphs.onPayload(hw);
+}
+
+void TelemetryClient::sendClimatePatterns(const analysis::Finding *f, int n,
+                                          int dew10, int pressPct,
+                                          const analysis::Windows &w) {
+  if (!tcpConnected_) return;
+  /* zbw:dew10,pressPct,dP1,ok1,dP3,ok3,dP6,ok6,dP12,ok12,dP24,ok24,dT1,dT24
+   * Every window ships its own ok flag because "no history that old yet" and
+   * "no change" are different answers, and a bare 0 for the first is how a
+   * consumer ends up drawing a flat line through a gap it never had data for. */
+  char b[160];
+  snprintf(b, sizeof(b), "zbw:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+           dew10, pressPct, w.dP10_1h, w.okP1 ? 1 : 0, w.dP10_3h,
+           w.okP3 ? 1 : 0, w.dP10_6h, w.okP6 ? 1 : 0, w.dP10_12h,
+           w.okP12 ? 1 : 0, w.dP10_24h, w.okP24 ? 1 : 0, w.dT10_1h,
+           w.dT10_24h);
+  sendLine(b);
+  for (int i = 0; i < n; i++) {
+    char p[176];
+    /* id and severity first so a consumer can route on them without having to
+     * understand the Russian text, which is for humans only. */
+    snprintf(p, sizeof(p), "zbpat:%d,%d,%s|%s\n", (int)f[i].id, f[i].severity,
+             f[i].title, f[i].detail);
+    sendLine(p);
+  }
+}
+
+void TelemetryClient::sendClimateCsvBegin(int days) {
+  if (!tcpConnected_) return;
+  char b[48];
+  snprintf(b, sizeof(b), "zbcsvb:%d\n", days);
+  sendLine(b);
+}
+
+bool TelemetryClient::sendClimateCsvRow(const char *row) {
+  if (!tcpConnected_ || !row) return false;
+  char b[96];
+  snprintf(b, sizeof(b), "zbcsv:%s\n", row);
+  return sendLine(b);
+}
+
+void TelemetryClient::sendClimateCsvEnd(int rows, bool complete) {
+  if (!tcpConnected_) return;
+  /* `complete` distinguishes a finished walk from one the board gave up on -
+   * a truncated archive presented as whole is the kind of thing a forecast
+   * gets built on and then quietly disbelieved. */
+  char b[64];
+  snprintf(b, sizeof(b), "zbcsve:%d,%d\n", rows, complete ? 1 : 0);
+  sendLine(b);
 }

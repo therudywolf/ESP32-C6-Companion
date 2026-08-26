@@ -194,6 +194,7 @@ Every field is optional; the sentinel means "no change this time".
 | `zbjoin` | sec | -1 | **one-shot**: open the network for joining |
 | `zbpoll` | 1 | -1 | **one-shot**: read the sensor's attributes now |
 | `zbint` | sec | -1 | ask the sensor to report at least this often |
+| `zbdump` | days | -1 | **one-shot**: upload that many days of the climate archive |
 
 > **On cadence:** an Aqara WSDCGQ11LM decides for itself — it reports on change
 > (~±0.5 °C, ±6 % RH) plus a keep-alive roughly every 50-60 minutes, and that
@@ -272,6 +273,52 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   eight-field line returned the name as `ForestHome,230,56` and the
   temperature as the battery, with no error anywhere. A fixed field count is
   a promise between two repositories that nothing checks at runtime.
+- `zbw:` — every analysis window at once, whenever the board recomputes
+  (every 5 min):
+  `zbw:dew10,pressPct,dP1,ok1,dP3,ok3,dP6,ok6,dP12,ok12,dP24,ok24,dT1,dT24`.
+  Deltas are TENTHS (of hPa, of degrees). `dew10` is the Magnus dew point,
+  -9999 when it cannot be computed. `pressPct` is where the current pressure
+  sits in the board's OWN recorded distribution, -1 when the archive is too
+  short — an absolute level is not exported at all, because the sensor
+  reports station pressure and reducing it to sea level needs an elevation
+  nobody has entered.
+
+  **Every window carries its own ok flag and a consumer must honour it.**
+  "No history that old on the card yet" and "no change over that window" are
+  different answers; treating the first as zero is how a chart ends up
+  drawing a confident flat line across a gap it never had data for.
+
+- `zbpat:` — one matched pattern, sent immediately after `zbw:`:
+  `zbpat:id,severity,title|detail`. `id` is the `analysis::PatternId` enum,
+  `severity` is 0 worth knowing / 1 worth a glance / 2 worth interrupting
+  for. id and severity come first so a consumer can route on them without
+  parsing the Russian text, which is written for humans only. A fresh `zbw:`
+  invalidates every `zbpat:` before it: the pair is one atomic report.
+
+- `zbcsvb:` / `zbcsv:` / `zbcsve:` — the climate archive, streamed on request
+  (`zbdump`). Begin carries the day count, then one row per reading as
+  `zbcsv:YYYY-MM-DD,HH:MM,temp_c,rh,bat,press_hpa`, then
+  `zbcsve:rows,complete`.
+
+  The board paces this at about 20 rows per 100 ms; it is not a blocking
+  dump. `complete` is 0 when the walk was abandoned, and a consumer **must**
+  discard an incomplete transfer rather than merge it — a truncated archive
+  presented as whole is the kind of thing a forecast gets built on and then
+  quietly disbelieved.
+
+  Rows may repeat a timestamp: the sensor reports several attributes
+  separately and each writes a full snapshot, so roughly 40% of rows share a
+  minute with another. Merge by timestamp, newest wins. Validate the shape
+  of the date and time fields before trusting a row — a TCP line can arrive
+  torn, and a corrupt record inside an archive is a data point that never
+  existed.
+
+  **The card is the source of truth, this is a mirror.** The board writes a
+  reading whether or not anything is listening; a consumer hears it only
+  while it is connected. So a night with the PC off leaves a hole in the
+  mirror and none on the card, and the repair is always to re-pull, never to
+  reconstruct from whatever arrived live.
+
 - `brd:` — the board's own vitals, every 15 s:
   `brd:temp,temp_max,load,fps,heap_free_kb,heap_min_kb,heap_largest_kb,
   uptime_s,cpu_mhz,rssi,boots,faults,reason`. The device watched a PC all day

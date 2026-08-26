@@ -70,9 +70,53 @@ public:
   bool trend(int hours, int &dTemp10, int &dHum, int &dPress10);
   const char *dirPath() const { return "/climate"; }
 
+  /* ── export ───────────────────────────────────────────────────────────
+   * The archive is worth nothing while it is stranded on a card inside a
+   * case. These three walk it out to whoever asked, a FEW ROWS AT A TIME:
+   * a month is a couple of thousand rows, and pushing them all inside one
+   * loop iteration is precisely the blocking uplink that tripped the task
+   * watchdog once already.
+   *
+   * The card is also the more complete record. The server only hears the
+   * board while the PC is awake; the board writes every reading regardless.
+   * So the card is the source and the server is the mirror, never the
+   * other way round. */
+  /* Where `press` sits in the room's own recorded distribution, as a
+   * percentage of readings below it. -1 when there is not enough archive to
+   * mean anything.
+   *
+   * This exists because ABSOLUTE pressure thresholds are unusable here: the
+   * sensor reports station pressure and reducing it to sea level needs an
+   * elevation nobody has entered, so "below 1000 hPa is a low" would be
+   * wrong by a fixed offset at every reading. A percentile against the
+   * board's own history needs no calibration at all - the offset cancels.
+   *
+   * Counted in one pass without an array: sorting a month of readings would
+   * cost more heap than the Zigbee stack has left to give. */
+  int pressurePercentile(int days, int press);
+
+  bool exportBegin(int days);
+  bool exportActive() const { return exDays_ > 0; }
+  /* One row as "YYYY-MM-DD,HH:MM,temp_c,rh,bat,press_hpa" — the date is
+   * prefixed because a bare HH:MM cannot be placed in time by the reader.
+   * False when the walk is finished. */
+  bool exportNextRow(char *out, size_t cap);
+  int exportRowsSent() const { return exRows_; }
+  int exportDaysLeft() const { return exDays_; }
+  void exportAbort();
+
 private:
+  bool exportLoadDay();
+
   SdStore *sd_ = nullptr;
   char lastDate_[12] = {0};
+  /* Export cursor. exDays_ counts DOWN to zero; exDay_ is how many days back
+   * from today the current file is, so the walk runs oldest-first and the
+   * receiving end gets a series already in order. */
+  int exDays_ = 0, exDay_ = 0, exRows_ = 0;
+  String exBuf_;
+  int exPos_ = 0;
+  char exDate_[12] = {0};
 };
 
 #endif

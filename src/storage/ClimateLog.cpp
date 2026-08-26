@@ -212,3 +212,129 @@ bool ClimateLog::trend(int hours, int &dTemp10, int &dHum, int &dPress10) {
   if (nP > 0 && oP > 0) dPress10 = (nP - oP) * 10;
   return true;
 }
+
+/* ── export ─────────────────────────────────────────────────────────────── */
+
+bool ClimateLog::exportBegin(int days) {
+  exportAbort();
+  if (!sd_ || !sd_->ok()) return false;
+  if (time(nullptr) < 1700000000L) return false; /* undated files, no walk */
+  if (days < 1) days = 1;
+  if (days > 60) days = 60; /* two months is ~4000 rows; past that, take the
+                             * card out and read it directly */
+  exDays_ = days;
+  exDay_ = days - 1; /* oldest first, so the receiver never has to sort */
+  exRows_ = 0;
+  return true;
+}
+
+void ClimateLog::exportAbort() {
+  /* Clears the CURSOR, deliberately not the row count. The walk ends by
+   * calling this from inside exportNextRow, so zeroing the total here meant
+   * the caller read 0 the instant the transfer succeeded - the board
+   * announced "archive uploaded: 0 rows" while 354 of them were arriving at
+   * the other end. exportBegin() resets the count; until then it means "rows
+   * sent by the last export", which is the only reading a caller wants. */
+  exDays_ = exDay_ = exPos_ = 0;
+  exBuf_ = "";
+  exDate_[0] = 0;
+}
+
+/* Pull the next dated file into the buffer, skipping days with no file. */
+bool ClimateLog::exportLoadDay() {
+  while (exDays_ > 0) {
+    time_t t = time(nullptr) - (time_t)exDay_ * 86400;
+    struct tm tmv;
+    bool got = localtime_r(&t, &tmv) != nullptr;
+    char path[40];
+    if (got) {
+      strftime(exDate_, sizeof(exDate_), "%Y-%m-%d", &tmv);
+      snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), exDate_);
+    }
+    /* Step the cursor BEFORE any early exit, or a missing file loops here
+     * forever and the export never finishes. */
+    exDay_--;
+    if (exDay_ < 0) exDays_ = 0; /* this is the last file */
+    if (got && sd_->exists(path)) {
+      exBuf_ = "";
+      exPos_ = 0;
+      if (sd_->readAll(path, exBuf_, NOCT_SD_READ_MAX) && exBuf_.length())
+        return true;
+    }
+    if (exDays_ == 0) break;
+  }
+  return false;
+}
+
+bool ClimateLog::exportNextRow(char *out, size_t cap) {
+  if (!out || cap < 24) return false;
+  for (;;) {
+    if (exPos_ >= (int)exBuf_.length()) {
+      if (exDays_ <= 0) {
+        exportAbort();
+        return false;
+      }
+      if (!exportLoadDay()) {
+        if (exDays_ <= 0) {
+          exportAbort();
+          return false;
+        }
+        continue;
+      }
+    }
+    int nl = exBuf_.indexOf('\n', exPos_);
+    String line =
+        (nl < 0) ? exBuf_.substring(exPos_) : exBuf_.substring(exPos_, nl);
+    exPos_ = (nl < 0) ? exBuf_.length() : nl + 1;
+    line.trim();
+    /* The per-file header is for whoever opens the CSV on a laptop; it is
+     * noise on the wire, where the schema is already agreed. */
+    if (!line.length() || line.startsWith("time")) continue;
+    snprintf(out, cap, "%s,%s", exDate_, line.c_str());
+    exRows_++;
+    return true;
+  }
+}
+
+int ClimateLog::pressurePercentile(int days, int press) {
+  if (!sd_ || !sd_->ok() || press <= 0) return -1;
+  if (days < 1) days = 1;
+  if (days > 60) days = 60;
+  time_t nowT = time(nullptr);
+  if (nowT < 1700000000L) return -1;
+
+  long below = 0, total = 0;
+  for (int d = 0; d < days; d++) {
+    time_t t = nowT - (time_t)d * 86400;
+    struct tm tmv;
+    if (!localtime_r(&t, &tmv)) continue;
+    char date[12], path[40];
+    strftime(date, sizeof(date), "%Y-%m-%d", &tmv);
+    snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), date);
+    if (!sd_->exists(path)) continue;
+    String text;
+    if (!sd_->readAll(path, text, NOCT_SD_READ_MAX) || !text.length()) continue;
+
+    int start = 0;
+    while (start < (int)text.length()) {
+      int nl = text.indexOf('\n', start);
+      String line =
+          (nl < 0) ? text.substring(start) : text.substring(start, nl);
+      start = (nl < 0) ? text.length() : nl + 1;
+      line.trim();
+      if (!line.length() || line.startsWith("time")) continue;
+      /* HH:MM,temp,rh,bat,press - pressure is the last field. */
+      int lastComma = line.lastIndexOf(',');
+      if (lastComma < 0) continue;
+      int p = line.substring(lastComma + 1).toInt();
+      if (p <= 0) continue; /* -1 means this sensor has no barometer */
+      total++;
+      if (p < press) below++;
+    }
+  }
+  /* Under a day of readings is not a distribution, it is a handful of
+   * numbers, and a percentile computed from it would look authoritative
+   * while meaning nothing. */
+  if (total < 24) return -1;
+  return (int)(below * 100 / total);
+}

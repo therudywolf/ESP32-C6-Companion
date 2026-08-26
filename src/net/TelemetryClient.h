@@ -10,6 +10,7 @@
 #include <WiFi.h>
 
 #include "core/Graphs.h"
+#include "core/ClimateAnalysis.h"
 #include "core/Types.h"
 #include "core/config.h"
 
@@ -36,6 +37,18 @@ public:
    * report — and because a server-side alert rule needs the rate, not the
    * absolute pressure, to say anything about the weather. */
   void sendZbTrend(int dPress10, int dTemp10, int dHum);
+  /* The multi-window analysis: one `zbw:` line with every window, then one
+   * `zbpat:` line per finding. Sent together and only when recomputed, so a
+   * consumer can treat the pair as one atomic report rather than guessing
+   * whether a finding belongs to the numbers it just saw. */
+  void sendClimatePatterns(const analysis::Finding *f, int n, int dew10,
+                           int pressPct, const analysis::Windows &w);
+  /* Archive export: a begin line, then one row per reading, then an end line
+   * carrying the total so the receiver can tell a finished transfer from a
+   * dropped connection. */
+  void sendClimateCsvBegin(int days);
+  bool sendClimateCsvRow(const char *row);
+  void sendClimateCsvEnd(int rows, bool complete);
   /* Hub state for the panel's "check connection" button: is the
    * coordinator up, on what channel, is the network open for joining, how
    * many sensors, and how long since any of them last spoke. */
@@ -72,7 +85,9 @@ private:
    * coexistence), ACKs stop, the ~5.7 KB send buffer fills in ~70 s of wolf/cfg
    * reports, and the next blocking printf hangs the render loop until the task
    * watchdog kills the board. Telemetry uplink is best-effort by nature. */
-  void sendLine(const char *line);
+  /* False when the line did not go out whole. Callers that push in bulk must
+   * back off on false rather than keep shovelling into a full socket. */
+  bool sendLine(const char *line);
   void parsePayload(const char *line, size_t len, AppState &state,
                     Graphs &graphs);
 
