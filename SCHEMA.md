@@ -273,6 +273,14 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   eight-field line returned the name as `ForestHome,230,56` and the
   temperature as the battery, with no error anywhere. A fixed field count is
   a promise between two repositories that nothing checks at runtime.
+- `zbs:` carries ONLY sensors this coordinator heard on its OWN radio.
+  A server-relayed or console-injected sensor is never echoed back up. The
+  line means "what the board hears", the server stores it as exactly that,
+  and a relayed entry re-reported as local makes the board launder someone
+  else's data as its own observation - which then sits in the panel as a
+  device that does not exist and cannot be removed for two hours. The board
+  tracks this as `ZigbeeData::localCount`, recorded BEFORE the relayed merge
+  because afterwards the two are indistinguishable.
 - `zbw:` — every analysis window at once, whenever the board recomputes
   (every 5 min):
   `zbw:dew10,pressPct,dP1,ok1,dP3,ok3,dP6,ok6,dP12,ok12,dP24,ok24,dT1,dT24`.

@@ -81,6 +81,11 @@ public:
   bool setReportInterval(int minSec, int maxSec);
   /* Seconds since the last report from any sensor, -1 = nothing ever heard. */
   int lastHeardSec(unsigned long now) const;
+  /* Dump the raw slot table: address, endpoint and what each holds. One
+   * physical device splitting across several slots is invisible from the
+   * sensor list alone - every copy shows the same readings and looks like a
+   * second device that agrees suspiciously well. */
+  void debugSlots();
   int channel() const;
 
 private:

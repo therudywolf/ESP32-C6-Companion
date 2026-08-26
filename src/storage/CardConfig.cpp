@@ -3,23 +3,40 @@
 #include "storage/SdStore.h"
 
 /* "ssid2" -> 2, "ssid" -> 1; 0 when the key is not indexed. */
-static int keyIndex(const String &key, const char *base, int baseLen) {
+/* Index out of a numbered key: "ssid" and "ssid1" both mean 1, "ssid2" means
+ * 2, and 0 means the key does not belong to `base` or names an index out of
+ * range.
+ *
+ * The prefix length is MEASURED rather than passed in. It used to be a
+ * parameter, and the zigbee caller passed 5 for "name" - which is four
+ * letters - reading the argument as "the highest index allowed". With
+ * baseLen 5 every key from name1 to name9 has exactly that length, so all of
+ * them took the "bare key, no number at all" branch and returned 1: name2
+ * and name3 both landed in slot 0 and whichever was read last won. The one
+ * real sensor was silently renamed, and the panel then showed it twice -
+ * once under the name the server had learned before, once under the new one,
+ * with identical readings because it was one device all along.
+ *
+ * So the two things that were conflated are now separate: the length is
+ * derived, and the bound is the caller's to state. */
+static int keyIndex(const String &key, const char *base, int maxN) {
   if (!key.startsWith(base)) return 0;
+  int baseLen = (int)strlen(base);
   if ((int)key.length() == baseLen) return 1;
   int n = key.substring(baseLen).toInt();
-  return (n >= 1 && n <= NOCT_WIFI_MAX_NETS) ? n : 0;
+  return (n >= 1 && n <= maxN) ? n : 0;
 }
 
 void CardConfig::apply(const String &section, const String &key,
                        const String &val) {
   if (section == "wifi") {
-    int i = keyIndex(key, "ssid", 4);
+    int i = keyIndex(key, "ssid", NOCT_WIFI_MAX_NETS);
     if (i) {
       ssid_[i - 1] = val;
       applied_++;
       return;
     }
-    i = keyIndex(key, "pass", 4);
+    i = keyIndex(key, "pass", NOCT_WIFI_MAX_NETS);
     if (i) {
       pass_[i - 1] = val;
       applied_++;

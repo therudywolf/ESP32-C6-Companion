@@ -157,6 +157,17 @@ struct ZigbeeData {
    * someone adds a door sensor. */
   static const int kMax = 5;
   int count = 0;
+  /* How many of the first `count` entries this board heard over its OWN
+   * radio. The rest were relayed by the server or injected from the console,
+   * and the distinction matters in exactly one place: what the board is
+   * entitled to report back UP.
+   *
+   * A relayed sensor re-reported as local is the board laundering someone
+   * else's data as its own observation - and once the server stores it under
+   * that name it looks indistinguishable from a real device that has since
+   * gone quiet. That is how a sensor nobody owns appeared in the panel and
+   * stayed there. */
+  int localCount = 0;
   ZbSensor list[kMax];
 };
 

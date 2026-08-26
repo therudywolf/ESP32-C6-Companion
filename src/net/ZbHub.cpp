@@ -12,9 +12,13 @@
 bool ZbHub::begin(SdStore *, const CardConfig *) { return false; }
 bool ZbHub::pollNow() { return false; }
 bool ZbHub::setReportInterval(int, int) { return false; }
+void ZbHub::debugSlots() {
+  Serial.println("  no radio in this build: every sensor listed is relayed");
+}
 int ZbHub::lastHeardSec(unsigned long) const { return -1; }
 int ZbHub::channel() const { return 0; }
 void ZbHub::tick(unsigned long, AppState &st, Graphs &) {
+  st.zb.localCount = 0; /* no radio in this build: nothing here is ours */
   /* No local hub in this build: whatever the server relayed IS the list. */
   st.zb = st.zbRemote;
 }
@@ -478,6 +482,16 @@ bool ZbHub::setReportInterval(int minSec, int maxSec) {
   return sent > 0;
 }
 
+void ZbHub::debugSlots() {
+  Serial.println("  slot  addr    ep   t10    rh   bat  press   lux");
+  for (int i = 0; i < ZigbeeData::kMax; i++) {
+    const Slot &s = gSlots[i];
+    if (s.addr == 0xFFFF) continue;
+    Serial.printf("   %d   0x%04X  %3d %6d %5d %5d %6d %5d\n", i, s.addr, s.ep,
+                  s.temp10, s.humidity, s.battery, s.pressure, s.lux);
+  }
+}
+
 int ZbHub::lastHeardSec(unsigned long now) const {
   unsigned long newest = 0;
   for (const auto &s : gSlots) {
@@ -546,6 +560,11 @@ void ZbHub::tick(unsigned long now, AppState &st, Graphs &g) {
     out.ageSec = newest ? (int)((now - newest) / 1000UL) : -1;
     n++;
   }
+  /* Everything up to here came off this board's own radio. Recorded before
+   * the merge below, because after it there is no way to tell the two apart
+   * and the uplink needs to. */
+  st.zb.localCount = n;
+
   /* Then top up from the server's own coordinator, skipping anything we
    * already hear ourselves. A sensor both relayed AND paired locally is one
    * sensor; listing it twice would be worse than either source alone. */
