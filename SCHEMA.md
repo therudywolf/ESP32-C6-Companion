@@ -195,6 +195,7 @@ Every field is optional; the sentinel means "no change this time".
 | `zbpoll` | 1 | -1 | **one-shot**: read the sensor's attributes now |
 | `zbint` | sec | -1 | ask the sensor to report at least this often |
 | `zbdump` | days | -1 | **one-shot**: upload that many days of the climate archive |
+| `pcwake` | 0/1 | -1 | presence at the desk may wake the PC. A SETTING, not a one-shot: it must survive a board reboot |
 
 > **On cadence:** an Aqara WSDCGQ11LM decides for itself — it reports on change
 > (~±0.5 °C, ±6 % RH) plus a keep-alive roughly every 50-60 minutes, and that
@@ -273,6 +274,14 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   eight-field line returned the name as `ForestHome,230,56` and the
   temperature as the battery, with no error anywhere. A fixed field count is
   a promise between two repositories that nothing checks at runtime.
+- `cmd:wake` — presence at the desk, and the board has decided the PC is
+  AWAKE (the TCP link is up) so the thing that is dark is the monitor. Only
+  something running on the PC can wake a monitor: by then the machine is
+  running, the NIC never slept, and there is no packet that means "turn the
+  backlight on". The server answers with a zero-delta SendInput, which counts
+  as user input for the display-idle timer and moves the pointer by nothing.
+  When the link is DOWN the board sends a Wake-on-LAN magic packet instead
+  and this line never appears — the two cases are exclusive by construction.
 - `zbs:` carries ONLY sensors this coordinator heard on its OWN radio.
   A server-relayed or console-injected sensor is never echoed back up. The
   line means "what the board hears", the server stores it as exactly that,

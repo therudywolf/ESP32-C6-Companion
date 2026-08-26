@@ -55,6 +55,7 @@ void load(Settings &s) {
                   savedBits, (int)SCENE_FORZA);
   }
   s.zbAlert = p.getBool("zbAl", false);
+  s.pcWake = p.getBool("pcWake", false);
   s.zbTempMin = p.getInt("zbTmin", -99);
   s.zbTempMax = p.getInt("zbTmax", 99);
   s.zbHumMin = p.getInt("zbHmin", -1);
@@ -105,6 +106,7 @@ void save(const Settings &s) {
   p.putBytes("slot2", s.slot[2], sizeof(s.slot[2]));
   p.putUInt("scnMask", s.sceneMask | 1u);
   p.putInt("scnBits", (int)SCENE_FORZA);
+  p.putBool("pcWake", s.pcWake);
   p.putBool("zbAl", s.zbAlert);
   p.putInt("zbTmin", s.zbTempMin);
   p.putInt("zbTmax", s.zbTempMax);
