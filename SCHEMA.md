@@ -283,7 +283,21 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   because afterwards the two are indistinguishable.
 - `zbw:` — every analysis window at once, whenever the board recomputes
   (every 5 min):
-  `zbw:dew10,pressPct,dP1,ok1,dP3,ok3,dP6,ok6,dP12,ok12,dP24,ok24,dT1,dT24`.
+  `zbw:dew10,pressPct,dP1,ok1,dP3,ok3,dP6,ok6,dP12,ok12,dP24,ok24,dT1,dT24`
+  and, APPENDED in v1.26 (fields 15..27, never inserted, so a consumer that
+  splits and ignores the tail keeps working):
+  `absHum10,tempPct,humPct,dT3,okT3,dT6,okT6,dH1,okH1,dH3,okH3,dH24,okH24`.
+
+  The room's own readings had no windows on this line at all — humidity none,
+  temperature only 1 h and 24 h — so everything a sensor in the middle of the
+  room could say about the room was computed and then dropped.
+
+  `absHum10` is tenths of a gram of water per cubic metre, -9999 when it
+  cannot be computed. It exists because RELATIVE HUMIDITY IS NOT A MEASURE OF
+  WATER: it is a ratio against a capacity that roughly doubles every ten
+  degrees, so it falls when the heating comes on and nothing has dried. A
+  consumer wanting "did something happen in this room" must read this, not
+  RH. Humidity deltas (`dH*`) are whole percent, not tenths.
   Deltas are TENTHS (of hPa, of degrees). `dew10` is the Magnus dew point,
   -9999 when it cannot be computed. `pressPct` is where the current pressure
   sits in the board's OWN recorded distribution, -1 when the archive is too

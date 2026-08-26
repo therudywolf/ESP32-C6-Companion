@@ -42,6 +42,46 @@
  * Indoor temperature describes the radiator and the window, never the sky.
  * It appears below only in patterns ABOUT the room - ventilation, heating,
  * condensation - and never as evidence about the weather.
+ *
+ * ── WHERE THE SENSOR IS, AND WHY IT DECIDES WHAT CAN BE SAID ──────────────
+ *
+ * The WSDCGQ11LM sits in the MIDDLE OF THE ROOM. That is the best place for
+ * measuring the air and the worst place for guessing about surfaces, and
+ * every conclusion below is shaped by that one fact.
+ *
+ * What it buys:
+ *   - the readings are the room's BULK AIR, not a microclimate. No sun on the
+ *     case, no radiator radiating into it, no draught off the window frame.
+ *     Nothing here has to be corrected for a bad position, and a spike is a
+ *     real event rather than the afternoon sun crossing a shelf.
+ *   - the humidity is the air people actually breathe, so the comfort and
+ *     health bands below apply to it directly.
+ *
+ * What it costs:
+ *   - IT CANNOT SEE A SINGLE SURFACE. Condensation happens where a wall is
+ *     cold, and the coldest wall is by definition not in the middle of the
+ *     room. Every condensation verdict here therefore rests on an ASSUMED
+ *     wall-to-air difference (kColdSurfaceDelta10), and the error runs one
+ *     way: a room-centre sensor UNDERSTATES the risk, never overstates it.
+ *     That is the safe direction to be wrong in, and it is still wrong.
+ *   - IT LAGS. The room's air has thermal mass; an opened window shows up
+ *     minutes late and damped, and a radiator switching on does the same.
+ *     So the one-hour window is the shortest one worth trusting for the room,
+ *     and anything claiming to detect an event "just now" from air alone is
+ *     claiming more than the physics allows.
+ *
+ * ── RELATIVE HUMIDITY IS NOT A MEASURE OF WATER ───────────────────────────
+ *
+ * This is the single most useful thing in this file. Relative humidity is a
+ * ratio against what the air COULD hold, and that capacity roughly doubles
+ * every ten degrees. Heat a sealed room and RH falls with not one gram of
+ * water having left. Every "the air got dry" reading in winter is mostly
+ * this, and treating it as a humidifier problem is treating the thermometer.
+ *
+ * absHumidity10() answers the question RH cannot: how much water is actually
+ * in the air. It moves only when water enters or leaves - people, cooking,
+ * laundry, an open window, condensation on a wall. That is what makes it,
+ * not RH, the right signal for "something is happening in this room".
  */
 #ifndef NOCT_CLIMATE_ANALYSIS_H
 #define NOCT_CLIMATE_ANALYSIS_H
@@ -64,10 +104,10 @@ namespace analysis {
 struct Windows {
   int dP10_1h = 0, dP10_3h = 0, dP10_6h = 0, dP10_12h = 0, dP10_24h = 0;
   bool okP1 = false, okP3 = false, okP6 = false, okP12 = false, okP24 = false;
-  int dT10_1h = 0, dT10_3h = 0, dT10_24h = 0;
-  bool okT1 = false, okT3 = false, okT24 = false;
-  int dH_1h = 0, dH_3h = 0;
-  bool okH1 = false, okH3 = false;
+  int dT10_1h = 0, dT10_3h = 0, dT10_6h = 0, dT10_24h = 0;
+  bool okT1 = false, okT3 = false, okT6 = false, okT24 = false;
+  int dH_1h = 0, dH_3h = 0, dH_6h = 0, dH_24h = 0;
+  bool okH1 = false, okH3 = false, okH6 = false, okH24 = false;
 };
 
 /* ── dew point ───────────────────────────────────────────────────────────
@@ -90,6 +130,30 @@ inline int dewPoint10(int temp10, int rh) {
   float td = (b * g) / (a - g);
   if (td < -60.0f || td > 60.0f) return -9999;
   return (int)(td * 10.0f + (td < 0 ? -0.5f : 0.5f));
+}
+
+/* Absolute humidity in TENTHS of a gram per cubic metre.
+ *
+ * Saturation vapour pressure by the Magnus form, then the ideal-gas step to
+ * mass per volume - the standard chain, good to well under a percent over
+ * the range a room ever sees, which is far better than the sensor itself.
+ *
+ * The point of having it: RH answers "how close is this air to its own
+ * limit", which changes when you merely heat the air. This answers "how much
+ * water is in it", which changes only when water moves. Two readings an hour
+ * apart with the same absolute humidity and different RH mean the heating
+ * came on, not that anything dried out.
+ *
+ * Returns -9999 when the inputs cannot support an answer. */
+inline int absHumidity10(int temp10, int rh) {
+  if (temp10 == -32768 || rh <= 0 || rh > 100) return -9999;
+  float t = temp10 / 10.0f;
+  /* saturation vapour pressure, hPa */
+  float es = 6.112f * expf((17.67f * t) / (t + 243.5f));
+  /* g/m3 = es * RH * 2.1674 / (273.15 + T), the ideal-gas constant folded in */
+  float ah = (es * rh * 2.1674f) / (273.15f + t);
+  if (ah < 0.0f || ah > 60.0f) return -9999;
+  return (int)(ah * 10.0f + 0.5f);
 }
 
 /* How much colder the coldest surface in a room runs than the air. An outside
@@ -127,6 +191,18 @@ enum PatternId {
   PAT_AIR_TOO_DRY,
   PAT_VENTILATION,       /* temperature dropping while pressure sits still */
   PAT_HEATING_UP,
+  /* Water in the air, as opposed to the ratio. These are the ones RH alone
+   * cannot express, and they are the reason absHumidity10 exists. */
+  PAT_DRY_IS_JUST_HEAT,  /* RH fell, but the water did not: the heating came on */
+  PAT_WATER_ENTERING,    /* absolute humidity climbing: cooking, laundry, people */
+  PAT_AIRED_OUT,         /* absolute humidity dropped hard: the room was aired */
+  /* Bands with a published basis, quoted rather than invented. */
+  PAT_MITE_ZONE,         /* sustained above 60 %: dust mites breed */
+  PAT_COLD_FOR_HEALTH,   /* under 18 C, the WHO minimum for a living room */
+  PAT_WARM_FOR_SLEEP,    /* over 24 C at night: measurably worse sleep */
+  /* Against the room's OWN record, the same trick the barometer uses. */
+  PAT_TEMP_UNUSUAL,
+  PAT_HUMIDITY_UNUSUAL,
   PAT_COUNT
 };
 
@@ -160,7 +236,8 @@ inline int per3h(int d10, int hours) {
  * of them is a forecast of temperature, because this board has no idea what
  * the outside temperature is, and none of them diagnoses a person. */
 inline int analyse(const Windows &w, int temp10, int rh, int hourLocal,
-                   int pressPct, Finding *out, int cap) {
+                   int pressPct, int tempPct, int humPct, Finding *out,
+                   int cap) {
   int n = 0;
   auto add = [&](PatternId id, int sev, const char *title, const char *detail) {
     if (n < cap) {
@@ -246,15 +323,98 @@ inline int analyse(const Windows &w, int temp10, int rh, int hourLocal,
       add(PAT_MOULD_WATCH, 1, "Влажно у холодных стен",
           "точка росы близко к стене, стоит проветрить");
   }
+
+  /* ── water, as opposed to the ratio ────────────────────────────────────
+   * Everything below compares absolute humidity now against absolute
+   * humidity an hour ago, reconstructed from the same reading minus the
+   * window's own deltas. That reconstruction is exact: dT and dH came from
+   * the archive rows either side of the window, so T-dT and RH-dH ARE the
+   * older row. No second card read, and no approximation.
+   *
+   * This is what separates "the air got dry" from "the heating came on".
+   * They look identical in RH and are opposites in water. */
+  const int ah10 = absHumidity10(temp10, rh);
+  int dAh10 = 0;
+  bool ahOk = false;
+  if (ah10 != -9999 && w.okT1 && w.okH1) {
+    int wasAh10 = absHumidity10(temp10 - w.dT10_1h, rh - w.dH_1h);
+    if (wasAh10 != -9999) {
+      dAh10 = ah10 - wasAh10;
+      ahOk = true;
+    }
+  }
+
+  if (ahOk) {
+    /* 0.8 g/m3 in an hour is well clear of the sensor's own noise and of
+     * the drift a closed, occupied room produces on its own. */
+    if (dAh10 <= -8)
+      add(PAT_AIRED_OUT, 0, "Комнату проветрили",
+          "воды в воздухе резко убавилось: был обмен с улицей");
+    else if (dAh10 >= 8)
+      add(PAT_WATER_ENTERING, 1, "Влага прибывает",
+          "воды в воздухе больше: готовка, сушка белья или люди");
+    /* RH down, water flat: the capacity grew, nothing dried. Worth saying
+     * out loud, because this is the reading that sends people out to buy a
+     * humidifier in January when the answer is the radiator. */
+    if (w.dH_1h <= -4 && dAh10 > -4 && dAh10 < 4 && w.okT1 && w.dT10_1h >= 5)
+      add(PAT_DRY_IS_JUST_HEAT, 0, "Это не сушь, а нагрев",
+          "влажность упала от прогрева, воды в воздухе столько же");
+  }
+
   if (rh >= 0 && rh < 30)
     add(PAT_AIR_TOO_DRY, 1, "Воздух пересушен",
         "ниже 30% сохнут слизистые, дерево и книги");
+  /* Above 60 % house dust mites breed freely; this is the number allergy
+   * guidance is quoted against, and it sits well below the ~70 % where mould
+   * starts on surfaces. The sensor is in the middle of the room, so this is
+   * the air people breathe - which is exactly what the band is about. */
+  else if (rh > 60)
+    add(PAT_MITE_ZONE, 1, "Сыро для пылевых клещей",
+        "выше 60% они размножаются свободно");
+
+  /* Two temperature bands with a published basis rather than a taste.
+   * 18 C is the WHO minimum for a healthy living room; above about 24 C at
+   * night sleep measurably degrades. Both are about the ROOM AIR, which is
+   * precisely what a sensor in the middle of the room measures. */
+  if (temp10 != -32768) {
+    if (temp10 < 180)
+      add(PAT_COLD_FOR_HEALTH, 1, "Холодно для жилой комнаты",
+          "ниже 18 C - это порог, который ВОЗ считает нижним");
+    else if (temp10 > 240 && hourLocal >= 0 &&
+             (hourLocal >= 22 || hourLocal <= 6))
+      add(PAT_WARM_FOR_SLEEP, 0, "Тепло для сна",
+          "выше 24 C ночью сон заметно хуже, лучше проветрить");
+  }
+
+  /* Against the room's own record. Same reasoning as the barometer: a
+   * threshold picked once is a guess about this flat, while its own
+   * distribution is a measurement of it. */
+  if (tempPct >= 0) {
+    if (tempPct <= 5)
+      add(PAT_TEMP_UNUSUAL, 1, "Холоднее обычного",
+          "ниже, чем 95% всех показаний за время наблюдений");
+    else if (tempPct >= 95)
+      add(PAT_TEMP_UNUSUAL, 1, "Теплее обычного",
+          "выше, чем 95% всех показаний за время наблюдений");
+  }
+  if (humPct >= 0) {
+    if (humPct <= 5)
+      add(PAT_HUMIDITY_UNUSUAL, 0, "Суше обычного",
+          "ниже, чем 95% всех показаний за время наблюдений");
+    else if (humPct >= 95)
+      add(PAT_HUMIDITY_UNUSUAL, 1, "Влажнее обычного",
+          "выше, чем 95% всех показаний за время наблюдений");
+  }
 
   /* Ventilation versus weather. A room cooling fast WHILE the pressure sits
    * still is a window, not a cold front: the atmosphere did not move, so
    * whatever changed is inside the flat. This is the one place indoor
    * temperature is allowed to mean something, and it means it only because
-   * pressure vouches that the weather is not responsible. */
+   * pressure vouches that the weather is not responsible.
+   *
+   * The room-centre sensor lags a real window by minutes and damps it, so
+   * the threshold is deliberately generous - this is the air mass turning
+   * over, not a draught crossing a probe. */
   if (w.okT1 && w.okP1) {
     bool pressureQuiet = r1 > -8 && r1 < 8;
     if (pressureQuiet && w.dT10_1h <= -20)

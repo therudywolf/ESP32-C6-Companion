@@ -591,19 +591,32 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
 }
 
 void TelemetryClient::sendClimatePatterns(const analysis::Finding *f, int n,
-                                          int dew10, int pressPct,
+                                          int dew10, int pressPct, int tempPct,
+                                          int humPct, int absHum10,
                                           const analysis::Windows &w) {
   if (!tcpConnected_) return;
   /* zbw:dew10,pressPct,dP1,ok1,dP3,ok3,dP6,ok6,dP12,ok12,dP24,ok24,dT1,dT24
    * Every window ships its own ok flag because "no history that old yet" and
    * "no change" are different answers, and a bare 0 for the first is how a
    * consumer ends up drawing a flat line through a gap it never had data for. */
-  char b[160];
-  snprintf(b, sizeof(b), "zbw:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+  char b[288];
+  /* Fields 15.. were APPENDED, never inserted: a consumer that splits and
+   * ignores the tail keeps working. The room's own readings had no windows
+   * on this line at all - humidity none, temperature only 1 h and 24 h -
+   * so everything the sensor in the middle of the room could say about the
+   * room was being computed and then dropped. */
+  snprintf(b, sizeof(b),
+           "zbw:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+           "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
            dew10, pressPct, w.dP10_1h, w.okP1 ? 1 : 0, w.dP10_3h,
            w.okP3 ? 1 : 0, w.dP10_6h, w.okP6 ? 1 : 0, w.dP10_12h,
            w.okP12 ? 1 : 0, w.dP10_24h, w.okP24 ? 1 : 0, w.dT10_1h,
-           w.dT10_24h);
+           w.dT10_24h,
+           /* 15.. the room: absolute humidity, its two percentiles, and the
+            * temperature and humidity windows that were never sent. */
+           absHum10, tempPct, humPct, w.dT10_3h, w.okT3 ? 1 : 0, w.dT10_6h,
+           w.okT6 ? 1 : 0, w.dH_1h, w.okH1 ? 1 : 0, w.dH_3h, w.okH3 ? 1 : 0,
+           w.dH_24h, w.okH24 ? 1 : 0);
   sendLine(b);
   for (int i = 0; i < n; i++) {
     char p[176];

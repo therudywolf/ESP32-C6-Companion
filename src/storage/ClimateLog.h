@@ -93,7 +93,21 @@ public:
    *
    * Counted in one pass without an array: sorting a month of readings would
    * cost more heap than the Zigbee stack has left to give. */
-  int pressurePercentile(int days, int press);
+  /* Where each of the three readings sits in the room's OWN recorded
+   * distribution, as a percentage of archived readings below it. -1 for any
+   * one of them means the archive is too thin to answer.
+   *
+   * All three in ONE pass. Three separate calls would have walked thirty
+   * daily files three times over, on the render loop, every five minutes -
+   * the cost is in opening and reading the files, not in the counting.
+   *
+   * Why percentiles at all: for pressure it is the only honest absolute,
+   * because station pressure needs an altitude nobody entered. For
+   * temperature and humidity the reason is different but lands in the same
+   * place - "warm for this flat" is a fact about this flat, and a threshold
+   * picked once by hand is a guess about it. */
+  bool percentiles(int days, int temp10, int rh, int press, int &pTemp,
+                   int &pHum, int &pPress);
 
   bool exportBegin(int days);
   bool exportActive() const { return exDays_ > 0; }

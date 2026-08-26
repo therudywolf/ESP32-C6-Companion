@@ -583,7 +583,8 @@ static void consoleExec(String line) {
         }
         state.zbFindCount = analysis::analyse(
             w, z0.temp10, z0.humidity, hourLocal, state.zbPressPct,
-            state.zbFind, AppState::kMaxFindings);
+            state.zbTempPct, state.zbHumPct, state.zbFind,
+            AppState::kMaxFindings);
       }
       /* Push it up the real wire too. The point of this command is to
        * exercise the WHOLE path - board, TCP, server, textfile collector,
@@ -592,7 +593,9 @@ static void consoleExec(String line) {
        * device would test the half that was never in doubt. */
       tcp.sendZbTrend(state.zbPress10Delta3h, w.dT10_3h, w.dH_3h);
       tcp.sendClimatePatterns(state.zbFind, state.zbFindCount,
-                              state.zbDewPoint10, state.zbPressPct, w);
+                              state.zbDewPoint10, state.zbPressPct,
+                              state.zbTempPct, state.zbHumPct,
+                              state.zbAbsHum10, w);
       Serial.printf("trend := %+d.%d hPa/3h -> %s (%d pattern(s))\n",
                     state.zbPress10Delta3h / 10,
                     abs(state.zbPress10Delta3h % 10),
@@ -632,13 +635,22 @@ static void consoleExec(String line) {
      * re-read every five minutes, so this shows the last verdict rather than
      * forcing a fresh walk on the render loop. */
     const analysis::Windows &w = state.zbWin;
-    Serial.printf("dew point %d.%d C | pressure percentile %d\n",
+    Serial.printf("dew point %d.%d C | abs humidity %d.%d g/m3\n",
                   state.zbDewPoint10 / 10, abs(state.zbDewPoint10 % 10),
+                  state.zbAbsHum10 / 10, abs(state.zbAbsHum10 % 10));
+    Serial.printf("percentiles vs own archive: temp %d, humidity %d, "
+                  "pressure %d\n", state.zbTempPct, state.zbHumPct,
                   state.zbPressPct);
     Serial.printf("dP 1h %+d 3h %+d 6h %+d 12h %+d 24h %+d (tenths hPa)\n",
                   w.okP1 ? w.dP10_1h : 0, w.okP3 ? w.dP10_3h : 0,
                   w.okP6 ? w.dP10_6h : 0, w.okP12 ? w.dP10_12h : 0,
                   w.okP24 ? w.dP10_24h : 0);
+    Serial.printf("dT 1h %+d 3h %+d 6h %+d 24h %+d (tenths C)\n",
+                  w.okT1 ? w.dT10_1h : 0, w.okT3 ? w.dT10_3h : 0,
+                  w.okT6 ? w.dT10_6h : 0, w.okT24 ? w.dT10_24h : 0);
+    Serial.printf("dRH 1h %+d 3h %+d 6h %+d 24h %+d (percent)\n",
+                  w.okH1 ? w.dH_1h : 0, w.okH3 ? w.dH_3h : 0,
+                  w.okH6 ? w.dH_6h : 0, w.okH24 ? w.dH_24h : 0);
     if (!state.zbFindCount) Serial.println("no patterns match right now");
     for (int i = 0; i < state.zbFindCount; i++)
       Serial.printf("  [%d] %s - %s\n", state.zbFind[i].severity,
@@ -1511,18 +1523,25 @@ void loop() {
       w.dT10_3h = dT;
       w.dH_3h = dH;
       w.okP3 = w.okT3 = w.okH3 = state.zbTrendOk;
+      /* Every window keeps its temperature and humidity too. They used to be
+       * thrown into a junk variable: the card read had already paid for them
+       * and the room's own trends were discarded on the floor. */
+      w.okP6 = climateLog.trend(6, w.dT10_6h, w.dH_6h, w.dP10_6h);
+      w.okT6 = w.okH6 = w.okP6;
       int junkT = 0, junkH = 0;
-      w.okP6 = climateLog.trend(6, junkT, junkH, w.dP10_6h);
       w.okP12 = climateLog.trend(12, junkT, junkH, w.dP10_12h);
-      w.okP24 = climateLog.trend(24, w.dT10_24h, junkH, w.dP10_24h);
-      w.okT24 = w.okP24;
+      w.okP24 = climateLog.trend(24, w.dT10_24h, w.dH_24h, w.dP10_24h);
+      w.okT24 = w.okH24 = w.okP24;
 
       const ZbSensor &z0 = state.zb.list[0];
       state.zbDewPoint10 = analysis::dewPoint10(z0.temp10, z0.humidity);
       /* Thirty days of the board's own readings as the yardstick. Absolute
        * pressure cannot be judged without an altitude nobody entered; the
        * room's own distribution needs no calibration. */
-      state.zbPressPct = climateLog.pressurePercentile(30, z0.pressure);
+      climateLog.percentiles(30, z0.temp10, z0.humidity, z0.pressure,
+                             state.zbTempPct, state.zbHumPct,
+                             state.zbPressPct);
+      state.zbAbsHum10 = analysis::absHumidity10(z0.temp10, z0.humidity);
 
       int hourLocal = -1;
       time_t nowT = time(nullptr);
@@ -1532,13 +1551,15 @@ void loop() {
       }
       state.zbFindCount =
           analysis::analyse(w, z0.temp10, z0.humidity, hourLocal,
-                            state.zbPressPct, state.zbFind,
-                            AppState::kMaxFindings);
+                            state.zbPressPct, state.zbTempPct, state.zbHumPct,
+                            state.zbFind, AppState::kMaxFindings);
       for (int i = 0; i < state.zbFindCount; i++)
         Serial.printf("[PAT] %d %s - %s\n", state.zbFind[i].severity,
                       state.zbFind[i].title, state.zbFind[i].detail);
       tcp.sendClimatePatterns(state.zbFind, state.zbFindCount,
-                              state.zbDewPoint10, state.zbPressPct, w);
+                              state.zbDewPoint10, state.zbPressPct,
+                              state.zbTempPct, state.zbHumPct,
+                              state.zbAbsHum10, w);
     }
   }
 
