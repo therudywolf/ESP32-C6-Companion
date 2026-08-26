@@ -615,11 +615,11 @@ void TelemetryClient::sendClimatePatterns(const analysis::Finding *f, int n,
   }
 }
 
-void TelemetryClient::sendClimateCsvBegin(int days) {
-  if (!tcpConnected_) return;
+bool TelemetryClient::sendClimateCsvBegin(int days) {
+  if (!tcpConnected_) return false;
   char b[48];
   snprintf(b, sizeof(b), "zbcsvb:%d\n", days);
-  sendLine(b);
+  return sendLine(b);
 }
 
 bool TelemetryClient::sendClimateCsvRow(const char *row) {
@@ -629,12 +629,12 @@ bool TelemetryClient::sendClimateCsvRow(const char *row) {
   return sendLine(b);
 }
 
-void TelemetryClient::sendClimateCsvEnd(int rows, bool complete) {
-  if (!tcpConnected_) return;
+bool TelemetryClient::sendClimateCsvEnd(int rows, bool complete) {
+  if (!tcpConnected_) return false;
   /* `complete` distinguishes a finished walk from one the board gave up on -
    * a truncated archive presented as whole is the kind of thing a forecast
    * gets built on and then quietly disbelieved. */
   char b[64];
   snprintf(b, sizeof(b), "zbcsve:%d,%d\n", rows, complete ? 1 : 0);
-  sendLine(b);
+  return sendLine(b);
 }

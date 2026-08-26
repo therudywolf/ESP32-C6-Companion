@@ -613,11 +613,19 @@ static void consoleExec(String line) {
   } else if (cmd == "dumpcsv") {
     int days = arg.length() ? arg.toInt() : 7;
     if (days < 1) days = 1;
-    if (climateLog.exportBegin(days)) {
-      tcp.sendClimateCsvBegin(days);
-      Serial.printf("uploading %d day(s) of archive\n", days);
-    } else {
+    if (!climateLog.exportBegin(days)) {
       Serial.println("no archive to upload (no card, or no clock)");
+    } else if (!tcp.sendClimateCsvBegin(days)) {
+      /* Without the begin line the receiver has no transfer open, and it
+       * DISCARDS every row that arrives outside one - silently, by design,
+       * because a row with no header is a row it cannot place. So a dropped
+       * begin turns the whole upload into nothing while the board cheerfully
+       * counts rows it sent into a void. Do not start the walk unless the
+       * opening line actually left. */
+      climateLog.exportAbort();
+      Serial.println("no link to the server yet - nothing uploaded");
+    } else {
+      Serial.printf("uploading %d day(s) of archive\n", days);
     }
   } else if (cmd == "analyse") {
     /* Print what the analyser currently makes of the room. The card is only
@@ -1082,11 +1090,15 @@ void loop() {
       state.rcZbPoll = -1;
     }
     if (state.rcZbDump > 0) {
-      if (climateLog.exportBegin(state.rcZbDump)) {
-        tcp.sendClimateCsvBegin(state.rcZbDump);
-        sceneMgr.toast("выгружаю архив");
-      } else {
+      /* Same rule as the console path: the walk starts only once the
+       * receiver has been told a transfer is opening. */
+      if (!climateLog.exportBegin(state.rcZbDump)) {
         sceneMgr.toast("архив недоступен");
+      } else if (!tcp.sendClimateCsvBegin(state.rcZbDump)) {
+        climateLog.exportAbort();
+        sceneMgr.toast("нет связи с сервером");
+      } else {
+        sceneMgr.toast("выгружаю архив");
       }
       state.rcZbDump = -1;
     }
@@ -1538,32 +1550,41 @@ void loop() {
    * rows at ~50 bytes is 1.5 KB per tick - one TCP segment - and a month
    * finishes in about a minute while the screen keeps drawing. */
   static unsigned long lastPump = 0;
-  if (climateLog.exportActive() && now - lastPump >= 100) {
+  /* The row in flight, kept across iterations so a refused send can retry it. */
+  static char exRow[80] = {0};
+  if ((climateLog.exportActive() || exRow[0]) && now - lastPump >= 100) {
     lastPump = now;
     /* Rate limit, not just a burst cap. This block sits in the main loop,
      * which spins at frame rate - without the 100 ms gate the "30 rows per
      * call" ran thirty times a second, buried the socket, and sendLine tore a
      * line in half. Twenty rows per 100 ms is about 10 KB/s: a month of
      * archive in ten seconds, and the TCP buffer never fills. */
-    char row[80];
     int sent = 0;
-    while (sent < 20 && climateLog.exportNextRow(row, sizeof(row))) {
-      if (!tcp.sendClimateCsvRow(row)) {
-        /* The socket is backing up. Stop for this tick rather than shovelling
-         * into it - this row is already lost, and losing more would only make
-         * the gap bigger. */
-        Serial.println("[CSV] socket busy, backing off");
-        break;
-      }
+    while (sent < 20) {
+      /* Fetch only when the previous row is gone. exportNextRow ADVANCES the
+       * cursor, so a row handed to a refused send was simply lost: the tick
+       * that backed off dropped it and moved on. Holding it here means
+       * back-pressure delays the transfer instead of punching holes in it. */
+      if (!exRow[0] && !climateLog.exportNextRow(exRow, sizeof(exRow))) break;
+      if (!tcp.sendClimateCsvRow(exRow)) break; /* socket full: keep the row */
+      exRow[0] = 0;
       sent++;
     }
     state.zbExportRows = climateLog.exportRowsSent();
     state.zbExportLeft = climateLog.exportDaysLeft();
-    if (!climateLog.exportActive()) {
-      tcp.sendClimateCsvEnd(state.zbExportRows, true);
-      Serial.printf("[CSV] archive uploaded: %d row(s)\n", state.zbExportRows);
-      sceneMgr.toast("архив выгружен");
-      state.zbExportLeft = -1;
+    /* Done only when the walk is finished AND the last row is out. */
+    if (!climateLog.exportActive() && !exRow[0]) {
+      /* The end line is retried on the same terms as a row. Dropping it
+       * leaves the receiver holding an incomplete transfer for good - it
+       * discards rather than merges, so the whole upload shows as nothing.
+       * That is the state this actually produced: 660 rows sent, a server
+       * stuck at "busy" with zero rows stored. */
+      if (tcp.sendClimateCsvEnd(state.zbExportRows, true)) {
+        Serial.printf("[CSV] archive uploaded: %d row(s)\n",
+                      state.zbExportRows);
+        sceneMgr.toast("архив выгружен");
+        state.zbExportLeft = -1;
+      }
     }
   }
 
