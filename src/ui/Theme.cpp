@@ -481,21 +481,38 @@ void backdrop(LGFX_Sprite &g, int y0, int y1) {
       }
     }
   } else {
-    /* Drifting dot grid — drifts faster and brightens with load.
+    /* Drifting graticule — drifts faster and brightens with load.
      *
-     * The blend was 12/255, under five percent. SINGLE PIXELS need far more
-     * separation than a filled area to register at all: at that strength the
-     * grid measured 1.07 against the background, which is not a faint
-     * texture, it is nothing. The spacing was never the problem — 18 px puts
-     * about 150 dots on the screen — so "there is no grid" was a colour
-     * fault, not a missing feature. 70 gives roughly 2:1, which reads as
-     * texture without competing with the data on top of it. */
-    uint16_t dot = lerp565(BG, tint, (bgLight ? 84 : 70) + energy / 10);
+     * This took two goes and the first one fixed the wrong thing. The blend
+     * started at 12/255, under five percent, so the obvious diagnosis was
+     * contrast; raising it to 70 bought a measured 2:1 and the grid was still
+     * invisible on glass.
+     *
+     * Because contrast was only half of it. Each node was ONE PIXEL, and a
+     * lone pixel has almost no perceived brightness whatever its ratio says:
+     * the eye integrates over an area, and a contrast figure assumes an
+     * element large enough to have one. WCAG's numbers are written for
+     * legible-sized marks, not for single dots, and applying them to a dot is
+     * measuring the right quantity on the wrong object.
+     *
+     * So the node is now a small cross — five pixels instead of one, and a
+     * shape that reads as deliberate structure rather than as noise in the
+     * matrix. With the blend at 120 (about 4:1) it is unmistakably a grid and
+     * still sits behind the data rather than competing with it. Spacing goes
+     * to 26 because five-pixel nodes at 18 px would be busy. */
+    uint16_t node = lerp565(BG, tint, (bgLight ? 140 : 120) + energy / 8);
     int ds = 90 - energy / 2;
     if (ds < 28) ds = 28;
-    int ox = (int)((nowMs / ds) % 18), oy = (int)((nowMs / (ds + 40)) % 18);
-    for (int y = y0 + oy; y < y1; y += 18)
-      for (int x = ox; x < 320; x += 18) g.drawPixel(x, y, dot);
+    const int step = 26;
+    int ox = (int)((nowMs / ds) % step), oy = (int)((nowMs / (ds + 40)) % step);
+    for (int y = y0 + oy; y < y1; y += step) {
+      for (int x = ox; x < 320; x += step) {
+        /* clipped by hand: the sprite would clip anyway, but the top rows of
+         * the content band belong to the status bar and must stay clean */
+        if (y - 1 >= y0 && y + 1 < y1) g.drawFastVLine(x, y - 1, 3, node);
+        g.drawFastHLine(x - 1, y, 3, node);
+      }
+    }
   }
 }
 
