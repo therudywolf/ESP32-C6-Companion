@@ -73,7 +73,7 @@ static const Preset kPresets[THEME_PRESETS] = {
      rgb(180, 165, 142), rgb(60, 56, 50), rgb(184, 187, 38), rgb(250, 189, 47),
      rgb(251, 73, 52), rgb(142, 192, 124), rgb(211, 134, 155)},
     /* 7 Dracula — purple/pink on dracula bg */
-    {"Dracula", rgb(40, 42, 54), rgb(189, 147, 249), rgb(248, 248, 242),
+    {"Dracula", rgb(40, 42, 54), rgb(196, 158, 250), rgb(248, 248, 242),
      rgb(160, 176, 200), rgb(58, 62, 80), rgb(80, 250, 123), rgb(241, 250, 140),
      rgb(255, 85, 85), rgb(139, 233, 253), rgb(255, 121, 198)},
     /* 8 Nord — cool blue/grey on polar night */
@@ -81,7 +81,7 @@ static const Preset kPresets[THEME_PRESETS] = {
      rgb(160, 180, 192), rgb(58, 66, 82), rgb(163, 190, 140), rgb(235, 203, 139),
      rgb(208, 110, 120), rgb(129, 161, 193), rgb(180, 142, 173)},
     /* 9 Blood — aggressive red on black-red */
-    {"Blood", rgb(26, 4, 4), rgb(255, 40, 40), rgb(255, 235, 235),
+    {"Blood", rgb(26, 4, 4), rgb(255, 72, 72), rgb(255, 235, 235),
      rgb(192, 116, 112), rgb(60, 12, 12), rgb(0, 230, 130), rgb(255, 180, 0),
      rgb(255, 0, 0), rgb(255, 130, 130), rgb(255, 90, 90)},
     /* 10 Forest — green/earth on deep forest */
@@ -187,10 +187,24 @@ static const Preset kPresets[THEME_PRESETS] = {
      rgb(178, 198, 220)},
 };
 
-/* slightly darker chrome for inactive frames */
+/* Slightly darker chrome for inactive frames — and this is the colour EVERY
+ * tile border on every screen is drawn in, so "slightly" has to be true.
+ *
+ * It was 5/8, applied to the RGB565 channel values. Those are gamma-encoded,
+ * so cutting them by 37 % cuts PERCEIVED luminance by a great deal more, and
+ * the frames that define every tile boundary fell under the 3.0 floor for a
+ * graphical element in eight of the twenty-two themes - Blood worst at 2.3.
+ * Tile edges were nearly invisible and the layout read as floating text.
+ *
+ * 13/16 keeps the frame a clear step quieter than the title, which is the
+ * whole reason this function exists, and clears 3.0 in every theme with
+ * margin. tools/check_contrast.py reads this factor out of the source rather
+ * than repeating it: a check that hardcodes the value it is checking passes
+ * happily after the code changes underneath it. */
 static uint16_t dimmer(uint16_t c) {
   uint8_t r = ((c >> 11) & 0x1F), g = ((c >> 5) & 0x3F), b = (c & 0x1F);
-  return (uint16_t)(((r * 5 / 8) << 11) | ((g * 5 / 8) << 5) | (b * 5 / 8));
+  return (uint16_t)(((r * 13 / 16) << 11) | ((g * 13 / 16) << 5) |
+                    (b * 13 / 16));
 }
 
 /* scale a colour's luminance by num/den (clamped) */

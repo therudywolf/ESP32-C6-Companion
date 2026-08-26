@@ -779,6 +779,71 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
   settings::save(s);
 }
 
+
+/* ── the colour test card ────────────────────────────────────────────────
+ * Four rows, each answering one question that a screenshot cannot:
+ *
+ *  1. PRIMARIES, labelled. If the patch under "КРАСНЫЙ" is blue, rgb_order
+ *     is wrong. This is a one-glance answer to a fault that would otherwise
+ *     take an afternoon, because in the framebuffer it looks perfect.
+ *  2. A GREY RAMP, black to white in eight steps. Even spacing means the
+ *     gamma is sane; a ramp that jumps at one end and crawls at the other
+ *     does not. If the first two or the last two steps are indistinguishable,
+ *     the panel is crushing shadows or highlights and no palette can fix it.
+ *  3. BLACK and WHITE side by side, named. Swapped means `invert` is wrong.
+ *  4. THE CURRENT THEME's roles, each under its own name, so a palette can be
+ *     judged on glass rather than in a contrast table.
+ */
+void SceneManager::drawTestCard(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  g.fillSprite(BG);
+  g.setTextSize(1);
+
+  /* 1 — primaries */
+  struct P { const char *n; uint16_t c; };
+  static const P prim[4] = {{"КРАСНЫЙ", rgb(255, 0, 0)},
+                            {"ЗЕЛЕНЫЙ", rgb(0, 255, 0)},
+                            {"СИНИЙ", rgb(0, 0, 255)},
+                            {"ЖЕЛТЫЙ", rgb(255, 255, 0)}};
+  for (int i = 0; i < 4; i++) {
+    int x = 4 + i * 79;
+    g.fillRect(x, 4, 75, 30, prim[i].c);
+    g.setFont(&F_SMALL);
+    textCenter(g, x + 37, 36, prim[i].n, TEXT);
+  }
+
+  /* 2 — grey ramp */
+  g.setFont(&F_SMALL);
+  textAt(g, 4, 48, "ГРАДИЕНТ: ступени должны быть ровными", DIM);
+  for (int i = 0; i < 8; i++) {
+    int v = i * 255 / 7;
+    g.fillRect(4 + i * 39, 58, 37, 22, rgb(v, v, v));
+  }
+
+  /* 3 — the two extremes, named */
+  g.fillRect(4, 84, 154, 24, rgb(0, 0, 0));
+  g.drawRect(4, 84, 154, 24, rgb(90, 90, 90));
+  g.fillRect(162, 84, 154, 24, rgb(255, 255, 255));
+  textCenter(g, 81, 90, "ЧЕРНЫЙ", rgb(150, 150, 150));
+  textCenter(g, 239, 90, "БЕЛЫЙ", rgb(0, 0, 0));
+
+  /* 4 — this theme's roles */
+  struct R { const char *n; uint16_t c; };
+  const R roles[6] = {{"текст", TEXT},   {"тускл", DIM},  {"рамка", ORANGE_DIM},
+                      {"норма", GOOD},   {"вним", WARN},  {"крит", CRIT}};
+  for (int i = 0; i < 6; i++) {
+    int x = 4 + i * 52;
+    g.fillRect(x, 116, 50, 18, roles[i].c);
+    textCenter(g, x + 25, 136, roles[i].n, DIM);
+  }
+
+  /* Small print on the theme's own ground: the real test of DIM, which is
+   * where every one of these palettes was failing before it was measured. */
+  g.setFont(&F_TEXT);
+  textAt(g, 4, 150, theme::presetName(theme::currentPreset), ORANGE);
+  textAt(g, 100, 150, "мелкий текст на фоне", DIM);
+}
+
 void SceneManager::drawMenu(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   Settings &s = ui.st.settings;
@@ -1501,6 +1566,13 @@ void SceneManager::draw(UiCtx &ui) {
                           NOCT_W - 2 * mx - 58, 18, 2, TEXT);
       }
     }
+  }
+
+  /* The test card owns the whole screen, chrome included: half of what it
+   * checks IS the chrome. */
+  if (testCardUntil_ && (long)(testCardUntil_ - ui.now) > 0) {
+    drawTestCard(ui);
+    return;
   }
 
   /* the runner owns the content band outright */

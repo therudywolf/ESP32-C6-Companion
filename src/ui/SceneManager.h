@@ -67,11 +67,26 @@ public:
   /* Ask for a screenshot on the next completed frame. The console uses this
    * too rather than grabbing the sprite itself — see main.cpp. */
   void requestShot() { shotRequested_ = true; }
+  /* Hold a colour test card over everything for `ms`.
+   *
+   * The one thing this codebase cannot check for itself: every screenshot
+   * comes from the SPRITE, and between the sprite and the eye sit the panel's
+   * inversion, its RGB order, its gamma and the backlight. A palette can pass
+   * every contrast measurement in the repository and still look wrong on
+   * glass. The card names what each patch is supposed to be, so "the colours
+   * are off" becomes one specific answer instead of a guess. */
+  void showTestCard(unsigned long ms) { testCardUntil_ = millis() + ms; }
   /* Push the alert takeover aside for a while — the same thing a long press
    * does, reachable from the console. A hardware alert that legitimately holds
    * the screen makes every other scene unverifiable, which matters when the
    * screenshot IS the test. */
   void snoozeAlert(unsigned long ms) { alertSnoozeUntil_ = millis() + ms; }
+
+private:
+  void drawTestCard(UiCtx &ui);
+  unsigned long testCardUntil_ = 0;
+
+public:
   bool takeShotRequest() {
     bool r = shotRequested_;
     shotRequested_ = false;
