@@ -582,6 +582,14 @@ static void consoleExec(String line) {
             w, z0.temp10, z0.humidity, hourLocal, state.zbPressPct,
             state.zbFind, AppState::kMaxFindings);
       }
+      /* Push it up the real wire too. The point of this command is to
+       * exercise the WHOLE path - board, TCP, server, textfile collector,
+       * alert rule - on a synthetic front, because the weather does not
+       * arrive on demand. Computing the findings and keeping them on the
+       * device would test the half that was never in doubt. */
+      tcp.sendZbTrend(state.zbPress10Delta3h, w.dT10_3h, w.dH_3h);
+      tcp.sendClimatePatterns(state.zbFind, state.zbFindCount,
+                              state.zbDewPoint10, state.zbPressPct, w);
       Serial.printf("trend := %+d.%d hPa/3h -> %s (%d pattern(s))\n",
                     state.zbPress10Delta3h / 10,
                     abs(state.zbPress10Delta3h % 10),
