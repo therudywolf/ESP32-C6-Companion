@@ -242,26 +242,27 @@ void ClimateLog::exportAbort() {
 }
 
 bool ClimateLog::exportTakeWindow(const char *path) {
-  String win;
   size_t total = 0;
-  if (!sd_->readWindow(path, win, exOff_, NOCT_SD_READ_MAX, &total) ||
-      !win.length())
+  /* Straight into exBuf_. Reading into a scratch String and assigning would
+   * hold two 4 KB buffers at once, and this runs on a board whose free heap
+   * bottoms out around 14 KB with Zigbee and WiFi both up. */
+  if (!sd_->readWindow(path, exBuf_, exOff_, NOCT_SD_READ_MAX, &total) ||
+      !exBuf_.length())
     return false;
   exSize_ = total;
-  size_t consumed = win.length();
+  size_t consumed = exBuf_.length();
   /* Never hand out half a row. Cut back to the last newline unless this
    * window already reaches the end of the file, and start the next window
    * where this one really stopped - so nothing is split and nothing skipped. */
   if (exOff_ + consumed < exSize_) {
-    int nl = win.lastIndexOf('\n');
+    int nl = exBuf_.lastIndexOf('\n');
     if (nl >= 0) {
-      win.remove(nl + 1);
+      exBuf_.remove(nl + 1); /* truncates in place, no second allocation */
       consumed = (size_t)nl + 1;
     }
     /* No newline in a whole window means one line longer than the window.
      * Take it whole rather than spinning here forever. */
   }
-  exBuf_ = win;
   exPos_ = 0;
   exOff_ += consumed;
   return true;
