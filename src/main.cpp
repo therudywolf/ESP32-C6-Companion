@@ -135,6 +135,20 @@ static void applyBacklight(bool dimmed, bool night) {
     appliedCap = cap;
     display.setBrightness((uint8_t)b);
   }
+  /* Publish what the backlight is ACTUALLY doing, so the panel can stop
+   * guessing from the stored setting. The slider says what was asked for;
+   * these say what happened to it — night mode, the idle dim, the thermal
+   * guard and a running override all silently override the request, and
+   * without this the owner sees 210 on screen and 90 on the glass with
+   * nothing to connect the two. */
+  state.blNow = (uint8_t)b;
+  state.blCap = (uint8_t)cap;
+  state.blThermal = state.boardTemp >= NOCT_BOARD_HOT_C    ? 2
+                    : state.boardTemp >= NOCT_BOARD_WARM_C ? 1
+                                                           : 0;
+  state.blForceLeft = display.forcing()
+                          ? (int)((display.forcedUntilMs() - millis()) / 1000UL)
+                          : 0;
 }
 
 /* "YYYY-MM-DD" / "HH:MM" from the NTP clock; empty string when it has not
@@ -1159,6 +1173,25 @@ void loop() {
       sceneMgr.toast(asked ? "опрашиваю датчик" : "некого опрашивать");
       state.rcZbPoll = -1;
     }
+    if (state.rcBlMax > 0) {
+      /* Same override the console's blmax drives, and the same automatic
+       * revert. Refused below the standing cap: raising the ceiling to
+       * something lower than it already is would silently do nothing, and a
+       * control that does nothing is worse than one that is absent. */
+      int v = state.rcBlMax, m = state.rcBlMins;
+      if (m < 1) m = 1;
+      if (m > 120) m = 120;
+      if (v >= NOCT_BRIGHT_MAX && v <= 255) {
+        display.forceFor((uint8_t)v, (unsigned long)m * 60000UL);
+        char t[48];
+        snprintf(t, sizeof(t), "подсветка %d на %d мин", v, m);
+        sceneMgr.toast(t);
+        Serial.printf("[BL] forced to %d for %d min (panel)\n", v, m);
+      } else {
+        sceneMgr.toast("вне диапазона");
+      }
+      state.rcBlMax = -1;
+    }
     if (state.rcZbDump > 0) {
       /* Same rule as the console path: the walk starts only once the
        * receiver has been told a transfer is opening. */
@@ -1341,7 +1374,8 @@ void loop() {
                   state.boardFps, state.heapFreeKb, state.heapMinKb,
                   state.heapLargestKb, state.uptimeSec, state.cpuMhz,
                   state.link.rssi, state.boot.bootCount, state.boot.faultCount,
-                  state.boot.reasonText);
+                  state.boot.reasonText, state.blNow, state.blCap,
+                  state.blThermal, state.blForceLeft);
   }
 
   /* Hub state upstream, so the panel's "check connection" shows the board's

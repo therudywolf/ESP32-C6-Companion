@@ -61,10 +61,15 @@ public:
   /* The board's own vitals. It watches a PC all day and had no way to say
    * how IT was doing — die temperature, loop duty cycle, heap, uptime and
    * the restart counters that turn a silent self-heal into a number. */
+  /* blNow/blCap/blThermal/blForceLeft are appended at the END: a server on
+   * an older build splits on the first twelve fields and ignores the rest,
+   * which is why this line has always grown rightwards and never in the
+   * middle. */
   void sendBoard(float temp, float tempMax, int load, int fps, int heapFree,
                  int heapMin, int heapLargest, unsigned long uptime,
                  int cpuMhz, int rssi, unsigned long boots,
-                 unsigned long faults, const char *reason);
+                 unsigned long faults, const char *reason, int blNow = 0,
+                 int blCap = 0, int blThermal = 0, int blForceLeft = 0);
   /* Report the SD card's health upstream. The board is the only thing that can
    * see the card, and "the archive has a hole in it" is discovered months
    * later unless the failures are visible while they happen. */
