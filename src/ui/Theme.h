@@ -134,6 +134,57 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h,
            const char *title = nullptr, uint16_t color = ORANGE_DIM,
            uint16_t titleColor = ORANGE);
 
+/* ── the second grammar: surfaces instead of outlines ────────────────────
+ *
+ * panel() draws information as LINES ON EMPTINESS - a contour with the label
+ * punched through its top edge. That is the oscilloscope look and it is fine,
+ * but it has one real weakness here: with 22 palettes and a colour editor, a
+ * contour on a LIGHT background either vanishes or cuts, and there is no
+ * single line colour that works for both. A filled surface works for both,
+ * because the separation is carried by TONE rather than by a stroke.
+ */
+
+/* The raised surface, and the label colour that survives on it. Both derived
+ * from the palette when it changes, not stored in it.
+ *
+ * Derived on purpose: a palette FIELD would have to be filled in for all 22
+ * presets, for the eight that live on the card, AND for whatever colour the
+ * owner mixes by hand in the editor - and that last one is exactly the case a
+ * hardcoded field gets wrong.
+ *
+ * TWO values, not one, because the requirements pull opposite ways: the tile
+ * has to separate from the background (lift up) while the label has to stay
+ * readable on the tile (lift down). A numeric sweep across all 22 presets
+ * found NO single lift that satisfies both using the global DIM - five
+ * palettes had no workable value at any lift. So the lift answers visibility
+ * and SURFACE_DIM answers readability, each solved against its own bar. */
+extern uint16_t SURFACE;     /* material tile fill */
+extern uint16_t SURFACE_DIM; /* label ON a tile — never plain DIM */
+
+/* The rectangle a tile leaves for its contents. Returned rather than assumed,
+ * because the label now lives INSIDE the surface and eats the first rows -
+ * a screen that positions its text from the tile's own x/y would draw it
+ * straight through the label. */
+struct Rect {
+  int x, y, w, h;
+};
+
+/* Material-style tile: filled, rounded, label inside, no outline at all.
+ * Returns the content rectangle. */
+Rect panelM(LGFX_Sprite &g, int x, int y, int w, int h,
+            const char *title = nullptr, uint16_t titleColor = 0);
+
+/* Everything on a material screen sits on a 4 px grid. Small screen, so 4
+ * rather than Material's 8: at 172 px tall an 8 px rhythm spends a quarter of
+ * the height on air. */
+/* Split by axis, and both still on the grid. A uniform 8 costs 16 px of every
+ * tile's height, and on a 172 px screen carrying four tiles that is a whole
+ * row of text spent on air - which is exactly how the forecast strip ended up
+ * with its second line printed through the descenders of its first. */
+static const int MPADX = 8;  /* left and right inside a tile */
+static const int MPADY = 4;  /* top and bottom */
+static const int MGAP = 4;   /* between tiles */
+
 /* Horizontal stat bar: frame + dithered fill + solid tip. */
 void hBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color);
 

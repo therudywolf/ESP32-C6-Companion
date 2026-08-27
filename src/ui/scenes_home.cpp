@@ -156,145 +156,165 @@ void drawHome(UiCtx &ui) {
                   ? barometer::classify(ui.st.zbPress10Delta3h, 3)
                   : barometer::TEND_UNKNOWN;
 
-  /* Laid out on the CPU screen's grid, tile for tile: a tall hero on the left,
-   * two stacked tiles on the right, one full-width strip along the bottom.
-   * Same rhythm means the eye already knows where to look after ОБЗОР or CPU —
-   * a screen that invents its own composition costs the reader a moment every
-   * time it comes round the ring. */
+  /* Surfaces, not outlines. Four tiles on a 4 px grid, and ONE display-sized
+   * number on the whole screen.
+   *
+   * That last rule is the actual change. This screen used to run the
+   * temperature at 64 px AND the humidity at double-size, and two numbers that
+   * large read as an argument rather than as a reading - the eye lands
+   * somewhere different every time the screen comes round. Temperature keeps
+   * the display role because it is the one number this room is consulted for;
+   * everything else drops a step in the scale and becomes legible AS
+   * secondary, which it always was.
+   *
+   *   4                 144 148                      316
+   *   +-----------------+ +-------------------------+  26
+   *   | температура     | | влажность               |
+   *   |                 | +-------------------------+  78
+   *   |    24,5 C       | | давление     батарея    |
+   *   +-----------------+ +-------------------------+ 126
+   *   +-------------------------------------------+   130
+   *   | forecast, then the evidence under it       |
+   *   +-------------------------------------------+   170
+   */
 
-  /* ── left, tall: the temperature ─────────────────────────────────────── */
-  panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
+  /* ── left, tall: the temperature, the one display element ────────────── */
   {
-    uint16_t c = TEXT;
+    Rect c = panelM(g, 4, 26, 140, 92, "температура");
+    uint16_t col = TEXT;
     if (!stale && s.zbAlert) {
-      if (s.zbTempMax < 99 && z.temp10 > s.zbTempMax * 10) c = CRIT;
-      else if (s.zbTempMin > -99 && z.temp10 < s.zbTempMin * 10) c = INFO;
+      if (s.zbTempMax < 99 && z.temp10 > s.zbTempMax * 10) col = CRIT;
+      else if (s.zbTempMin > -99 && z.temp10 < s.zbTempMin * 10) col = INFO;
     }
-    if (stale) c = DIM;
+    if (stale) col = DIM;
     if (z.temp10 != -32768) {
       int whole = z.temp10 / 10, frac = z.temp10 % 10;
       if (frac < 0) frac = -frac;
       char f[8];
       snprintf(v, sizeof(v), "%d", whole);
       snprintf(f, sizeof(f), ",%d", frac);
-      hero(g, 14, 36, v, f, "C", c);
+      hero(g, c.x, c.y + 6, v, f, "C", col);
     } else {
       g.setFont(&F_BIG);
-      textAt(g, 14, 56, "-", DIM);
+      textAt(g, c.x, c.y + 24, "-", DIM);
     }
-    trendArrow(g, 118, 32, ui.gr.zbTemp, 6, 2);
+    trendArrow(g, c.x + c.w - 10, c.y, ui.gr.zbTemp, 6, 2);
   }
 
-  /* ── right upper: humidity, with its own trend ───────────────────────── */
-  panel(g, 140, 26, 176, 50, "ВЛАЖНОСТЬ");
+  /* ── right upper: humidity, dropped from display to title ────────────── */
   {
+    Rect c = panelM(g, 148, 26, 168, 44, "влажность");
     if (z.humidity >= 0) {
-      uint16_t c = INFO;
+      uint16_t col = INFO;
       if (!stale && s.zbAlert) {
-        if (s.zbHumMax <= 100 && z.humidity > s.zbHumMax) c = CRIT;
-        else if (s.zbHumMin >= 0 && z.humidity < s.zbHumMin) c = WARN;
+        if (s.zbHumMax <= 100 && z.humidity > s.zbHumMax) col = CRIT;
+        else if (s.zbHumMin >= 0 && z.humidity < s.zbHumMin) col = WARN;
       }
-      if (stale) c = DIM;
-      g.setFont(&F_VALUE);
-      g.setTextSize(2);
+      if (stale) col = DIM;
+      g.setFont(&F_BIG);
       snprintf(v, sizeof(v), "%d%%", z.humidity);
-      textAt(g, 148, 36, v, c);
-      g.setTextSize(1);
-      trendArrow(g, 218, 34, ui.gr.zbHum, 6, 2);
+      textAt(g, c.x, c.y, v, col);
+      int nw = g.textWidth(v);
+      trendArrow(g, c.x + nw + 6, c.y, ui.gr.zbHum, 5, 2);
       /* Only once there is a line to draw. sparkline() frames itself before
-       * it checks whether it has points, which is invisible on the PC screens
-       * - those fill at 1 Hz - but this sensor reports about every fifty
-       * minutes, so an empty rectangle would sit here for the first hour
-       * after every boot looking like a broken widget. Say what it is
-       * instead: the graph is waiting, not missing. */
+       * it checks whether it has points, so an empty rectangle would sit here
+       * for the first hour after every boot looking like a broken widget. */
+      int sx = c.x + nw + 20;
       if (ui.gr.zbHum.count >= 2) {
-        sparkline(g, 232, 34, 76, 34, ui.gr.zbHum, stale ? DIM : INFO);
+        sparkline(g, sx, c.y - 2, c.x + c.w - sx, c.h + 2,
+                  ui.gr.zbHum, stale ? DIM : INFO);
       } else {
-        /* F_TEXT rather than F_SMALL: this is the tile explaining itself,
-         * and an explanation nobody can read is worse than an empty box,
-         * because it looks like it said something. */
         g.setFont(&F_TEXT);
-        textAt(g, 236, 44, "график", DIM);
-        textAt(g, 236, 58, "копится", DIM);
+        textAt(g, sx, c.y + 4, "график копится", DIM);
       }
     } else {
       g.setFont(&F_BIG);
-      textAt(g, 148, 38, "-", DIM);
+      textAt(g, c.x, c.y, "-", DIM);
     }
   }
 
   /* ── right lower: the two secondary numbers ──────────────────────────── */
-  panel(g, 140, 82, 176, 32, "ДАВЛЕНИЕ / БАТАРЕЯ");
   {
+    Rect c = panelM(g, 148, 74, 168, 44, "давление / батарея");
     if (z.pressure > 0) {
-      /* Pressure is the one reading here that is about the OUTDOORS — a
-       * building leaks, so the needle tracks the atmosphere. mmHg because that
-       * is the unit a Russian forecast quotes. */
+      /* Pressure is the one reading here that is about the OUTDOORS - a
+       * building leaks, so the needle tracks the atmosphere. mmHg because
+       * that is the unit a Russian forecast quotes. */
       snprintf(v, sizeof(v), "%d", (z.pressure * 3) / 4);
       uint16_t pc = tend == barometer::TEND_FALL_FAST   ? WARN
                     : tend == barometer::TEND_RISE_FAST ? INFO
                                                         : TEXT;
-      bigVal(g, 148, 86, v, "мм", stale ? DIM : pc);
+      bigVal(g, c.x, c.y, v, "мм", stale ? DIM : pc);
     }
     if (z.battery >= 0) {
       bool lowBat = s.zbBattMin > 0 && z.battery <= s.zbBattMin;
       snprintf(v, sizeof(v), "%d", z.battery);
-      bigVal(g, 308, 86, v, "%", stale ? DIM : (lowBat ? CRIT : TEXT), true);
+      bigVal(g, c.x + c.w, c.y, v, "%",
+             stale ? DIM : (lowBat ? CRIT : TEXT), true);
     }
   }
 
   /* ── bottom, full width: what the sky is doing, and how fresh this is ─── */
-  /* The tab carries the trend window so a long press has feedback that
-   * outlives the toast. */
-  const char *strip = ui.homeMode == 1   ? "ПРОГНОЗ / СУТКИ"
-                      : ui.homeMode == 2 ? "ПРОГНОЗ / НЕДЕЛЯ"
-                                         : "ПРОГНОЗ / БАРОМЕТР";
-  panel(g, 4, 120, 312, 48, strip);
   {
-    /* The claim gets the arrow and the big type; the evidence goes small
-     * underneath. Before, both rows were the same weight and the strip read as
-     * two unrelated captions rather than as a statement with its reason. */
+    /* No label on this one. "ПРОГНОЗ" above an arrow and the sentence
+     * "Погода без перемен" was a caption introducing something that already
+     * introduces itself, and the row it cost is the row the evidence needs.
+     * The trend window moves to the right of the claim, where it is still
+     * feedback for the long press but is not spending a line of its own. */
+    Rect c = panelM(g, 4, 122, 312, 48);
     const char *line = nullptr;
     uint16_t lc = TEXT;
-    int ax = 12;
+    int ax = c.x;
     if (ui.st.zbTrendOk) {
       line = barometer::forecast(tend);
-      lc = barometer::headacheWatch(tend) ? WARN
+      lc = barometer::headacheWatch(tend)   ? WARN
            : tend == barometer::TEND_RISE_FAST ? INFO
                                                : TEXT;
-      ax += baroArrow(g, 12, 130, barometer::direction(tend),
+      ax += baroArrow(g, c.x, c.y + 4, barometer::direction(tend),
                       barometer::isSharp(tend), stale ? DIM : lc);
     } else {
-      /* No trend yet is not "steady" — say which, or the screen claims the
+      /* No trend yet is not "steady" - say which, or the screen claims the
        * weather is settled when it simply has not been watching long enough. */
-      line = "Барометр копит историю";
+      line = "Барометр "
+             "копит "
+             "историю";
       lc = DIM;
     }
+    const char *win = ui.homeMode == 1   ? "сутки"
+                      : ui.homeMode == 2 ? "неделя"
+                                         : "барограф";
+    g.setFont(&F_TEXT);
+    int ww = g.textWidth(win);
+    textRight(g, c.x + c.w, c.y, win, DIM);
+
     g.setFont(&F_MED);
     g.setTextSize(1);
     char clipped[48];
-    clipW(g, line, clipped, sizeof(clipped), 306 - ax);
-    textAt(g, ax, 126, clipped, stale ? DIM : lc);
+    clipW(g, line, clipped, sizeof(clipped), c.x + c.w - ax - ww - 8);
+    textAt(g, ax, c.y, clipped, stale ? DIM : lc);
 
-    /* Second row: the sensor, its freshness, and the 3-hour delta that the
-     * forecast above was derived from — the claim and its evidence together. */
+    /* Second row: the sensor, its freshness, and the 3-hour delta the claim
+     * above was derived from - the statement and its evidence together. */
     g.setFont(&F_TEXT);
     char age[40];
     fmtAge(z, age, sizeof(age));
-    textAt(g, 12, 150, z.name[0] ? z.name : NOCT_ZB_NET_NAME,
+    int y2 = c.y + c.h - 10;
+    textAt(g, c.x, y2, z.name[0] ? z.name : NOCT_ZB_NET_NAME,
            stale ? DIM : ORANGE);
     if (ui.st.zbTrendOk) {
       int dp = ui.st.zbPress10Delta3h;
-      snprintf(v, sizeof(v), "%+d.%d гПа/3ч", dp / 10, abs(dp % 10));
-      textAt(g, 120, 150, v, DIM);
+      snprintf(v, sizeof(v), "%+d.%d гПа/3ч",
+               dp / 10, abs(dp % 10));
+      textAt(g, c.x + 116, y2, v, DIM);
     }
-    textRight(g, 308, 150, age, stale ? CRIT : DIM);
+    textRight(g, c.x + c.w, y2, age, stale ? CRIT : DIM);
   }
 
   /* More sensors than this screen shows: say so rather than hide them. */
   if (ui.st.zb.count > 1) {
     g.setFont(&F_SMALL);
-    snprintf(v, sizeof(v), "+%d на ПОГОДЕ", ui.st.zb.count - 1);
+    snprintf(v, sizeof(v), "+%d на ПОГОДЕ",
+             ui.st.zb.count - 1);
     textRight(g, NOCT_W - 8, 22, v, DIM);
   }
 }
