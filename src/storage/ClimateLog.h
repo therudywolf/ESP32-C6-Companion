@@ -110,7 +110,22 @@ public:
                    int &pHum, int &pPress);
 
   bool exportBegin(int days);
-  bool exportActive() const { return exDays_ > 0; }
+  /* "There is more to send", which is NOT "there are more files". Files and
+   * rows run out at different moments: exportLoadDay() zeroes exDays_ BEFORE
+   * it reads the last file, so between that store and the last row of that
+   * file, exDays_ is 0 while the whole day is still sitting in exBuf_.
+   *
+   * Reading exDays_ alone here meant the caller was told the transfer had
+   * finished the instant the final file was opened. The pump drains at most
+   * twenty rows per tick and then asks this question; the answer sent the END
+   * line, and everything past row twenty of the LAST day was abandoned - the
+   * current day, every time, which is the only part nobody has a copy of yet.
+   * A mirror ran on every reconnect and was silently truncated to the small
+   * hours of the morning. Must agree with exportNextRow's own end condition,
+   * which is exactly this. */
+  bool exportActive() const {
+    return exDays_ > 0 || exPos_ < (int)exBuf_.length() || exOff_ < exSize_;
+  }
   /* One row as "YYYY-MM-DD,HH:MM,temp_c,rh,bat,press_hpa" — the date is
    * prefixed because a bare HH:MM cannot be placed in time by the reader.
    * False when the walk is finished. */
@@ -121,6 +136,8 @@ public:
 
 private:
   bool exportLoadDay();
+  /* One window of `path` at exOff_, trimmed to whole lines, into exBuf_. */
+  bool exportTakeWindow(const char *path);
 
   SdStore *sd_ = nullptr;
   char lastDate_[12] = {0};
@@ -130,6 +147,10 @@ private:
   int exDays_ = 0, exDay_ = 0, exRows_ = 0;
   String exBuf_;
   int exPos_ = 0;
+  /* Where the current day's file has been read up to, and how long it is.
+   * A day is walked in WINDOWS: one 4 KB read per day used to be the whole
+   * of it, so every file past the cap shipped only its newest 4 KB. */
+  size_t exOff_ = 0, exSize_ = 0;
   char exDate_[12] = {0};
 };
 

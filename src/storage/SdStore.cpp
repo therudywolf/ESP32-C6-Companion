@@ -185,6 +185,41 @@ bool SdStore::readAll(const char *path, String &out, size_t maxBytes) {
   return track("read", t0, true);
 }
 
+bool SdStore::readWindow(const char *path, String &out, size_t offset,
+                         size_t maxBytes, size_t *total) {
+  if (!ok_) return false;
+  sync();
+  unsigned long t0 = millis();
+  if (total) *total = 0;
+  if (!SD.exists(path)) return false;
+  File f = SD.open(path, FILE_READ);
+  if (!f) return false;
+  size_t size = f.size();
+  if (total) *total = size;
+  out = "";
+  if (offset >= size) {
+    f.close();
+    return track("read", t0, true); /* past the end is empty, not an error */
+  }
+  f.seek(offset);
+  size_t want = size - offset;
+  if (want > maxBytes) want = maxBytes;
+  out.reserve(want + 1);
+  /* Chunked rather than readString(): readString runs to EOF and would drag
+   * the whole file in, which is the exact thing the window exists to avoid.
+   * A small stack buffer keeps the peak at one copy instead of two. */
+  char chunk[256];
+  while (want) {
+    size_t n = want < sizeof(chunk) ? want : sizeof(chunk);
+    int got = f.read((uint8_t *)chunk, n);
+    if (got <= 0) break;
+    out.concat(chunk, (unsigned int)got);
+    want -= (size_t)got;
+  }
+  f.close();
+  return track("read", t0, true);
+}
+
 bool SdStore::readLastLines(const char *path, int n, String &out,
                             size_t maxBytes) {
   String all;
