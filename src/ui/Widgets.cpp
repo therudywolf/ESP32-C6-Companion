@@ -7,6 +7,13 @@ using namespace theme;
 
 namespace widgets {
 
+void fmtRateMb(char *out, size_t cap, int kbs) {
+  if (kbs >= 10240)
+    snprintf(out, cap, "%d", kbs / 1024);
+  else
+    snprintf(out, cap, "%d.%d", kbs / 1024, (kbs % 1024) * 10 / 1024);
+}
+
 void fmtRate(char *out, size_t cap, int kbs) {
   if (kbs >= 10000)
     snprintf(out, cap, "%d.%dM", kbs / 1024, (kbs % 1024) * 10 / 1024);

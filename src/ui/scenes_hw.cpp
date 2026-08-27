@@ -240,23 +240,34 @@ void drawDisks(UiCtx &ui) {
     textAt(g, 150, y, v, TEXT);
     snprintf(v, sizeof(v), "%dC", d.temp);
     textRight(g, 314, y, v, tempColor(d.temp, 45, 55));
-    hBar(g, 30, y + 18, 284, 10, pct, pctColor(pct)); /* y+18..y+28 */
+    /* y+20, не y+18: строка ёмкости содержит косую черту, а она свисает
+     * под базовую линию, и полоса срезала ей хвост на два ряда. */
+    hBar(g, 30, y + 20, 284, 8, pct, pctColor(pct)); /* y+20..y+27 */
   }
 
-  /* disk I/O across the freed bottom band (y148..170) */
-  /* 24 rather than 22: F_MED writes 20 rows and the slash in "K/s" uses the
-   * descent, so a 22 px tile clipped the stroke against its own frame. */
-  panel(g, 4, 146, 312, 24, "ДИСКОВЫЙ ОБМЕН");
-  g.setFont(&F_MED);
+  /* Disk I/O along the bottom, as a RULE rather than a tile.
+   *
+   * A tile costs a label row, and panel() draws that label as a background
+   * wipe three rows above its own top edge — on a 172 px screen with the
+   * fourth bar ending at 143 there is nowhere to put it that does not erase
+   * something. The rule says the same thing in one pixel.
+   *
+   * MB/s rather than KB/s: this is an NVMe, and four or five digits of
+   * kilobytes is a number nobody reads as a speed. */
+  g.drawFastHLine(8, 146, NOCT_W - 16, ORANGE_DIM);
   char r1[12], r2[12];
-  fmtRate(r1, sizeof(r1), hw.dr);
-  fmtRate(r2, sizeof(r2), hw.dw);
-  g.fillTriangle(12, 154, 22, 154, 17, 163, INFO);
-  snprintf(v, sizeof(v), "%s/s", r1);
-  textAt(g, 26, inkY(INK_MED, 149, 18), v, INFO);
-  g.fillTriangle(172, 163, 182, 163, 177, 154, WARN);
-  snprintf(v, sizeof(v), "%s/s", r2);
-  textAt(g, 186, inkY(INK_MED, 149, 18), v, WARN);
+  fmtRateMb(r1, sizeof(r1), hw.dr);
+  fmtRateMb(r2, sizeof(r2), hw.dw);
+  const int ioY = inkY(INK_MED, 150, 20);
+  g.setFont(&F_MED);
+  g.fillTriangle(12, 154, 22, 154, 17, 162, INFO);
+  snprintf(v, sizeof(v), "%s", r1);
+  textAt(g, 28, ioY, v, INFO);
+  g.fillTriangle(172, 162, 182, 162, 177, 154, WARN);
+  snprintf(v, sizeof(v), "%s", r2);
+  textAt(g, 188, ioY, v, WARN);
+  g.setFont(&F_TEXT);
+  textRight(g, NOCT_W - 8, ioY + 5, "МБ/с", DIM);
 }
 
 void drawFans(UiCtx &ui) {
@@ -364,13 +375,16 @@ void drawNet(UiCtx &ui) {
 
   panel(g, 4, 26, 156, 60, "ВХОДЯЩИЙ");
   fmtRate(r, sizeof(r), hw.nd);
-  bigVal(g, 14, 33, 50, r, "Б/с", INFO);   /* плитка 26..85 */
-  sparkline(g, 14, 64, 134, 18, ui.gr.netDown, INFO, 1000);
+  /* Плитка 26..85. Значению нужно 24 ряда чернил, графику 18 — вместе с
+   * зазором это ровно то, что есть, но полоса в 50 рядов под значение
+   * опускала его чернила на шесть рядов в график. */
+  bigVal(g, 14, 30, 26, r, "Б/с", INFO);
+  sparkline(g, 14, 60, 134, 18, ui.gr.netDown, INFO, 1000);
 
   panel(g, 164, 26, 152, 60, "ИСХОДЯЩИЙ");
   fmtRate(r, sizeof(r), hw.nu);
-  bigVal(g, 174, 33, 50, r, "Б/с", GOOD);
-  sparkline(g, 174, 64, 132, 18, ui.gr.netUp, GOOD, 200);
+  bigVal(g, 174, 30, 26, r, "Б/с", GOOD);
+  sparkline(g, 174, 60, 132, 18, ui.gr.netUp, GOOD, 200);
 
   /* bottom panels grown into the freed band (y94..168), spacing fixed so the
    * RSSI line and the server line no longer overlap */

@@ -79,6 +79,9 @@ void weatherIcon(LGFX_Sprite &g, int cx, int cy, int r, int wmo,
 
 /* kb/s humanizer: "1.2M" / "850K". */
 void fmtRate(char *out, size_t cap, int kbs);
+/* Same input, but read as MB/s. A disk that does 400 000 KB/s prints five
+ * digits nobody parses as a speed; 390 does. */
+void fmtRateMb(char *out, size_t cap, int kbs);
 
 /* Tiny 8px trend caret from a rolling graph: up (rising, amber) / down
  * (falling, green) / flat (dim dash). Blinks red/cyan when the recent change
