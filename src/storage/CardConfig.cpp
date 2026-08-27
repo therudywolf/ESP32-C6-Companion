@@ -81,10 +81,6 @@ void CardConfig::apply(const String &section, const String &key,
     if (key == "skin") { skin_ = val; applied_++; }
     return;
   }
-  if (section == "pc") {
-    if (key == "mac") { pcMac_ = val; applied_++; }
-    return;
-  }
 }
 
 bool CardConfig::load(SdStore *sd) {
@@ -203,17 +199,3 @@ bool CardConfig::setZbName(SdStore *sd, int i, const String &name) {
   return ok;
 }
 
-bool CardConfig::setPcMac(SdStore *sd, const String &mac) {
-  pcMac_ = mac;
-  pcMac_.trim();
-  String body;
-  if (pcMac_.length()) {
-    body += "mac=";
-    body += pcMac_;
-    body += "\n";
-  }
-  bool ok = rewriteSection(sd, "pc", body);
-  Serial.printf("[CFG] PC mac '%s'%s\n", pcMac_.c_str(),
-                ok ? " (saved)" : " (NOT saved)");
-  return ok;
-}

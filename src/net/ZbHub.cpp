@@ -47,17 +47,8 @@ struct Slot {
   int humidity = -1;
   int battery = -1;
   int pressure = -1;
-  int lux = -1;
   unsigned long tempAt = 0; /* millis of the last report, 0 = never */
   unsigned long humAt = 0;
-  /* The RTCGQ11LM measures light only when it wakes to report motion, so a
-   * lux stamp is a second proof of life for a device that has no temperature
-   * to prove it with. */
-  unsigned long luxAt = 0;
-  /* The RTCGQ11LM only ever reports "occupied": Aqara firmware never sends a
-   * clear, so 0 legitimately means "booted, nothing seen yet" and is not
-   * confused with "no motion" the way tempAt/humAt's 0 works above. */
-  unsigned long motionAt = 0;
 };
 
 Slot gSlots[ZigbeeData::kMax];
@@ -116,16 +107,6 @@ public:
      * be sending a number nobody ever asked to hear. */
     esp_zb_cluster_list_add_pressure_meas_cluster(
         _cluster_list, esp_zb_pressure_meas_cluster_create(NULL),
-        ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-    /* Both clusters below are what the RTCGQ11LM motion+illuminance sensor
-     * speaks. One endpoint serves every sensor kind: which cluster a given
-     * device actually reports on is up to that device, not to how many
-     * clusters this sink declares. */
-    esp_zb_cluster_list_add_occupancy_sensing_cluster(
-        _cluster_list, esp_zb_occupancy_sensing_cluster_create(NULL),
-        ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-    esp_zb_cluster_list_add_illuminance_meas_cluster(
-        _cluster_list, esp_zb_illuminance_meas_cluster_create(NULL),
         ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
     esp_zb_cluster_list_add_power_config_cluster(
         _cluster_list, esp_zb_power_config_cluster_create(NULL),
@@ -191,34 +172,6 @@ public:
           s->pressure = hpa;
           gDirty = true;
         }
-      }
-    } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_OCCUPANCY_SENSING &&
-               attribute->id ==
-                   ESP_ZB_ZCL_ATTR_OCCUPANCY_SENSING_OCCUPANCY_ID &&
-               attribute->data.value) {
-      /* Bitmap8, bit 0 = occupied. The RTCGQ11LM never clears it — Aqara
-       * firmware has no "unoccupied" report at all, only silence — so the
-       * only fact worth latching is WHEN motion was last seen. */
-      uint8_t raw = *(uint8_t *)attribute->data.value;
-      if (raw & 0x01) {
-        s->motionAt = millis();
-        gDirty = true;
-      }
-    } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_ILLUMINANCE_MEASUREMENT &&
-               attribute->id ==
-                   ESP_ZB_ZCL_ATTR_ILLUMINANCE_MEASUREMENT_MEASURED_VALUE_ID &&
-               attribute->data.type == ESP_ZB_ZCL_ATTR_TYPE_U16 &&
-               attribute->data.value) {
-      uint16_t raw = *(uint16_t *)attribute->data.value;
-      /* The compliant ZCL formula is lux = 10^((raw-1)/10000), but Aqara's
-       * own motion sensors report raw lux directly — Zigbee2MQTT's converter
-       * treats it exactly this way, and a log-scale reading would put a
-       * dim room at "1 lux" and a bright one at "4". 0xFFFF is the ZCL
-       * "invalid" marker. */
-      if (raw != 0xFFFF) {
-        s->lux = raw;
-        s->luxAt = millis();
-        gDirty = true;
       }
     } else if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_BASIC &&
                attribute->id == 0xFF01 && attribute->data.value &&
@@ -390,17 +343,6 @@ const PollTarget kPoll[] = {
     /* pressure is S16 in whole hPa: 1 = 1 hPa, the smallest it can express */
     {ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT, 0x0000,
      ESP_ZB_ZCL_ATTR_TYPE_S16, 1, true},
-    /* illuminance is U16 raw lux (see the attribute handler): 10 lux is
-     * worth a message, a flickering shadow is not. */
-    {ESP_ZB_ZCL_CLUSTER_ID_ILLUMINANCE_MEASUREMENT, 0x0000,
-     ESP_ZB_ZCL_ATTR_TYPE_U16, 10, true},
-    /* occupancy is bitmap8 - DISCRETE. This is the attribute the null-pointer
-     * crash was about: an analog reportable_change on a discrete type is not
-     * merely optional, the pointer must not be given at all, so analog=false
-     * here means "leave reportable_change null", the one case where null is
-     * correct rather than fatal. */
-    {ESP_ZB_ZCL_CLUSTER_ID_OCCUPANCY_SENSING, 0x0000,
-     ESP_ZB_ZCL_ATTR_TYPE_8BITMAP, 0, false},
 };
 } // namespace
 
@@ -483,12 +425,12 @@ bool ZbHub::setReportInterval(int minSec, int maxSec) {
 }
 
 void ZbHub::debugSlots() {
-  Serial.println("  slot  addr    ep   t10    rh   bat  press   lux");
+  Serial.println("  slot  addr    ep   t10    rh   bat  press");
   for (int i = 0; i < ZigbeeData::kMax; i++) {
     const Slot &s = gSlots[i];
     if (s.addr == 0xFFFF) continue;
-    Serial.printf("   %d   0x%04X  %3d %6d %5d %5d %6d %5d\n", i, s.addr, s.ep,
-                  s.temp10, s.humidity, s.battery, s.pressure, s.lux);
+    Serial.printf("   %d   0x%04X  %3d %6d %5d %5d %6d\n", i, s.addr, s.ep,
+                  s.temp10, s.humidity, s.battery, s.pressure);
   }
 }
 
@@ -498,8 +440,6 @@ int ZbHub::lastHeardSec(unsigned long now) const {
     if (s.addr == 0xFFFF) continue;
     if (s.tempAt > newest) newest = s.tempAt;
     if (s.humAt > newest) newest = s.humAt;
-    if (s.motionAt > newest) newest = s.motionAt;
-    if (s.luxAt > newest) newest = s.luxAt;
   }
   return newest ? (int)((now - newest) / 1000UL) : -1;
 }
@@ -543,20 +483,11 @@ void ZbHub::tick(unsigned long now, AppState &st, Graphs &g) {
     out.humidity = s.humidity;
     out.battery = s.battery;
     out.pressure = s.pressure;
-    out.lux = s.lux;
-    /* Seconds since motion was last seen. Never a "no motion" verdict: the
-     * device cannot report one, so the cutoff belongs to whoever reads this. */
-    out.motionAgeSec = s.motionAt ? (int)((now - s.motionAt) / 1000UL) : -1;
-    /* Age from the freshest measurement of ANY kind this device sends. It
-     * used to consider temperature and humidity only, which is fine for a
-     * climate sensor and wrong for a motion sensor: an RTCGQ11LM has neither,
-     * so its age stayed -1 forever and every screen drew it as stale - dimmed
-     * and disbelieved seconds after it had actually reported. */
+    /* Age from the freshest measurement this device sends. A sensor that
+     * reports temperature but not humidity is still alive. */
     unsigned long newest = 0;
     if (s.tempAt > newest) newest = s.tempAt;
     if (s.humAt > newest) newest = s.humAt;
-    if (s.motionAt > newest) newest = s.motionAt;
-    if (s.luxAt > newest) newest = s.luxAt;
     out.ageSec = newest ? (int)((now - newest) / 1000UL) : -1;
     n++;
   }
@@ -643,17 +574,11 @@ void ZbHub::restore() {
     restored++;
     if (gap < 0) {
       /* unknown age is honest; a fake one is not */
-      s.tempAt = s.humAt = s.motionAt = s.luxAt = 0;
+      s.tempAt = s.humAt = 0;
     } else {
       unsigned long back = (unsigned long)gap * 1000UL;
       s.tempAt = s.tempAt ? (millis() > back ? millis() - back : 1) : 0;
       s.humAt = s.humAt ? (millis() > back ? millis() - back : 1) : 0;
-      /* Motion survives a reboot the same way a temperature does. Without
-       * this rebase a restored motion stamp kept its pre-reboot millis and
-       * read as motion seen just now - the board would claim somebody walked
-       * past during the reboot it just performed. */
-      s.motionAt = s.motionAt ? (millis() > back ? millis() - back : 1) : 0;
-      s.luxAt = s.luxAt ? (millis() > back ? millis() - back : 1) : 0;
     }
   }
   if (restored)

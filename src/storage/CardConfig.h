@@ -57,18 +57,13 @@ public:
   }
   /* Rename a sensor slot and write the [zigbee] section back to the card, so
    * the name survives a reboot and a reflash the way every other card setting
-   * does. Needed because motion sensors make the NAME the reading: "движение
-   * 2 мин назад" is only useful once you know it was the hallway. Returns
+   * does. A sensor called "Спальня" is worth more than a short address
+   * nobody can read. Returns
    * false if there is no card to persist to - the in-memory name still
    * changes, so the screen updates either way. */
   bool setZbName(SdStore *sd, int i, const String &name);
 
-  /* The PC's wired MAC, for Wake-on-LAN. Empty when unset, and that is the
-   * only safe default: a magic packet aimed at a guess wakes somebody else's
-   * machine on the same subnet. Lives on the card next to the sensor names
-   * because it is site configuration, not a preference. */
-  const char *pcMac() const { return pcMac_.c_str(); }
-  bool setPcMac(SdStore *sd, const String &mac);
+
 
 private:
   void apply(const String &section, const String &key, const String &val);
@@ -87,7 +82,6 @@ private:
   uint16_t port_ = 0, panelPort_ = 0;
   int alarm_ = -1;
   String zbName_[5];
-  String pcMac_;
   bool loaded_ = false;
   int applied_ = 0;
 };

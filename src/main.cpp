@@ -45,8 +45,6 @@
 #include "storage/CardConfig.h"
 #include "core/Barometer.h"
 #include "core/ClimateAnalysis.h"
-#include "net/Presence.h"
-#include "net/WolClient.h"
 #include "storage/ClimateLog.h"
 #include "storage/SdStore.h"
 #include "ui/Display.h"
@@ -77,7 +75,6 @@ static SceneManager sceneMgr;
 static ZbHub zb;
 static ClimateAlert climate;
 static CardConfig cardCfg;
-static Presence presence;
 static Archive archive;
 static ClimateLog climateLog;
 static ClimateLog::Series climateSeries;
@@ -511,9 +508,6 @@ static void consoleExec(String line) {
         if (z.temp10 != -32768) Serial.printf(" %.1fC", z.temp10 / 10.0f);
         if (z.humidity >= 0) Serial.printf(" rh %d%%", z.humidity);
         if (z.pressure > 0) Serial.printf(" %d hPa", z.pressure);
-        if (z.lux >= 0) Serial.printf(" %d lx", z.lux);
-        if (z.motionAgeSec >= 0)
-          Serial.printf(" motion %ds ago", z.motionAgeSec);
         if (z.battery >= 0) Serial.printf(" bat %d%%", z.battery);
         Serial.printf(" age %ds\n", z.ageSec);
       }
@@ -669,41 +663,6 @@ static void consoleExec(String line) {
       sceneMgr.showTestCard((unsigned long)sec * 1000UL);
       Serial.printf("test card up for %ld s (testcard 0 to dismiss) - look at "
                     "the GLASS, not a screenshot\n", sec);
-    }
-  } else if (cmd == "wolmac") {
-    if (!arg.length()) {
-      const char *m = cardCfg.pcMac();
-      Serial.printf("PC mac: %s\n", (m && *m) ? m : "(not set)");
-      Serial.println("wolmac D8-5E-D3-54-9A-EF   (empty arg clears it)");
-    } else {
-      uint8_t probe[6];
-      String v = arg;
-      v.trim();
-      if (v == "-" || v == "clear") v = "";
-      if (v.length() && !wol::parseMac(v.c_str(), probe)) {
-        Serial.println("that is not a MAC - need six hex bytes");
-      } else {
-        cardCfg.setPcMac(&sd, v);
-      }
-    }
-  } else if (cmd == "wol") {
-    /* Fire one by hand. The answer is always about the PACKET: the machine
-     * being woken is by definition not listening, so nothing here can know
-     * whether it worked. */
-    uint8_t mac[6];
-    const char *m = cardCfg.pcMac();
-    if (!m || !*m) {
-      Serial.println("no PC mac set - see `wolmac`");
-    } else if (!wol::parseMac(m, mac)) {
-      Serial.printf("'%s' is not a MAC\n", m);
-    } else if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("no wifi to broadcast on");
-    } else {
-      IPAddress bc = wol::broadcastFor(WiFi.localIP(), WiFi.subnetMask());
-      bool ok = wol::send(mac, bc);
-      Serial.printf("magic packet for %s to %d.%d.%d.%d: %s\n", m, bc[0],
-                    bc[1], bc[2], bc[3], ok ? "sent" : "FAILED");
-      Serial.println("sent != woke: there is no acknowledgement to have");
     }
   } else if (cmd == "blmax") {
     /* blmax <211..255> [minutes] - lift the backlight cap temporarily.
@@ -905,7 +864,6 @@ void setup() {
   state.link.sdOk = sd.begin();
   /* Card overrides before anything reads a network or a host. */
   cardCfg.load(&sd);
-  presence.begin(&cardCfg);
   if (cardCfg.wifiCount() > 0) {
     activeNets = cardCfg.wifiNets();
     activeNetCount = cardCfg.wifiCount();
@@ -1219,10 +1177,6 @@ void loop() {
        * change; max = what the owner asked for. */
       zb.setReportInterval(state.rcZbInt / 10 + 1, state.rcZbInt);
       state.rcZbInt = -1;
-    }
-    if (state.rcPcWake >= 0) {
-      cfg.pcWake = state.rcPcWake != 0;
-      persist = true;
     }
     if (state.rcZbAlert >= 0) {
       cfg.zbAlert = state.rcZbAlert != 0;
@@ -1586,38 +1540,6 @@ void loop() {
   /* Thresholds the owner set in the panel; edge-triggered, hysteretic, and
    * deliberately silent while the sensor is stale. */
   climate.tick(now, state, brain, sceneMgr);
-  /* Somebody at the desk. Inert unless the owner switched it on. */
-  presence.tick(now, state, tcp, sceneMgr);
-
-  /* The day's presence, half an hour per bucket.
-   *
-   * Marked on a NEW report rather than on a fresh-looking age: motionAgeSec
-   * counts up, so "age < 60" stays true for a whole minute and would paint
-   * the bucket over and over. What marks an event is the age going DOWN.
-   * Same rule Presence uses, for the same reason. */
-  {
-    time_t nowT = time(nullptr);
-    if (nowT > 1700000000L) {
-      struct tm tmv;
-      if (localtime_r(&nowT, &tmv)) {
-        int bucket = (tmv.tm_hour * 60 + tmv.tm_min) / 30;
-        int seen = 0;
-        for (int i = 0; i < state.zb.count && seen < 2; i++) {
-          const ZbSensor &z = state.zb.list[i];
-          if (z.motionAgeSec < 0 && z.lux < 0) continue; /* not a PIR */
-          MotionDay &d = state.motionDay[seen];
-          d.advance(bucket);
-          int was = state.motionAgeWas[seen];
-          if (z.motionAgeSec >= 0 &&
-              ((was >= 0 && z.motionAgeSec < was) ||
-               (was < 0 && z.motionAgeSec <= 60)))
-            d.mark(bucket);
-          state.motionAgeWas[seen] = z.motionAgeSec;
-          seen++;
-        }
-      }
-    }
-  }
   /* One row per genuinely new reading, stamped with the wall clock. A
    * WSDCGQ11LM speaks on change plus roughly hourly, so this is 30-80 rows a
    * day — about 2 KB, under a megabyte a year. */
