@@ -112,7 +112,8 @@ void drawMedia(UiCtx &ui) {
       g.setClipRect(cx, cy, cw, shown); /* reveal from the top down */
       g.pushImage(cx, cy, cw, cw, ui.cover);
       g.clearClipRect();
-      g.drawFastHLine(cx, cy + shown, cw, ACCENT); /* sweeping reveal edge */
+      lintRect(LK_FRAME, cx, cy + shown, cw, 1, "линейка");
+  g.drawFastHLine(cx, cy + shown, cw, ACCENT); /* sweeping reveal edge */
     }
     g.setSwapBytes(sw);
     uint16_t frameC =
@@ -179,7 +180,9 @@ void drawMedia(UiCtx &ui) {
   reel(g, 100, 70, 20, angle, playing ? ORANGE : DIM);
   reel(g, 220, 70, 20, angle * 1.13f, playing ? ORANGE : DIM);
   /* tape between reels */
+  lintRect(LK_FRAME, 118, 86, 84, 1, "линейка");
   g.drawFastHLine(118, 86, 84, DIM);
+  lintRect(LK_FRAME, 118, 88, 84, 1, "линейка");
   g.drawFastHLine(118, 88, 84, ORANGE_DIM);
   /* window */
   g.drawRect(135, 56, 50, 18, DIM);
@@ -511,7 +514,8 @@ void drawForest(UiCtx &ui) {
          * across the empty bar — otherwise it is identical to a real 0%. */
         if (unknown) {
           int bw = (cw - 24) / 3 - 6;
-          g.drawFastHLine(bx + bw / 2 - 2, y + 30, 5, DIM);
+          lintRect(LK_FRAME, bx + bw / 2 - 2, y + 30, 5, 1, "линейка");
+  g.drawFastHLine(bx + bw / 2 - 2, y + 30, 5, DIM);
         }
       }
     }
@@ -580,7 +584,7 @@ void drawServices(UiCtx &ui) {
   snprintf(v, sizeof(v), "%d/%d", s.up, s.count);
   textCenter(g, 266, 118, v, s.up == s.count ? GOOD : CRIT);
   g.setFont(&F_TEXT);
-  textCenter(g, 266, 150, "онлайн", DIM);
+  textCenter(g, 266, 152, "онлайн", DIM);
 }
 
 /* ── EVENTS ──────────────────────────────────────────────────────────── */
@@ -750,7 +754,8 @@ void drawAchievements(UiCtx &ui) {
       for (int p = 0; p < lvl; p++) prev = Achievements::nextTier(id, prev);
       int span = (int)(next - prev), got = (int)(have - prev);
       int w = span > 0 ? 112 * got / span : 0;
-      if (w > 0) g.drawFastHLine(x, y + 13, w, ORANGE_DIM);
+      if (w > 0) lintRect(LK_FRAME, x, y + 13, w, 1, "линейка");
+  g.drawFastHLine(x, y + 13, w, ORANGE_DIM);
     }
   }
   g.setFont(&F_TEXT);

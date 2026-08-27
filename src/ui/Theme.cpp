@@ -648,7 +648,7 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
   lintClip(x, y - 6, w, h + 6);
   /* The four border LINES, one pixel each — not the tile's area. Registering
    * the area would make every value inside it a "collision". */
-  const int own = y * 512 + x + 1; /* unique per tile, never 0 */
+  const int own = lintOwner(x, y); /* unique per tile, never 0 */
   lintRectOwned(LK_FRAME, x, y, w, 1, "рамка+", own);
   lintRectOwned(LK_FRAME, x, y + h - 1, w, 1, "рамка-", own);
   lintRectOwned(LK_FRAME, x, y, 1, h, "рамка<", own);
@@ -1020,6 +1020,8 @@ void lintRect(int kind, int x, int y, int w, int h, const char *what) {
   lintRectOwned(kind, x, y, w, h, what, 0);
 }
 
+int lintOwner(int x, int y) { return y * 512 + x + 1; }
+
 /* Which pairs are a fault, and which are the design working.
  *
  * ART on ART is normal — a bar's fill sits in its own frame, a sparkline's
@@ -1075,6 +1077,7 @@ void lintResetOverlap() { lrN = 0; }
 #else
 void lintRect(int, int, int, int, int, const char *) {}
 void lintRectOwned(int, int, int, int, int, const char *, int) {}
+int lintOwner(int, int) { return 0; }
 void lintFrameEnd() {}
 #endif
 

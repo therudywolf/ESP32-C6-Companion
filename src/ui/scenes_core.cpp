@@ -387,8 +387,10 @@ void drawDash(UiCtx &ui) {
    * Placed by cursor offset before, which put the lower one's digits a pixel
    * through the tile's own frame — F_BIG writes 35 rows for 24 of ink, and
    * the offsets were chosen against the 24. */
-  const int nb = (t[3].h - 6) / 2;          /* half the interior */
-  const int ny1 = t[3].y + 3, ny2 = ny1 + nb;
+  /* +7, не +3: заливка вкладки ярлыка кончается на y+5, и первое значение
+   * начиналось под ней. */
+  const int nb = (t[3].h - 10) / 2;         /* half the interior */
+  const int ny1 = t[3].y + 7, ny2 = ny1 + nb;
   g.setFont(&F_BIG);
   int ty1 = inkY(INK_BIG, ny1, nb), ty2 = inkY(INK_BIG, ny2, nb);
   /* Arrows level with the ink they belong to, not with a fixed offset. */
@@ -409,7 +411,8 @@ void drawDash(UiCtx &ui) {
   /* freed bottom band: total power draw + hottest component (F_TEXT keeps the
    * line inside y171 — F_MED's 20px cell would clip past the screen edge) */
   if (uiOn(UI_STRIPS)) {
-    g.drawFastHLine(4, 153, NOCT_W - 8, ORANGE_DIM);
+    lintRect(LK_FRAME, 4, 153, NOCT_W - 8, 1, "линейка");
+  g.drawFastHLine(4, 153, NOCT_W - 8, ORANGE_DIM);
     g.setFont(&F_TEXT);
     g.setTextSize(1);
     snprintf(v, sizeof(v), "питание %d Вт", hw.pw);

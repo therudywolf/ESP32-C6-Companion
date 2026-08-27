@@ -307,6 +307,10 @@ void lintRect(int kind, int x, int y, int w, int h, const char *what);
 /* Same, but tagged as belonging to one tile's chrome — see LRect::own. */
 void lintRectOwned(int kind, int x, int y, int w, int h, const char *what,
                    int own);
+/* The owner id panel()/panelM() give a tile at (x, y). A scene that draws its
+ * own chrome onto a tile's frame on purpose — a counter sitting on the border
+ * the way a label tab does — tags it with this and the check stays quiet. */
+int lintOwner(int x, int y);
 /* Test the frame's registered rectangles and report collisions. */
 void lintFrameEnd();
 void lintClear();

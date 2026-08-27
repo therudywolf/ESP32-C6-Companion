@@ -165,6 +165,11 @@ void drawAnalysis(UiCtx &ui) {
       g.setFont(&F_TEXT);
       snprintf(v, sizeof(v), " еще %d ", st.zbFindCount - shown);
       int w = g.textWidth(v);
+      /* Tagged as this tile's own chrome: it sits ON its top border by
+       * design, exactly as a label tab does, and without the tag the overlap
+       * check reports the design as a fault on every frame. */
+      lintRectOwned(LK_FILL, 308 - w, 82, w, INK_TEXT.box, "еще",
+                    lintOwner(4, 86));
       g.fillRect(308 - w, 82, w, INK_TEXT.box, BG);
       textRight(g, 308, 82, v, DIM);
     }

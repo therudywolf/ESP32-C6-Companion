@@ -83,9 +83,12 @@ void drawCpu(UiCtx &ui) {
 
   panel(g, 140, 82, 176, 32, "КУЛЕР / ПИТАНИЕ");
   snprintf(v, sizeof(v), "%d", hw.fans[0]);
-  bigVal(g, 148, 85, 26, v, "RPM", TEXT);   /* плитка 82..113 */
+  /* 88, не 85. panel() рисует вкладку ярлыка заливкой на три ряда ВЫШЕ
+   * своего верха — здесь это ряды 79..87, — а чернила значения начинались
+   * на 86. Два ряда цифр стирались подложкой собственного заголовка. */
+  bigVal(g, 148, 88, 26, v, "RPM", TEXT);   /* плитка 82..113 */
   snprintf(v, sizeof(v), "%d", hw.pw);
-  bigVal(g, 308, 85, 26, v, "Вт", TEXT, true); /* не "W": в этом шрифте он читается как "ш" */
+  bigVal(g, 308, 88, 26, v, "Вт", TEXT, true); /* не "W": он читается как "ш" */
 
   /* grown into the freed bottom band: top-2 CPU processes + clock */
   panel(g, 4, 120, 312, 48, "ТОП ПРОЦЕССЫ / ТАКТ");
@@ -95,7 +98,9 @@ void drawCpu(UiCtx &ui) {
     if (!ui.st.process.cpuNames[i].length()) continue;
     snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[i].c_str(),
              ui.st.process.cpuPercent[i]);
-    textAt(g, 12, 128 + i * 20, v, i == 0 ? TEXT : DIM);
+    /* Шаг 19 от 126: при 20 от 128 вторая строка доставала выносными
+     * элементами до нижней рамки экрана. */
+    textAt(g, 12, 126 + i * 19, v, i == 0 ? TEXT : DIM);
   }
   snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
   bigVal(g, 306, 123, 42, v, "GHz", INFO, true); /* плитка 120..167 */
@@ -131,11 +136,13 @@ void drawGpu(UiCtx &ui) {
   /* grown into the freed bottom band: clock/power/hotspot + fan & mem clock */
   panel(g, 4, 120, 312, 48, "ТАКТ / ПИТАНИЕ / ГОР.ТОЧКА");
   snprintf(v, sizeof(v), "%d", hw.gclock);
-  bigVal(g, 14, 119, 26, v, "МГц", TEXT);  /* плитка 120..167 */
+  /* Плитка 120..167. Полоса 119 ставила чернила ровно на верхнюю рамку и
+   * под вкладку ярлыка; 124 уводит их внутрь, а подвал уходит ниже. */
+  bigVal(g, 14, 126, 26, v, "МГц", TEXT);  /* чернила 127..150 */
   snprintf(v, sizeof(v), "%d", hw.gtdp);
-  bigVal(g, 178, 119, 26, v, "Вт", TEXT);
+  bigVal(g, 178, 126, 26, v, "Вт", TEXT);
   snprintf(v, sizeof(v), "%d", hw.gh);
-  bigVal(g, 306, 119, 26, v, "C", tempColor(hw.gh, 85, 95), true);
+  bigVal(g, 306, 126, 26, v, "C", tempColor(hw.gh, 85, 95), true);
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   /* the literal alone is 38 B of UTF-8, so this needs its own wider buffer */
@@ -148,19 +155,19 @@ void drawGpu(UiCtx &ui) {
    * looked on the first attempt. */
   char foot[16];
   g.setFont(&F_TEXT);
-  textAt(g, 14, 158, "кулер", DIM);
+  textAt(g, 14, 155, "кулер", DIM);
   g.setFont(&F_VALUE);
   snprintf(foot, sizeof(foot), "%d", hw.gf);
-  textAt(g, 52, 154, foot, TEXT);
+  textAt(g, 52, 152, foot, TEXT);
   g.setFont(&F_TEXT);
-  textAt(g, 92, 158, "об/мин", DIM);
+  textAt(g, 92, 155, "об/мин", DIM);
   g.setFont(&F_TEXT);
-  textAt(g, 150, 158, "память", DIM);
+  textAt(g, 150, 155, "память", DIM);
   g.setFont(&F_VALUE);
   snprintf(foot, sizeof(foot), "%d", hw.vclock);
-  textAt(g, 198, 154, foot, TEXT);
+  textAt(g, 198, 152, foot, TEXT);
   g.setFont(&F_TEXT);
-  textAt(g, 246, 158, "МГц", DIM);
+  textAt(g, 246, 155, "МГц", DIM);
 }
 
 void drawRam(UiCtx &ui) {
@@ -207,13 +214,15 @@ void drawRam(UiCtx &ui) {
   /* "ГБ" cannot be set in F_VALUE — Latin subset, hollow boxes. Digits in
    * F_VALUE, Cyrillic in F_TEXT, and the two sit on one baseline. */
   g.setFont(&F_TEXT);
-  textAt(g, 12, 156, "свободно", DIM);
+  /* «свободно» несёт «д», а она свисает под базовую линию и доставала
+   * до нижней рамки плитки. */
+  textAt(g, 12, 152, "свободно", DIM);
   g.setFont(&F_VALUE);
   snprintf(v, sizeof(v), "%.1f", freeGb);
-  textAt(g, 74, 152, v, GOOD);
+  textAt(g, 74, 148, v, GOOD);
   g.setFont(&F_TEXT);
   snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
-  textAt(g, 118, 156, v, DIM);
+  textAt(g, 118, 152, v, DIM);
 }
 
 void drawDisks(UiCtx &ui) {
@@ -254,6 +263,7 @@ void drawDisks(UiCtx &ui) {
    *
    * MB/s rather than KB/s: this is an NVMe, and four or five digits of
    * kilobytes is a number nobody reads as a speed. */
+  lintRect(LK_FRAME, 8, 146, NOCT_W - 16, 1, "линейка");
   g.drawFastHLine(8, 146, NOCT_W - 16, ORANGE_DIM);
   char r1[12], r2[12];
   fmtRateMb(r1, sizeof(r1), hw.dr);
@@ -292,7 +302,41 @@ void drawFans(UiCtx &ui) {
      * fallback is still better than an empty bar, so it stays as the else. */
     int barPct = pct > 0 ? pct : (rpm * 100 / 2200);
     if (barPct > 100) barPct = 100;
-    vBar(g, x + 16, 28, 30, 68, barPct, rpm > 0 ? GOOD : PANEL);
+    /* Extremes since boot, per fan.
+     *
+     * The owner asked for them beside each bar, and there was nowhere to read
+     * them from — nothing anywhere tracked a fan's range. Kept here rather
+     * than in the shared state because they are a property of this VIEW: the
+     * question "how hard does this fan ever work" only exists on this screen,
+     * and putting it in the payload would mean the PC computing something the
+     * board can see for itself.
+     *
+     * Since BOOT, not since forever: a reboot is when the machine's workload
+     * changed, and carrying yesterday's peak past it would make the number
+     * describe a session nobody remembers. Zeroes are skipped — a fan reading
+     * 0 is a fan not reporting, and it would pin every minimum to zero. */
+    static int fanMin[NOCT_FAN_COUNT] = {0};
+    static int fanMax[NOCT_FAN_COUNT] = {0};
+    if (rpm > 0) {
+      if (!fanMin[i] || rpm < fanMin[i]) fanMin[i] = rpm;
+      if (rpm > fanMax[i]) fanMax[i] = rpm;
+    }
+    /* Bar narrowed from 30 to 22 to make room: at 78 px of pitch there is no
+     * third column, so the extremes stack in the one the bar gives back. */
+    vBar(g, x + 4, 28, 22, 68, barPct, rpm > 0 ? GOOD : PANEL);
+    g.setFont(&F_TEXT);
+    if (fanMax[i]) {
+      snprintf(v, sizeof(v), "%d", fanMax[i]);
+      textAt(g, x + 30, 30, v, DIM);
+      snprintf(v, sizeof(v), "%d", fanMin[i]);
+      textAt(g, x + 30, 82, v, DIM);
+      /* Which is which, once per screen — four repetitions of "макс" would
+       * cost more room than the numbers themselves. */
+      if (i == 0) {
+        textAt(g, x + 30, 44, "макс", DIM);
+        textAt(g, x + 30, 68, "мин", DIM);
+      }
+    }
     /* Name and duty share ONE line above the rpm. There is room for a label
      * row and a hero number between the bar (ends y96) and the footer rule
      * (y152), but not for three: F_BIG's ink is ~30 px, so a third line landed
@@ -305,18 +349,23 @@ void drawFans(UiCtx &ui) {
      * name: at F_VALUE it is 40 % wider than the F_SMALL it replaced, and in
      * a 62 px tile the two ran into each other ("КОРПУ85%"). */
     g.setFont(&F_SMALL);
-    textCenter(g, x + 31, 98, names[i], DIM);
+    textCenter(g, x + 31, 99, names[i], DIM);
     g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%d%%", pct);
-    textCenter(g, x + 31, 107, v, ORANGE);
+    textCenter(g, x + 31, 108, v, ORANGE);
     g.setFont(&F_BIG);
     snprintf(v, sizeof(v), "%d", rpm);
-    textCenter(g, x + 31, 124, v, TEXT);
+    /* 116, not 124: F_BIG's ink runs 24 rows from five below the cursor, so
+     * at 124 the digits reached 152 and crossed the summary rule at 150.
+     * The rule is drawn with drawFastHLine and never registered, so the
+     * overlap check could not see this one — worth registering later. */
+    textCenter(g, x + 31, 116, v, TEXT);
   }
 
   /* summary across the freed bottom band (F_TEXT stays inside y171) */
   if (uiOn(UI_STRIPS)) {
-    g.drawFastHLine(8, 150, NOCT_W - 16, ORANGE_DIM);
+    lintRect(LK_FRAME, 8, 150, NOCT_W - 16, 1, "линейка");
+  g.drawFastHLine(8, 150, NOCT_W - 16, ORANGE_DIM);
     g.setFont(&F_TEXT);
     g.setTextSize(1);
     char sum2[64]; /* "среднее ..." + "максимум ..." is 42 B before the numbers */
@@ -378,13 +427,14 @@ void drawNet(UiCtx &ui) {
   /* Плитка 26..85. Значению нужно 24 ряда чернил, графику 18 — вместе с
    * зазором это ровно то, что есть, но полоса в 50 рядов под значение
    * опускала его чернила на шесть рядов в график. */
-  bigVal(g, 14, 30, 26, r, "Б/с", INFO);
-  sparkline(g, 14, 60, 134, 18, ui.gr.netDown, INFO, 1000);
+  /* 32: заливка вкладки ярлыка кончается на y+5, то есть на 31. */
+  bigVal(g, 14, 32, 26, r, "Б/с", INFO);
+  sparkline(g, 14, 62, 134, 18, ui.gr.netDown, INFO, 1000);
 
   panel(g, 164, 26, 152, 60, "ИСХОДЯЩИЙ");
   fmtRate(r, sizeof(r), hw.nu);
-  bigVal(g, 174, 30, 26, r, "Б/с", GOOD);
-  sparkline(g, 174, 60, 132, 18, ui.gr.netUp, GOOD, 200);
+  bigVal(g, 174, 32, 26, r, "Б/с", GOOD);
+  sparkline(g, 174, 62, 132, 18, ui.gr.netUp, GOOD, 200);
 
   /* bottom panels grown into the freed band (y94..168), spacing fixed so the
    * RSSI line and the server line no longer overlap */

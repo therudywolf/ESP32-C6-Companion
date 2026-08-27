@@ -204,11 +204,12 @@ void drawBoard(UiCtx &ui) {
      * does not do that. */
     snprintf(v, sizeof(v), "пусков %lu, сбоев %lu", (unsigned long)b.bootCount,
              (unsigned long)b.faultCount);
-    textAt(g, x1 + 8, y1 + 50, v, b.faultCount > 0 ? WARN : DIM);
+    textAt(g, x1 + 8, y1 + 47, v, b.faultCount > 0 ? WARN : DIM);
   }
 
   /* ── footer: the rest of the identity, one line ──────────────────────── */
   g.setFont(&F_SMALL);
+  lintRect(LK_FRAME, 8, 152, NOCT_W - 16, 1, "линейка");
   g.drawFastHLine(8, 152, NOCT_W - 16, ORANGE_DIM);
   snprintf(v, sizeof(v), "v%s   %d МГц   wifi %d dBm", NOCT_VERSION, st.cpuMhz,
            st.link.rssi);
