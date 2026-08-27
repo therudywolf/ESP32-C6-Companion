@@ -49,6 +49,14 @@ struct Slot {
   int pressure = -1;
   unsigned long tempAt = 0; /* millis of the last report, 0 = never */
   unsigned long humAt = 0;
+  /* Pressure has its own stamp because it arrives on its own schedule. The
+   * Aqara reports each attribute separately, and after a cache reset the
+   * barometer often speaks first - leaving a sensor that reported two minutes
+   * ago listed as "age unknown", because the age was computed from
+   * temperature and humidity alone. A reading with no age is the exact lie
+   * the stale-handling exists to prevent, so a reading that HAS an age must
+   * be allowed to say so. */
+  unsigned long pressAt = 0;
 };
 
 Slot gSlots[ZigbeeData::kMax];
@@ -170,6 +178,7 @@ public:
         if (hpa >= 30 && hpa <= 110) hpa *= 10; /* it was kPa after all */
         if (hpa >= 300 && hpa <= 1200) {
           s->pressure = hpa;
+          s->pressAt = millis();
           gDirty = true;
         }
       }
@@ -440,6 +449,7 @@ int ZbHub::lastHeardSec(unsigned long now) const {
     if (s.addr == 0xFFFF) continue;
     if (s.tempAt > newest) newest = s.tempAt;
     if (s.humAt > newest) newest = s.humAt;
+    if (s.pressAt > newest) newest = s.pressAt;
   }
   return newest ? (int)((now - newest) / 1000UL) : -1;
 }
@@ -488,6 +498,7 @@ void ZbHub::tick(unsigned long now, AppState &st, Graphs &g) {
     unsigned long newest = 0;
     if (s.tempAt > newest) newest = s.tempAt;
     if (s.humAt > newest) newest = s.humAt;
+    if (s.pressAt > newest) newest = s.pressAt;
     out.ageSec = newest ? (int)((now - newest) / 1000UL) : -1;
     n++;
   }
@@ -574,11 +585,12 @@ void ZbHub::restore() {
     restored++;
     if (gap < 0) {
       /* unknown age is honest; a fake one is not */
-      s.tempAt = s.humAt = 0;
+      s.tempAt = s.humAt = s.pressAt = 0;
     } else {
       unsigned long back = (unsigned long)gap * 1000UL;
       s.tempAt = s.tempAt ? (millis() > back ? millis() - back : 1) : 0;
       s.humAt = s.humAt ? (millis() > back ? millis() - back : 1) : 0;
+      s.pressAt = s.pressAt ? (millis() > back ? millis() - back : 1) : 0;
     }
   }
   if (restored)
