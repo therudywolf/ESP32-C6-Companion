@@ -137,6 +137,7 @@ public:
     return forcedUntil_ && (long)(forcedUntil_ - millis()) > 0;
   }
   uint8_t forcedValue() const { return forced_; }
+  unsigned long forcedUntilMs() const { return forcedUntil_; }
   uint8_t capNow() const { return forcing() ? forced_ : NOCT_BRIGHT_MAX; }
   uint8_t forced_ = NOCT_BRIGHT_MAX;
   unsigned long forcedUntil_ = 0;

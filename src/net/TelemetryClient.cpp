@@ -157,12 +157,18 @@ void TelemetryClient::sendBoard(float temp, float tempMax, int load, int fps,
                                 int heapFree, int heapMin, int heapLargest,
                                 unsigned long uptime, int cpuMhz, int rssi,
                                 unsigned long boots, unsigned long faults,
-                                const char *reason) {
+                                const char *reason, int blNow, int blCap,
+                                int blThermal, int blForceLeft) {
   if (!tcpConnected_) return;
-  char b[176];
-  snprintf(b, sizeof(b), "brd:%.1f,%.1f,%d,%d,%d,%d,%d,%lu,%d,%d,%lu,%lu,%s\n",
+  /* The reason string is LAST among the old fields and can contain anything,
+   * so the new numbers go BEFORE it — a receiver splitting from the right
+   * would otherwise have to know how many commas a panic message contains. */
+  char b[208];
+  snprintf(b, sizeof(b),
+           "brd:%.1f,%.1f,%d,%d,%d,%d,%d,%lu,%d,%d,%lu,%lu,%d,%d,%d,%d,%s\n",
            temp, tempMax, load, fps, heapFree, heapMin, heapLargest, uptime,
-           cpuMhz, rssi, boots, faults, reason ? reason : "?");
+           cpuMhz, rssi, boots, faults, blNow, blCap, blThermal, blForceLeft,
+           reason ? reason : "?");
   sendLine(b);
 }
 
@@ -510,6 +516,8 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcSay = stripGlyphs(rc["say"] | "");
       state.rcTheme = rc["theme"] | -1;
       state.rcBright = rc["bright"] | -1;
+      state.rcBlMax = rc["blmax"] | -1;
+      state.rcBlMins = rc["blmins"] | 15;
       state.rcAction = (const char *)(rc["action"] | "");
       state.rcLed = rc["led"] | -1;
       state.rcCarousel = rc["carousel"] | -2;

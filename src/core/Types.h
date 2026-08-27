@@ -343,6 +343,15 @@ struct AppState {
   int heapFreeKb = 0;
   int heapMinKb = 0;      /* lowest ever seen — the number that matters */
   int heapLargestKb = 0;  /* biggest contiguous block: fragmentation shows here */
+  /* What the backlight is ACTUALLY doing, as opposed to what was asked for.
+   * Four different things silently override the request — night mode, the
+   * idle dim, the thermal guard and a running override — and without these
+   * the owner reads 210 on the slider while the glass sits at 90, with
+   * nothing on either screen connecting the two. */
+  uint8_t blNow = 0;      /* PWM actually driven, 0..255 */
+  uint8_t blCap = 0;      /* ceiling in force right now */
+  int blThermal = 0;      /* 0 cool, 1 warm-limited, 2 hot-limited */
+  int blForceLeft = 0;    /* seconds left on a temporary override, 0 = none */
   unsigned long uptimeSec = 0;
   int cpuMhz = 0;
   bool weatherReceived = false;
@@ -363,6 +372,10 @@ struct AppState {
   int rcChromeR = -1, rcChromeG = -1, rcChromeB = -1; /* custom chrome */
   int rcAccentR = -1, rcAccentG = -1, rcAccentB = -1; /* custom accent */
   int rcBright = -1;             /* backlight 10..255, -1 = none */
+  /* Raise the backlight ceiling for a while: {value, minutes}. -1 = none.
+   * A temporary FORCE, never a stored setting — see Display::forceFor. */
+  int rcBlMax = -1;
+  int rcBlMins = 15;
   String rcAction;               /* "feed"|"play"|"talk", "" = none */
   int rcLed = -1;                /* 0/1, -1 = none */
   int rcCarousel = -2;           /* -1 off, 5/10/15 sec, -2 = none */
