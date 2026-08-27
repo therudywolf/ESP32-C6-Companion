@@ -378,6 +378,10 @@ struct AppState {
   int rcBlMins = 15;
   /* Greyscale + no backdrop, for comparing screenshots. -1 = no change. */
   int rcMono = -1;
+  /* Per-panel tone: channel gains in percent (0 = no change) and the black
+   * point (-1 = no change). NOT one-shot on the server, so the values are
+   * re-sent after a board reboot and the correction survives it. */
+  int rcToneR = 0, rcToneG = 0, rcToneB = 0, rcToneK = -1;
   String rcAction;               /* "feed"|"play"|"talk", "" = none */
   int rcLed = -1;                /* 0/1, -1 = none */
   int rcCarousel = -2;           /* -1 off, 5/10/15 sec, -2 = none */

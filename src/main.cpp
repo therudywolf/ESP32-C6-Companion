@@ -671,6 +671,16 @@ static void consoleExec(String line) {
     } else {
       Serial.printf("uploading %d day(s) of archive\n", days);
     }
+  } else if (cmd == "tone") {
+    /* tone <R> <G> <B> [black] — per-channel gain in percent and the black
+     * point. Dialled by eye against the GLASS; the numbers in the palette
+     * were never the problem. */
+    int r = 0, g = 0, b = 0, k = -1;
+    if (arg.length()) sscanf(arg.c_str(), "%d %d %d %d", &r, &g, &b, &k);
+    if (r || g || b || k >= 0) theme::setTone(r, g, b, k);
+    theme::getTone(&r, &g, &b, &k);
+    Serial.printf("tone R%d G%d B%d чёрный %d (усиление 30..300, чёрный 0..96)\n",
+                  r, g, b, k);
   } else if (cmd == "mono") {
     /* Screenshot review mode: the palette goes greyscale and the animated
      * backdrop stops. Asked for because colour and motion between two
@@ -1199,6 +1209,13 @@ void loop() {
       bool asked = zb.pollNow();
       sceneMgr.toast(asked ? "опрашиваю датчик" : "некого опрашивать");
       state.rcZbPoll = -1;
+    }
+    if (state.rcToneR > 0 || state.rcToneG > 0 || state.rcToneB > 0 ||
+        state.rcToneK >= 0) {
+      theme::setTone(state.rcToneR, state.rcToneG, state.rcToneB,
+                     state.rcToneK);
+      state.rcToneR = state.rcToneG = state.rcToneB = 0;
+      state.rcToneK = -1;
     }
     if (state.rcMono >= 0) {
       theme::setMono(state.rcMono != 0);
