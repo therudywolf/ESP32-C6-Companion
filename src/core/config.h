@@ -174,17 +174,7 @@
  * a black blob. 210 (~82%) is bright but stays well under the thermal cliff.
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
-/* How long presence waits before it may act again. Ten minutes, and measured
- * from when the action FIRED rather than from the last motion — timing it
- * from motion would let continuous presence push the window out forever and
- * it would never settle.
- *
- * Far longer than the sensor's own 60 s lockout on purpose: waking a PC is
- * intrusive and cannot be undone by waiting, so somebody crossing the room
- * three times with laundry must not send three magic packets. */
-#define NOCT_PRESENCE_COOLDOWN_MS 600000UL
-
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.29.2"
+#define NOCT_VERSION "1.30.0"
 
 #endif

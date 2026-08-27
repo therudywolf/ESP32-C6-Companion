@@ -137,63 +137,13 @@ struct ZbSensor {
    * WSDCGQ11LM carries one, the cheaper WSDCGQ01LM does not, so every consumer
    * must treat it as optional rather than assume zero. */
   int pressure = -1;
-  /* Below: the Aqara RTCGQ11LM motion+illuminance sensor. Neither field means
-   * anything for a climate sensor, so -1 is "not this kind of device" rather
-   * than "sensor idle" — a screen tells the two apart by which fields are
-   * populated, the same convention `pressure` already uses. */
-  int lux = -1;         /* ambient light, lux; -1 = no light sensor on this device */
-  /* Seconds since the sensor last reported motion, -1 = never (or not a
-   * motion sensor). The RTCGQ11LM only ever reports "occupied" — Aqara
-   * firmware never sends a clear — so "how long since" is the one honest
-   * thing to show; a fixed "no motion" cutoff belongs to whoever reads this,
-   * not to the field. Hardware retrigger lockout is 60 s: two motion events
-   * closer together than that are physically impossible to tell apart. */
-  int motionAgeSec = -1;
-};
-
-/* When motion happened, not just how long ago.
- *
- * A PIR is an EVENT source, and one number — "seventeen minutes" — throws
- * away everything interesting about it. The room being busy all morning and
- * dead since three is the fact worth having, and it takes six bytes.
- *
- * Forty-eight buckets of half an hour: one day, one bit each. Kept in RAM
- * only. It could go on the card, but a day of presence is not history worth
- * a write cycle every half hour, and losing it to a reboot costs a day of
- * texture rather than a day of measurements. */
-struct MotionDay {
-  static const int kBuckets = 48;
-  uint64_t bits = 0;   /* bucket N set = motion was seen in it */
-  int lastBucket = -1; /* which bucket the clock was in last time */
-
-  /* Advance to `bucket`, clearing everything stepped over so yesterday's
-   * marks do not masquerade as today's. Wrapping past the end of the day is
-   * the normal case, not an edge case. */
-  void advance(int bucket) {
-    if (bucket < 0 || bucket >= kBuckets) return;
-    if (lastBucket < 0) { lastBucket = bucket; return; }
-    while (lastBucket != bucket) {
-      lastBucket = (lastBucket + 1) % kBuckets;
-      bits &= ~(1ULL << lastBucket);
-    }
-  }
-  void mark(int bucket) {
-    if (bucket >= 0 && bucket < kBuckets) bits |= (1ULL << bucket);
-  }
-  bool at(int bucket) const {
-    return bucket >= 0 && bucket < kBuckets && (bits >> bucket) & 1ULL;
-  }
-  int count() const {
-    int n = 0;
-    for (int i = 0; i < kBuckets; i++) if (at(i)) n++;
-    return n;
-  }
 };
 
 struct ZigbeeData {
-  /* One ForestHome climate sensor plus two motion sensors is the concrete
-   * ask; a fourth slot costs 76 bytes and avoids hard-coding "3" the moment
-   * someone adds a door sensor. */
+  /* Five slots. One climate sensor is the concrete ask, and the spare four
+   * cost 76 bytes each against hard-coding "1" the moment a second device
+   * arrives. Motion sensors lived here too until they moved to their own
+   * branch; the room is left because the reason for it did not change. */
   static const int kMax = 5;
   int count = 0;
   /* How many of the first `count` entries this board heard over its OWN
@@ -253,10 +203,6 @@ struct Settings {
   /* Which scenes appear in the nav ring / carousel (bit i = SceneId i). DEN
    * (bit 0) is forced on. Default: everything visible. */
   uint32_t sceneMask = 0xFFFFFFFFu; /* "scnMask" */
-  /* Presence acts on the PC. OFF by default and deliberately so: a default
-   * that wakes the owner's computer because somebody walked past is not a
-   * default, it is a surprise. */
-  bool pcWake = false;
   /* Quiet hours: between nightFrom:00 and nightTo:00 the panel drops to
    * NOCT_NIGHT_BRIGHT and the mood LED goes dark. Needs the NTP clock; a
    * button press suspends it briefly. Alerts always override. */
@@ -358,11 +304,6 @@ struct AppState {
    * against a capacity that doubles every ten degrees, so it moves when the
    * heating comes on and nothing has dried. This does not. */
   int zbAbsHum10 = -9999;
-  /* One day of presence per motion sensor, in the order they appear in
-   * zb.list. Two, because that is how many the owner has; a third would show
-   * as a sensor with no timeline rather than crash. */
-  MotionDay motionDay[2];
-  int motionAgeWas[2] = {-1, -1}; /* to spot a NEW report, not a fresh one */
   /* Rows uploaded by the archive export, and how many days are still to go.
    * -1 in `zbExportLeft` means no export is running. */
   int zbExportRows = 0;
@@ -451,7 +392,6 @@ struct AppState {
    * anywhere it can be plotted or exported. */
   int rcZbDump = -1;
   int rcZbAlert = -1;
-  int rcPcWake = -1;   /* presence -> wake the PC, 0/1 */
   int rcZbTempMin = -1000, rcZbTempMax = -1000;
   int rcZbHumMin = -1000, rcZbHumMax = -1000;
   int rcZbBattMin = -1000;

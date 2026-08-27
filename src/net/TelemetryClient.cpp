@@ -125,7 +125,7 @@ void TelemetryClient::sendCfg(const Settings &s) {
   char b[240];
   snprintf(b, sizeof(b),
            "cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d,"
-           "%d,%d,%d,%d,%d,%d,%d\n",
+           "%d,%d,%d,%d,%d,%d\n",
            s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone, s.ledEnabled ? 1 : 0,
            s.flipped ? 1 : 0, s.bgLight ? 1 : 0, s.brightness,
            s.carouselEnabled ? s.carouselIntervalSec : -1, s.displayTimeoutSec,
@@ -134,19 +134,22 @@ void TelemetryClient::sendCfg(const Settings &s) {
            s.notifShow ? 1 : 0, s.ledMode, s.pinnedScene, s.activeSlot,
            s.nightMode ? 1 : 0, s.nightFrom, s.nightTo,
            s.zbAlert ? 1 : 0, s.zbTempMin, s.zbTempMax, s.zbHumMin,
-           s.zbHumMax, s.zbBattMin, s.pcWake ? 1 : 0);
+           s.zbHumMax, s.zbBattMin);
   sendLine(b);
 }
 
 void TelemetryClient::sendZbSensor(const ZbSensor &z) {
   if (!tcpConnected_) return;
-  /* zbs:name,temp10,humidity,battery,age_sec,pressure,lux,motion_age_sec -
-   * names come from nocturne.ini and must not contain commas (documented
-   * there). lux/motion_age_sec are -1 for a climate sensor, same convention
-   * as pressure on a sensor with no barometer. */
+  /* zbs:name,temp10,humidity,battery,age_sec,pressure - names come from
+   * nocturne.ini and must not contain commas (documented there). pressure is
+   * -1 on a sensor with no barometer.
+   *
+   * Parse it from the RIGHT: the trailing fields are integers and the name is
+   * whatever precedes them. This line has grown and shrunk before, and a
+   * consumer that splits on a fixed count breaks silently when it does. */
   char b[112];
-  snprintf(b, sizeof(b), "zbs:%s,%d,%d,%d,%d,%d,%d,%d\n", z.name, z.temp10,
-           z.humidity, z.battery, z.ageSec, z.pressure, z.lux, z.motionAgeSec);
+  snprintf(b, sizeof(b), "zbs:%s,%d,%d,%d,%d,%d\n", z.name, z.temp10,
+           z.humidity, z.battery, z.ageSec, z.pressure);
   sendLine(b);
 }
 
@@ -430,8 +433,6 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
         e.battery = list[i]["b"] | -1;
         e.ageSec = list[i]["age"] | -1;
         e.pressure = list[i]["p"] | -1;
-        e.lux = list[i]["lux"] | -1;
-        e.motionAgeSec = list[i]["mo"] | -1;
       } else {
         e = ZbSensor();
       }
@@ -533,7 +534,6 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcZbPoll = rc["zbpoll"] | -1;
       state.rcZbInt = rc["zbint"] | -1;
       state.rcZbDump = rc["zbdump"] | -1;
-      state.rcPcWake = rc["pcwake"] | -1;
       state.rcZbAlert = rc["zbalert"] | -1;
       state.rcZbTempMin = rc["zbtmin"] | -1000;
       state.rcZbTempMax = rc["zbtmax"] | -1000;
