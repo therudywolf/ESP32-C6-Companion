@@ -1,6 +1,7 @@
 #include "ui/Theme.h"
 
 #include <math.h>
+#include <string.h>
 
 #include "storage/SdStore.h"
 
@@ -25,6 +26,7 @@ uint16_t SURFACE = 0, SURFACE_DIM = 0;
 
 /* Defined below, called from applyPreset above it. */
 static void deriveSurface();
+void applyMono();
 unsigned long nowMs = 0;
 int reactLevel = 0;
 int weatherCode = 0;
@@ -305,12 +307,51 @@ void applyPreset(int idx) {
     ACCENT = saturate(ACCENT, 122);
   }
   applyBgLight();
+  applyMono(); /* before deriveSurface: the surface is derived FROM these */
   /* Last, and after applyBgLight: both derived values read BG, TEXT and DIM
    * in their FINAL form, and light mode rewrites all three. */
   deriveSurface();
 }
 
 void setBgStyle(int s) { bgStyle = (s < 0 || s >= BG_STYLES) ? 0 : s; }
+
+static bool monoMode = false;
+bool monoOn() { return monoMode; }
+
+/* Rec.601 luma, which is what the eye weights — a flat average turns a
+ * saturated blue into something far lighter than it looks. */
+static uint16_t toGrey(uint16_t c) {
+  int r = ((c >> 11) & 0x1F) << 3, g = ((c >> 5) & 0x3F) << 2,
+      b = (c & 0x1F) << 3;
+  int y = (r * 77 + g * 151 + b * 28) >> 8;
+  if (y > 255) y = 255;
+  return rgb((uint8_t)y, (uint8_t)y, (uint8_t)y);
+}
+
+void applyMono() {
+  if (!monoMode) return;
+  uint16_t *all[] = {&BG,   &ORANGE, &ORANGE_DIM, &TEXT, &DIM,   &PANEL,
+                     &GOOD, &WARN,   &CRIT,       &INFO, &ACCENT};
+  for (unsigned i = 0; i < sizeof(all) / sizeof(all[0]); i++)
+    *all[i] = toGrey(*all[i]);
+}
+
+void setMono(bool on) {
+  /* One switch, because the two halves are useless apart: hue hides a pixel
+   * of drift, and an animated backdrop makes two captures uncomparable even
+   * in grey. The previous background style is remembered so turning the mode
+   * off restores what the owner had, rather than leaving it plain. */
+  static int bgBefore = -1;
+  if (on && !monoMode) bgBefore = bgStyle;
+  monoMode = on;
+  if (on) {
+    bgStyle = 0;
+  } else if (bgBefore >= 0) {
+    bgStyle = bgBefore;
+    bgBefore = -1;
+  }
+  applyPreset(currentPreset); /* re-derive; applyMono runs inside */
+}
 
 void setBgLight(bool light) {
   bgLight = light;
@@ -539,6 +580,13 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
    * rows higher than the tile — otherwise every outlined panel in the
    * firmware would report its own label as a violation. */
   lintClip(x, y - 6, w, h + 6);
+  /* The four border LINES, one pixel each — not the tile's area. Registering
+   * the area would make every value inside it a "collision". */
+  const int own = y * 512 + x + 1; /* unique per tile, never 0 */
+  lintRectOwned(LK_FRAME, x, y, w, 1, "рамка+", own);
+  lintRectOwned(LK_FRAME, x, y + h - 1, w, 1, "рамка-", own);
+  lintRectOwned(LK_FRAME, x, y, 1, h, "рамка<", own);
+  lintRectOwned(LK_FRAME, x + w - 1, y, 1, h, "рамка>", own);
   /* clean full rectangle frame + brighter L-accents at two corners (static,
    * HUD feel, no moving glint that reads as a glitch) */
   g.drawRect(x, y, w, h, color);
@@ -558,6 +606,10 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
      * whose rows are four pixels apart lands precisely on the bottom frame of
      * the tile above. That is why every second row on ПЛАТА and ДИСКИ had its
      * neighbour's border rubbed out under the label. */
+    /* A FILL: it erases whatever is under it, which is the whole point and
+     * also the whole danger — this is what rubbed out the neighbour's border
+     * on ПЛАТА and ДИСКИ. */
+    lintRectOwned(LK_FILL, x + 6, y - 3, tw + 8, 9, title, own);
     g.fillRect(x + 6, y - 3, tw + 8, 9, BG); /* tab punches the frame */
     g.setTextColor(titleColor);
     g.setCursor(x + 10, y - 4);
@@ -644,6 +696,11 @@ static void deriveSurface() {
 Rect panelM(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
             uint16_t titleColor) {
   g.fillRoundRect(x, y, w, h, 4, SURFACE);
+  /* The tile paints its own ground, so it is registered as ART rather than
+   * FILL: everything inside it is meant to be there. Its EDGES still matter,
+   * so the four one-pixel rims go in as frames. */
+  lintRect(LK_FRAME, x, y, w, 1, "плитка+");
+  lintRect(LK_FRAME, x, y + h - 1, w, 1, "плитка-");
   Rect c = {x + MPADX, y + MPADY, w - 2 * MPADX, h - 2 * MPADY};
   /* Arm the lint box on the TILE, not on the content rect: a label drawn at
    * the very top is legitimately outside the content rect, and flagging it
@@ -664,6 +721,7 @@ Rect panelM(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
 }
 
 void hBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
+  lintRect(LK_ART, x, y, w, h, "полоса");
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
   g.drawRect(x, y, w, h, ORANGE_DIM);
@@ -679,6 +737,7 @@ void hBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
 }
 
 void vBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
+  lintRect(LK_ART, x, y, w, h, "столбик");
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
   g.drawRect(x, y, w, h, ORANGE_DIM);
@@ -766,6 +825,48 @@ static void lintCyrillic(LGFX_Sprite &g, int x, int y, const char *s) {
     }
 }
 
+/* Does this string reach below the baseline?
+ *
+ * The line box always has room for a descender; most strings have none, and
+ * counting those empty rows as ink reported a hero colliding with the caption
+ * three rows under it when nothing touched. Erring toward "yes" only ever
+ * costs a false report, so the list is generous.
+ *
+ * Cyrillic descenders are two UTF-8 bytes: д Д р у ф ц щ Ц Щ. */
+static bool hasDescender(const char *s) {
+  for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+    if (*p < 0x80) {
+      if (strchr("gjpqyQ,;()[]{}/\|@_", (char)*p)) return true;
+      continue;
+    }
+    if (*p == 0xD0 && p[1]) {
+      unsigned char c = p[1];
+      if (c == 0xB4 || c == 0x94 || c == 0xA6 || c == 0xA9) return true;
+    } else if (*p == 0xD1 && p[1]) {
+      unsigned char c = p[1];
+      if (c == 0x80 || c == 0x83 || c == 0x84 || c == 0x86 || c == 0x89)
+        return true;
+    }
+    if (p[1]) p++;
+  }
+  return false;
+}
+
+/* The rows this string actually paints: leading above, then the capital, then
+ * the descent only if something in it descends. */
+static void inkExtent(LGFX_Sprite &g, const char *s, int *top, int *height) {
+  int sz = 1;
+  const Ink *k = inkFor(g.fontHeight(), &sz);
+  if (!k) {
+    *top = 0;
+    *height = g.fontHeight();
+    return;
+  }
+  *top = k->top * sz;
+  *height = k->height * sz;
+  if (hasDescender(s)) *height = (k->box - k->top) * sz;
+}
+
 static void lintCheck(LGFX_Sprite &g, int x, int y, const char *s) {
   lintCyrillic(g, x, y, s);
   if (!lcOn || !s || !*s) return;
@@ -818,9 +919,110 @@ void lintScene(const char *) {}
 void lintReset() {}
 #endif
 
+
+#if NOCT_LAYOUT_LINT
+/* Everything drawn this frame, so it can be tested against everything else.
+ * 96 is comfortably above the busiest screen (ДИСКИ draws about 40). */
+struct LRect {
+  int16_t x, y, w, h;
+  /* Which tile's chrome this belongs to, or 0. A panel's label tab is
+   * SUPPOSED to punch that panel's own top border — that is what makes it a
+   * tab. Without this the design's own device is reported as a fault on every
+   * outlined tile, and the real collisions drown. */
+  int16_t own;
+  uint8_t kind;
+  char what[18];
+};
+static LRect lrs[96];
+static int lrN = 0;
+
+void lintRectOwned(int kind, int x, int y, int w, int h, const char *what,
+                   int own) {
+  if (w <= 0 || h <= 0) return;
+  if (lrN >= (int)(sizeof(lrs) / sizeof(lrs[0]))) return;
+  LRect &r = lrs[lrN++];
+  r.x = (int16_t)x;
+  r.y = (int16_t)y;
+  r.w = (int16_t)w;
+  r.h = (int16_t)h;
+  r.own = (int16_t)own;
+  r.kind = (uint8_t)kind;
+  snprintf(r.what, sizeof(r.what), "%s", what ? what : "?");
+}
+
+void lintRect(int kind, int x, int y, int w, int h, const char *what) {
+  lintRectOwned(kind, x, y, w, h, what, 0);
+}
+
+/* Which pairs are a fault, and which are the design working.
+ *
+ * ART on ART is normal — a bar's fill sits in its own frame, a sparkline's
+ * point sits on its curve. TEXT on anything is a fault: nothing in this UI
+ * is meant to be printed over. A FILL over anything is a fault by
+ * definition; it erases what is under it, which is how the "еще N" badge
+ * rubbed out a whole column. */
+static bool pairMatters(uint8_t a, uint8_t b) {
+  if (a == LK_FILL || b == LK_FILL) return true;
+  if (a == LK_TEXT || b == LK_TEXT) return true;
+  if (a == LK_FRAME || b == LK_FRAME) return true;
+  return false; /* art on art */
+}
+
+void lintFrameEnd() {
+  static uint32_t seen[32];
+  static int seenN = 0;
+  for (int i = 0; i < lrN; i++) {
+    for (int j = i + 1; j < lrN; j++) {
+      const LRect &a = lrs[i], &b = lrs[j];
+      if (!pairMatters(a.kind, b.kind)) continue;
+      /* Same tile's chrome: the tab punching its own border is the design. */
+      if (a.own && a.own == b.own) continue;
+      int x0 = a.x > b.x ? a.x : b.x;
+      int y0 = a.y > b.y ? a.y : b.y;
+      int x1 = (a.x + a.w) < (b.x + b.w) ? (a.x + a.w) : (b.x + b.w);
+      int y1 = (a.y + a.h) < (b.y + b.h) ? (a.y + a.h) : (b.y + b.h);
+      int ow = x1 - x0, oh = y1 - y0;
+      if (ow <= 0 || oh <= 0) continue;
+      /* Art and text touching by a single row is kerning, not a collision;
+       * two rows is where it starts to read as one thing on top of another. */
+      if (a.kind != LK_FILL && b.kind != LK_FILL && ow * oh <= 2) continue;
+      uint32_t key = (uint32_t)(a.x & 0x1FF) << 20 ^
+                     (uint32_t)(a.y & 0x1FF) << 11 ^
+                     (uint32_t)(b.x & 0x1FF) << 2 ^ (uint32_t)(b.y & 3);
+      bool dup = false;
+      for (int k = 0; k < seenN; k++)
+        if (seen[k] == key) dup = true;
+      if (dup) continue;
+      if (seenN < 32) seen[seenN++] = key;
+      static const char *kn[] = {"текст", "рамка", "графика", "заливка"};
+      Serial.printf("[OVERLAP] %s: %s \"%s\" (%d,%d %dx%d) x %s \"%s\" "
+                    "(%d,%d %dx%d) = %dx%d%s",
+                    lcScene, kn[a.kind], a.what, a.x, a.y, a.w, a.h,
+                    kn[b.kind], b.what, b.x, b.y, b.w, b.h, ow, oh,
+                    "\n");
+    }
+  }
+  lrN = 0;
+}
+
+void lintResetOverlap() { lrN = 0; }
+#else
+void lintRect(int, int, int, int, int, const char *) {}
+void lintRectOwned(int, int, int, int, int, const char *, int) {}
+void lintFrameEnd() {}
+#endif
+
 void textAt(LGFX_Sprite &g, int x, int y, const char *s, uint16_t color) {
 #if NOCT_LAYOUT_LINT
-  if (s && *s) lintCheck(g, x, y, s);
+  if (s && *s) {
+    lintCheck(g, x, y, s);
+    /* The INK rectangle, not the line box: the empty leading rows touch
+     * nothing, and registering them would report collisions the eye cannot
+     * see — the same mistake the fit check made on its first version. */
+    int top = 0, hh = 0;
+    inkExtent(g, s, &top, &hh);
+    lintRect(LK_TEXT, x, y + top, g.textWidth(s), hh, s);
+  }
 #endif
   g.setTextColor(color);
   g.setCursor(x, y);

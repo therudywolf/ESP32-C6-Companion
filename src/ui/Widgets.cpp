@@ -18,6 +18,9 @@ void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr, int back,
                 int dead) {
   if (!uiOn(UI_TRENDS)) return; /* element composition */
   if (gr.count < back + 2) return;
+  /* 9x9 is the arrow's own footprint. Registered because these are exactly
+   * the marks the owner found sitting on top of the numbers beside them. */
+  theme::lintRect(theme::LK_ART, x, y, 9, 9, "стрелка");
   int d = gr.at(gr.count - 1) - gr.at(gr.count - 1 - back);
   bool spike = d > dead * 3 || d < -dead * 3;
   bool blink = (nowMs / 200) & 1;
@@ -33,6 +36,7 @@ void trendArrow(LGFX_Sprite &g, int x, int y, const RollingGraph &gr, int back,
 }
 
 int baroArrow(LGFX_Sprite &g, int x, int y, int dir, bool sharp, uint16_t c) {
+  theme::lintRect(theme::LK_ART, x, y, sharp ? 22 : 13, 9, "барострелка");
   if (dir == 0) {
     g.drawFastHLine(x, y + 4, 9, c);
     return 13;
@@ -354,6 +358,7 @@ void footer(UiCtx &ui, const char *action, int scene, int sceneCount) {
 void sparkline(LGFX_Sprite &g, int x, int y, int w, int h,
                const RollingGraph &gr, uint16_t color, int maxFloor) {
   if (!uiOn(UI_GRAPHS)) return; /* element composition */
+  theme::lintRect(theme::LK_ART, x, y, w, h, "график");
   g.drawRect(x, y, w, h, PANEL);
   if (gr.count < 2) return;
   int m = gr.maxVal(maxFloor);
@@ -477,6 +482,8 @@ void xbmScaled(LGFX_Sprite &g, int x, int y, const unsigned char *bits, int w,
 
 void weatherIcon(LGFX_Sprite &g, int cx, int cy, int r, int wmo,
                  unsigned long now) {
+  theme::lintRect(theme::LK_ART, cx - r - 2, cy - r - 2, r * 2 + 5, r * 2 + 5,
+                  "значок");
   /* gentle horizontal drift so every cloud "breathes" */
   int drift = (int)(sinf(now / 900.0f) * (r / 6.0f));
   auto cloud = [&](int dx, int dy, uint16_t c) {

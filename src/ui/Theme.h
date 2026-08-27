@@ -68,6 +68,12 @@ void applyPalette(const uint16_t pal[COLOR_ROLES]);
 extern int bgStyle;
 extern bool bgLight;
 void setBgStyle(int s);     /* 0..2 */
+/* Greyscale the live palette. For screenshot review: hue hides a pixel of
+ * drift, and the animated backdrop makes two captures impossible to compare.
+ * Reversible — it re-derives from the active preset rather than replacing
+ * it, so nothing is lost when it goes off. */
+void setMono(bool on);
+bool monoOn();
 void setBgLight(bool light);/* re-applies the active preset in light/dark */
 static const int BG_STYLES = 3;
 const char *bgStyleName(int s);
@@ -256,6 +262,30 @@ int boxBottom(const Ink &k, int y, int size = 1);
  * The rect is set by panel()/panelM(), so a screen gets the check for free
  * the moment it uses either. */
 void lintClip(int x, int y, int w, int h);
+
+/* ── the second check: elements against each other ───────────────────────
+ *
+ * lintClip answers "does this text fit its tile". Every fault the owner
+ * listed is the OTHER question — does this text hit that line, does this
+ * arrow hit that number — and no amount of the first check answers it. So
+ * everything drawn registers the rectangle it occupies, and at the end of
+ * the frame the set is tested pairwise.
+ *
+ * `kind` separates what may legitimately share space from what may not:
+ * a bar's fill sits inside its own frame by design, and reporting that
+ * would bury the real collisions. */
+enum LintKind {
+  LK_TEXT,  /* a string */
+  LK_FRAME, /* a tile border or rule — thin, and nothing should cross it */
+  LK_ART,   /* bars, sparklines, icons, arrows */
+  LK_FILL,  /* a background wipe: it ERASES whatever it covers */
+};
+void lintRect(int kind, int x, int y, int w, int h, const char *what);
+/* Same, but tagged as belonging to one tile's chrome — see LRect::own. */
+void lintRectOwned(int kind, int x, int y, int w, int h, const char *what,
+                   int own);
+/* Test the frame's registered rectangles and report collisions. */
+void lintFrameEnd();
 void lintClear();
 /* Also reports the current SCENE, so a violation can be found without
  * guessing which screen was up. */
