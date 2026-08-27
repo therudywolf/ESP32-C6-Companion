@@ -1555,18 +1555,25 @@ void SceneManager::draw(UiCtx &ui) {
 
 #if NOCT_LAYOUT_LINT
   /* The chrome is not inside anybody's tile: leaving the last tile's box
-   * armed would report the status bar as an overflow of it. */
+   * armed would report the status bar as an overflow of it. The pairwise
+   * test does NOT run here — it used to, and that made it blind to exactly
+   * the thing it should have caught first: the alert wolf is chrome, it is
+   * drawn after this point, and it sat on top of the footer text of every
+   * screen that has one. The status bar was the excuse; the status bar lives
+   * above y26 and never touches the content band anyway. */
   theme::lintClear();
-  /* Everything the scene drew is now registered; test it against itself.
-   * Here rather than after the chrome, because the status bar legitimately
-   * sits over the top of the content band. */
-  theme::lintFrameEnd();
 #endif
 
   /* chrome — the Forza HUD owns the whole screen, no bars. Footer hint line
    * removed (wasted space); scene position lives in the status bar now. */
   if (effScene != SCENE_FORZA)
     widgets::statusBar(ui, scenes::title(effScene), effScene, SCENE_FORZA);
+
+#if NOCT_LAYOUT_LINT
+  /* Last, when everything is on the sprite — scene AND chrome. Running it
+   * before the chrome is what hid the alert wolf sitting on the footers. */
+  theme::lintFrameEnd();
+#endif
 
   /* alert frame on top */
   if (alertActive(ui) && effScene != SCENE_FORZA) {
@@ -1586,7 +1593,16 @@ void SceneManager::draw(UiCtx &ui) {
     snprintf(buf, sizeof(buf), "!! %s !!", m);
     textCenter(g, NOCT_W / 2, 1, buf, on ? BG : CRIT);
     g.setTextSize(1);
-    xbmScaled(g, 4, NOCT_H - 38, wolfFrame(WOLF_AGGRO), 32, 32, 1, on ? CRIT : DIM);
+    /* The angry wolf used to be drawn here, at (4, NOCT_H-38): 32 by 32
+     * pixels over rows 134..165 of the left edge. On a 172 px screen that is
+     * where half the scenes put their footer, and it sat on top of
+     * "свободно" on ПАМЯТЬ and on the process list on CPU.
+     *
+     * Removed rather than moved. It cannot shrink — xbmScaled only scales up
+     * — and there is no free corner on a screen this size. And it was never
+     * carrying the message: an alert already blinks a banner across the whole
+     * status bar AND a blinking frame around the entire screen. A third
+     * decoration that costs a line of real data is a bad trade. */
   }
 
   /* wolf speech overlay — the wolf "lives in the background": its comment
