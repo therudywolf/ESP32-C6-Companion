@@ -61,12 +61,20 @@ static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
 /* 64 px hero with a small unit beside it, ink-anchored — the same shape
  * heroTemp() draws on CPU and GPU, so this screen sits at the same optical
  * height as the rest of the ring. */
-static void hero(LGFX_Sprite &g, int x, int y, const char *num,
-                 const char *frac, const char *unit, uint16_t c) {
+static void hero(LGFX_Sprite &g, const Rect &c, const char *num,
+                 const char *frac, const char *unit, uint16_t col) {
+  const int x = c.x;
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   int vw = g.textWidth(num);
-  textAt(g, x, inkTop(g, y, 64), num, c);
+  /* Placed by the font's INK, not by its name and not by its line box.
+   * F_HUGE at double size writes a 94 px line for 64 px of digits: sizing a
+   * tile from "logisoso32" clips the glyph, and centring on the line box
+   * leaves it visibly high with the empty leading hanging below. */
+  int y = inkY(INK_HUGE, c.y, c.h, 2);
+  textAt(g, x, y, num, col);
+  const int numTop = y + INK_HUGE.top * 2;
+  const int numBot = numTop + INK_HUGE.height * 2 - 1;
   g.setTextSize(1);
   /* The tenth and the unit stack in one narrow column to the RIGHT of the
    * digits, tenth on top. Read downward it says "23 , 4 C" in that order.
@@ -82,18 +90,27 @@ static void hero(LGFX_Sprite &g, int x, int y, const char *num,
      * board is read from. Same colour as the number it belongs to, for the
      * same reason. */
     g.setFont(&F_MED);
-    textAt(g, x + vw + 4, y + 36, frac, c);
+    /* Hung off the big number's own ink: the tenth sits in its lower half,
+     * the unit ends level with its baseline. Both used to be offsets from
+     * the CURSOR, which is 14 rows above the ink at this size — which is how
+     * the unit ended up eleven pixels below the tile. */
+    textAt(g, x + vw + 4, numTop + INK_HUGE.height - INK_MED.top, frac, col);
   }
   if (unit) {
     g.setFont(&F_MED);
-    textAt(g, x + vw + 4, frac ? y + 60 : y + 44, unit, DIM);
+    textAt(g, x + vw + 4, numBot - INK_MED.height - INK_MED.top + 1, unit,
+           DIM);
   }
 }
 
 /* Big number + small unit on one baseline. Mirrors bigVal() in scenes_hw.cpp
  * for the same reason as inkTop: file-local there, and worth matching exactly
  * so the two screens line up. */
-static void bigVal(LGFX_Sprite &g, int x, int y, const char *num,
+/* `y` is the TOP OF THE BAND the value must sit in, and `h` its height —
+ * not a cursor position. The caller cannot know how tall F_BIG really is
+ * (35 px for 24 px of digits), and every place that guessed clipped its own
+ * number by a pixel or two. */
+static void bigVal(LGFX_Sprite &g, int x, int y, int h, const char *num,
                    const char *unit, uint16_t c, bool rightAlign = false) {
   g.setFont(&F_BIG);
   int nw = g.textWidth(num);
@@ -101,10 +118,14 @@ static void bigVal(LGFX_Sprite &g, int x, int y, const char *num,
   int uw = unit ? g.textWidth(unit) : 0;
   int x0 = rightAlign ? x - nw - uw - 4 : x;
   g.setFont(&F_BIG);
-  textAt(g, x0, y, num, c);
+  int ty = inkY(INK_BIG, y, h);
+  textAt(g, x0, ty, num, c);
   if (unit) {
     g.setFont(&F_TEXT);
-    textAt(g, x0 + nw + 4, y + 13, unit, DIM);
+    /* Sitting on the number's baseline, so the pair reads as one reading
+     * rather than as two things at different heights. */
+    int base = ty + (INK_BIG.top + INK_BIG.height);
+    textAt(g, x0 + nw + 4, base - INK_TEXT.top - INK_TEXT.height, unit, DIM);
   }
 }
 
@@ -170,17 +191,17 @@ void drawHome(UiCtx &ui) {
    *   4                 144 148                      316
    *   +-----------------+ +-------------------------+  26
    *   | температура     | | влажность               |
-   *   |                 | +-------------------------+  78
+   *   |                 | +-------------------------+  80
    *   |    24,5 C       | | давление     батарея    |
-   *   +-----------------+ +-------------------------+ 126
-   *   +-------------------------------------------+   130
+   *   +-----------------+ +-------------------------+ 130
+   *   +-------------------------------------------+   134
    *   | forecast, then the evidence under it       |
    *   +-------------------------------------------+   170
    */
 
   /* ── left, tall: the temperature, the one display element ────────────── */
   {
-    Rect c = panelM(g, 4, 26, 140, 92, "температура");
+    Rect c = panelM(g, 4, 26, 140, 104, "температура");
     uint16_t col = TEXT;
     if (!stale && s.zbAlert) {
       if (s.zbTempMax < 99 && z.temp10 > s.zbTempMax * 10) col = CRIT;
@@ -193,17 +214,17 @@ void drawHome(UiCtx &ui) {
       char f[8];
       snprintf(v, sizeof(v), "%d", whole);
       snprintf(f, sizeof(f), ",%d", frac);
-      hero(g, c.x, c.y + 6, v, f, "C", col);
+      hero(g, c, v, f, "C", col);
     } else {
       g.setFont(&F_BIG);
-      textAt(g, c.x, c.y + 24, "-", DIM);
+      textAt(g, c.x, inkY(INK_BIG, c.y, c.h), "-", DIM);
     }
     trendArrow(g, c.x + c.w - 10, c.y, ui.gr.zbTemp, 6, 2);
   }
 
   /* ── right upper: humidity, dropped from display to title ────────────── */
   {
-    Rect c = panelM(g, 148, 26, 168, 44, "влажность");
+    Rect c = panelM(g, 148, 26, 168, 50, "влажность");
     if (z.humidity >= 0) {
       uint16_t col = INFO;
       if (!stale && s.zbAlert) {
@@ -213,29 +234,30 @@ void drawHome(UiCtx &ui) {
       if (stale) col = DIM;
       g.setFont(&F_BIG);
       snprintf(v, sizeof(v), "%d%%", z.humidity);
-      textAt(g, c.x, c.y, v, col);
+      int hy = inkY(INK_BIG, c.y, c.h);
+      textAt(g, c.x, hy, v, col);
       int nw = g.textWidth(v);
-      trendArrow(g, c.x + nw + 6, c.y, ui.gr.zbHum, 5, 2);
+      trendArrow(g, c.x + nw + 6, hy + INK_BIG.top, ui.gr.zbHum, 5, 2);
       /* Only once there is a line to draw. sparkline() frames itself before
        * it checks whether it has points, so an empty rectangle would sit here
        * for the first hour after every boot looking like a broken widget. */
       int sx = c.x + nw + 20;
       if (ui.gr.zbHum.count >= 2) {
-        sparkline(g, sx, c.y - 2, c.x + c.w - sx, c.h + 2,
-                  ui.gr.zbHum, stale ? DIM : INFO);
+        sparkline(g, sx, c.y, c.x + c.w - sx, c.h, ui.gr.zbHum,
+                  stale ? DIM : INFO);
       } else {
         g.setFont(&F_TEXT);
-        textAt(g, sx, c.y + 4, "график копится", DIM);
+        textAt(g, sx, inkY(INK_TEXT, c.y, c.h), "график копится", DIM);
       }
     } else {
       g.setFont(&F_BIG);
-      textAt(g, c.x, c.y, "-", DIM);
+      textAt(g, c.x, inkY(INK_BIG, c.y, c.h), "-", DIM);
     }
   }
 
   /* ── right lower: the two secondary numbers ──────────────────────────── */
   {
-    Rect c = panelM(g, 148, 74, 168, 44, "давление / батарея");
+    Rect c = panelM(g, 148, 80, 168, 50, "давление / батарея");
     if (z.pressure > 0) {
       /* Pressure is the one reading here that is about the OUTDOORS - a
        * building leaks, so the needle tracks the atmosphere. mmHg because
@@ -244,12 +266,12 @@ void drawHome(UiCtx &ui) {
       uint16_t pc = tend == barometer::TEND_FALL_FAST   ? WARN
                     : tend == barometer::TEND_RISE_FAST ? INFO
                                                         : TEXT;
-      bigVal(g, c.x, c.y, v, "мм", stale ? DIM : pc);
+      bigVal(g, c.x, c.y, c.h, v, "мм", stale ? DIM : pc);
     }
     if (z.battery >= 0) {
       bool lowBat = s.zbBattMin > 0 && z.battery <= s.zbBattMin;
       snprintf(v, sizeof(v), "%d", z.battery);
-      bigVal(g, c.x + c.w, c.y, v, "%",
+      bigVal(g, c.x + c.w, c.y, c.h, v, "%",
              stale ? DIM : (lowBat ? CRIT : TEXT), true);
     }
   }
@@ -261,7 +283,7 @@ void drawHome(UiCtx &ui) {
      * introduces itself, and the row it cost is the row the evidence needs.
      * The trend window moves to the right of the claim, where it is still
      * feedback for the long press but is not spending a line of its own. */
-    Rect c = panelM(g, 4, 122, 312, 48);
+    Rect c = panelM(g, 4, 134, 312, 36);
     const char *line = nullptr;
     uint16_t lc = TEXT;
     int ax = c.x;

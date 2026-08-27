@@ -663,6 +663,16 @@ static void consoleExec(String line) {
     } else {
       Serial.printf("uploading %d day(s) of archive\n", days);
     }
+  } else if (cmd == "fontcard") {
+    /* Measure the fonts instead of trusting their names — see drawFontCard. */
+    long sec = arg.length() ? arg.toInt() : 60;
+    if (sec <= 0) {
+      sceneMgr.showFontCard(0);
+      Serial.println("font card dismissed");
+    } else {
+      sceneMgr.showFontCard((unsigned long)sec * 1000UL);
+      Serial.printf("font card up for %ld s\n", sec);
+    }
   } else if (cmd == "testcard") {
     /* The only check this project cannot make on its own: screenshots come
      * from the sprite, and the panel's inversion, RGB order, gamma and

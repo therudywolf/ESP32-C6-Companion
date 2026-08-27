@@ -794,6 +794,39 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
  *  4. THE CURRENT THEME's roles, each under its own name, so a palette can be
  *     judged on glass rather than in a contrast table.
  */
+/* One probe per font, each drawn at a cursor y that is a round number, with a
+ * single-pixel rule ON that y. Measuring the screenshot then gives the offset
+ * from the cursor to the first and last ink row directly — no arithmetic, no
+ * assumption about what fontHeight() means. */
+void SceneManager::drawFontCard(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  g.fillScreen(0x0000);
+  struct Probe {
+    const lgfx::U8g2font *f;
+    int size;
+    int y;
+    const char *s;
+  };
+  static const Probe probes[] = {
+      {&theme::F_SMALL, 1, 10, "0Ag"}, {&theme::F_TEXT, 1, 30, "0Ag"},
+      {&theme::F_VALUE, 1, 50, "0Ag"}, {&theme::F_MED, 1, 70, "0Ag"},
+      {&theme::F_BIG, 1, 100, "0"},    {&theme::F_HUGE, 1, 140, "0"},
+  };
+  for (unsigned i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+    const Probe &p = probes[i];
+    /* The rule marks the cursor row exactly, in a colour nothing else uses. */
+    g.drawFastHLine(0, p.y, 8, 0x07E0);
+    g.setFont(p.f);
+    g.setTextSize(p.size);
+    g.setTextColor(0xFFFF);
+    g.setCursor(12, p.y);
+    g.print(p.s);
+    Serial.printf("[FONT] probe %u cursorY=%d fontHeight=%d width=%d\n", i,
+                  p.y, g.fontHeight(), g.textWidth(p.s));
+  }
+  g.setTextSize(1);
+}
+
 void SceneManager::drawTestCard(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   g.fillSprite(BG);
@@ -1478,6 +1511,21 @@ void SceneManager::draw(UiCtx &ui) {
   if (effScene != SCENE_FORZA)
     theme::backdrop(g, NOCT_STATUS_H, NOCT_H);
 
+#if NOCT_LAYOUT_LINT
+  /* Name the screen for the report, and forget the previous visit when the
+   * screen CHANGES — otherwise walking the ring reports only whichever
+   * violations happened to be seen first and the rest stay silent. */
+  {
+    static int lastLinted = -1;
+    theme::lintScene(scenes::title(effScene));
+    if (effScene != lastLinted) {
+      lastLinted = effScene;
+      theme::lintReset();
+    }
+  }
+  theme::lintClear();
+#endif
+
   /* content */
   switch (effScene) {
   case SCENE_DEN:
@@ -1504,6 +1552,12 @@ void SceneManager::draw(UiCtx &ui) {
   case SCENE_ANALYSIS: scenes::drawAnalysis(ui); break;
   case SCENE_FORZA: scenes::drawForza(ui); break;
   }
+
+#if NOCT_LAYOUT_LINT
+  /* The chrome is not inside anybody's tile: leaving the last tile's box
+   * armed would report the status bar as an overflow of it. */
+  theme::lintClear();
+#endif
 
   /* chrome — the Forza HUD owns the whole screen, no bars. Footer hint line
    * removed (wasted space); scene position lives in the status bar now. */
@@ -1569,6 +1623,11 @@ void SceneManager::draw(UiCtx &ui) {
 
   /* The test card owns the whole screen, chrome included: half of what it
    * checks IS the chrome. */
+  if (fontCardUntil_ && (long)(fontCardUntil_ - ui.now) > 0) {
+    drawFontCard(ui);
+    return;
+  }
+
   if (testCardUntil_ && (long)(testCardUntil_ - ui.now) > 0) {
     drawTestCard(ui);
     return;

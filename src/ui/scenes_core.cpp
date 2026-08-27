@@ -380,13 +380,23 @@ void drawDash(UiCtx &ui) {
   char r1[12], r2[12];
   fmtRate(r1, sizeof(r1), hw.nd);
   fmtRate(r2, sizeof(r2), hw.nu);
-  g.fillTriangle(t[3].x + 10, t[3].y + 14, t[3].x + 20, t[3].y + 14,
-                 t[3].x + 15, t[3].y + 22, INFO); /* down */
+  /* Two values sharing the tile, each centred by INK in its own half.
+   * Placed by cursor offset before, which put the lower one's digits a pixel
+   * through the tile's own frame — F_BIG writes 35 rows for 24 of ink, and
+   * the offsets were chosen against the 24. */
+  const int nb = (t[3].h - 6) / 2;          /* half the interior */
+  const int ny1 = t[3].y + 3, ny2 = ny1 + nb;
   g.setFont(&F_BIG);
-  textAt(g, t[3].x + 26, t[3].y + 6, r1, INFO);
-  g.fillTriangle(t[3].x + 10, t[3].y + 46, t[3].x + 20, t[3].y + 46,
-                 t[3].x + 15, t[3].y + 38, GOOD); /* up */
-  textAt(g, t[3].x + 26, t[3].y + 32, r2, GOOD);
+  int ty1 = inkY(INK_BIG, ny1, nb), ty2 = inkY(INK_BIG, ny2, nb);
+  /* Arrows level with the ink they belong to, not with a fixed offset. */
+  int mid1 = ty1 + INK_BIG.top + INK_BIG.height / 2;
+  int mid2 = ty2 + INK_BIG.top + INK_BIG.height / 2;
+  g.fillTriangle(t[3].x + 10, mid1 - 4, t[3].x + 20, mid1 - 4, t[3].x + 15,
+                 mid1 + 4, INFO); /* down */
+  textAt(g, t[3].x + 26, ty1, r1, INFO);
+  g.fillTriangle(t[3].x + 10, mid2 + 4, t[3].x + 20, mid2 + 4, t[3].x + 15,
+                 mid2 - 4, GOOD); /* up */
+  textAt(g, t[3].x + 26, ty2, r2, GOOD);
   g.setFont(&F_MED);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "%dms", hw.pg);

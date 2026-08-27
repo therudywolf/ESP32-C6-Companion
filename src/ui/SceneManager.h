@@ -78,6 +78,16 @@ public:
   /* ms == 0 dismisses it. A card you have to photograph should not be
    * racing a timer: the first attempt at this expired while the camera was
    * being fetched. */
+  /* A card with one glyph per font on a plain ground, each at a KNOWN cursor
+   * y, so the ink offsets can be measured off a screenshot instead of
+   * guessed. The layout bug this whole exercise is about comes from the gap
+   * between a font's line box and its ink; that gap has to be a number. */
+  void showFontCard(unsigned long ms) {
+    fontCardUntil_ = ms ? millis() + ms : 0;
+  }
+  bool fontCardUp() const {
+    return fontCardUntil_ && (long)(fontCardUntil_ - millis()) > 0;
+  }
   void showTestCard(unsigned long ms) {
     testCardUntil_ = ms ? millis() + ms : 0;
   }
@@ -93,6 +103,8 @@ public:
 private:
   void drawTestCard(UiCtx &ui);
   unsigned long testCardUntil_ = 0;
+  unsigned long fontCardUntil_ = 0;
+  void drawFontCard(UiCtx &ui);
 
 public:
   bool takeShotRequest() {
