@@ -376,6 +376,8 @@ struct AppState {
    * A temporary FORCE, never a stored setting — see Display::forceFor. */
   int rcBlMax = -1;
   int rcBlMins = 15;
+  /* Greyscale + no backdrop, for comparing screenshots. -1 = no change. */
+  int rcMono = -1;
   String rcAction;               /* "feed"|"play"|"talk", "" = none */
   int rcLed = -1;                /* 0/1, -1 = none */
   int rcCarousel = -2;           /* -1 off, 5/10/15 sec, -2 = none */

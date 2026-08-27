@@ -378,6 +378,7 @@ static void consoleHelp() {
       "  say <text>      make the wolf say something\n"
       "  feed|play|pet|talk\n"
       "  shot            screenshot to the card\n"
+      "  mono [0|1]      ч/б + без анимации, для сверки снимков\n"
       "  zb [join|reset]  Zigbee coordinator\n"
       "  reboot"));
 }
@@ -670,6 +671,15 @@ static void consoleExec(String line) {
     } else {
       Serial.printf("uploading %d day(s) of archive\n", days);
     }
+  } else if (cmd == "mono") {
+    /* Screenshot review mode: the palette goes greyscale and the animated
+     * backdrop stops. Asked for because colour and motion between two
+     * captures make it impossible to see WHICH pixel moved — and that is
+     * the only question a layout review is trying to answer. */
+    bool on = arg.length() ? (arg.toInt() != 0) : !theme::monoOn();
+    theme::setMono(on);
+    Serial.printf("mono %s (фон %s)\n", on ? "on" : "off",
+                  theme::bgStyleName(0));
   } else if (cmd == "fontcard") {
     /* Measure the fonts instead of trusting their names — see drawFontCard. */
     long sec = arg.length() ? arg.toInt() : 60;
@@ -1189,6 +1199,11 @@ void loop() {
       bool asked = zb.pollNow();
       sceneMgr.toast(asked ? "опрашиваю датчик" : "некого опрашивать");
       state.rcZbPoll = -1;
+    }
+    if (state.rcMono >= 0) {
+      theme::setMono(state.rcMono != 0);
+      sceneMgr.toast(state.rcMono ? "ч/б режим" : "цвет вернулся");
+      state.rcMono = -1;
     }
     if (state.rcBlMax > 0) {
       /* Same override the console's blmax drives, and the same automatic

@@ -1557,6 +1557,10 @@ void SceneManager::draw(UiCtx &ui) {
   /* The chrome is not inside anybody's tile: leaving the last tile's box
    * armed would report the status bar as an overflow of it. */
   theme::lintClear();
+  /* Everything the scene drew is now registered; test it against itself.
+   * Here rather than after the chrome, because the status bar legitimately
+   * sits over the top of the content band. */
+  theme::lintFrameEnd();
 #endif
 
   /* chrome — the Forza HUD owns the whole screen, no bars. Footer hint line

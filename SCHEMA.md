@@ -178,6 +178,7 @@ Every field is optional; the sentinel means "no change this time".
 | `zbdump` | days | -1 | **one-shot**: upload that many days of the climate archive |
 | `blmax` | PWM | -1 | **one-shot**: raise the backlight ceiling to this value (210..255) |
 | `blmins` | min | 15 | how long `blmax` holds before the board drops it back (1..120) |
+| `mono` | 0/1 | -1 | greyscale the palette and stop the backdrop, for comparing screenshots |
 
 > **On cadence:** an Aqara WSDCGQ11LM decides for itself — it reports on change
 > (~±0.5 °C, ±6 % RH) plus a keep-alive roughly every 50-60 minutes, and that
