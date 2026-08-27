@@ -28,6 +28,44 @@
 
 class SdStore;
 
+/* Walks one dated CSV line by line, holding a single window of it at a time.
+ *
+ * Every reader of the archive used to call readAll(), which keeps the LAST
+ * NOCT_SD_READ_MAX bytes of anything bigger. For a log being tailed that is
+ * correct; for an archive being analysed it deletes the MORNING of every busy
+ * day, silently and with no error to notice. Three of the six files on the
+ * card were over the cap, so the percentile that answers "warm for this flat"
+ * was computed from a sample with the coldest hours cut out of it - biased,
+ * confident, and wrong in a direction nobody would think to check.
+ *
+ * One implementation on purpose. The export had its own copy of this cursor,
+ * and the copy is where the off-by-one lived that ended every transfer twenty
+ * rows into the newest day. */
+class DayReader {
+ public:
+  /* False when the file is absent or empty; nothing else needs saying. */
+  bool begin(SdStore *sd, const char *path);
+  /* The next row that is neither blank nor the header, trimmed.
+   * False once the whole file has been walked. */
+  bool next(String &out);
+  /* Whether anything is left - buffered rows or unread windows. Both must be
+   * asked about: the last window is loaded while the file counter already
+   * reads zero. */
+  bool more() const {
+    return pos_ < (int)buf_.length() || off_ < size_;
+  }
+  void reset();
+
+ private:
+  bool window();
+
+  SdStore *sd_ = nullptr;
+  char path_[48] = {0};
+  String buf_;
+  int pos_ = 0;
+  size_t off_ = 0, size_ = 0;
+};
+
 class ClimateLog {
 public:
   /* Columns in a loaded series. 32 matches the live sparkline, so the ДОМ
@@ -123,9 +161,10 @@ public:
    * A mirror ran on every reconnect and was silently truncated to the small
    * hours of the morning. Must agree with exportNextRow's own end condition,
    * which is exactly this. */
-  bool exportActive() const {
-    return exDays_ > 0 || exPos_ < (int)exBuf_.length() || exOff_ < exSize_;
-  }
+  /* "There is more to send", which is NOT "there are more files": the last
+   * file is opened with the day counter already at zero, and asking only the
+   * counter ended every transfer on that file's first window. */
+  bool exportActive() const { return exDays_ > 0 || exRd_.more(); }
   /* One row as "YYYY-MM-DD,HH:MM,temp_c,rh,bat,press_hpa" — the date is
    * prefixed because a bare HH:MM cannot be placed in time by the reader.
    * False when the walk is finished. */
@@ -135,9 +174,8 @@ public:
   void exportAbort();
 
 private:
-  bool exportLoadDay();
-  /* One window of `path` at exOff_, trimmed to whole lines, into exBuf_. */
-  bool exportTakeWindow(const char *path);
+  /* Point exRd_ at the next dated file that has rows. */
+  bool exportOpenNextDay();
 
   SdStore *sd_ = nullptr;
   char lastDate_[12] = {0};
@@ -145,12 +183,7 @@ private:
    * from today the current file is, so the walk runs oldest-first and the
    * receiving end gets a series already in order. */
   int exDays_ = 0, exDay_ = 0, exRows_ = 0;
-  String exBuf_;
-  int exPos_ = 0;
-  /* Where the current day's file has been read up to, and how long it is.
-   * A day is walked in WINDOWS: one 4 KB read per day used to be the whole
-   * of it, so every file past the cap shipped only its newest 4 KB. */
-  size_t exOff_ = 0, exSize_ = 0;
+  DayReader exRd_;
   char exDate_[12] = {0};
 };
 
