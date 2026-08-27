@@ -131,7 +131,10 @@ void drawMedia(UiCtx &ui) {
     g.setTextSize(1);
     String t = m.track.length() ? m.track : String("--- нет трека ---");
     int tw = g.textWidth(t.c_str());
-    g.setClipRect(rx, 48, rw, 20);
+    /* Opened at the cursor and as tall as the line: at 48 with 20 rows it
+     * ended four rows early and shaved the descenders off, so Cyrillic "р",
+     * "у" and "д" lost their tails and read as different letters. */
+    g.setClipRect(rx, 52, rw, INK_MED.box);
     if (tw > rw) { /* scroll long titles seamlessly */
       int span = tw + 40, off = (int)((ui.now / 35) % span);
       textAt(g, rx - off, 52, t.c_str(), TEXT);
@@ -198,17 +201,24 @@ void drawMedia(UiCtx &ui) {
   if (tw > NOCT_W - 16) {
     int span = tw + 50; /* gap between loop copies */
     int off = (int)((ui.now / 35) % span);
-    g.setClipRect(4, 108, NOCT_W - 8, 18); /* keep it on its own line */
+    /* The window has to contain the LINE, not a guess at it. F_MED writes 20
+     * rows from the cursor, so an 18-row window opened ten rows above the
+     * cursor showed the top five rows of the capitals and nothing else — a
+     * long title scrolled past as a band of letter-tops. */
+    g.setClipRect(4, 118, NOCT_W - 8, INK_MED.box);
     textAt(g, 8 - off, 118, t.c_str(), TEXT);
     textAt(g, 8 - off + span, 118, t.c_str(), TEXT); /* second copy = seamless */
     g.clearClipRect();
   } else {
     textCenter(g, NOCT_W / 2, 118, t.c_str(), TEXT);
   }
-  String a = m.artist;
-  int aw = g.textWidth(a.c_str());
-  if (aw > NOCT_W - 8) a = a.substring(0, 24);
-  textCenter(g, NOCT_W / 2, 138, a.c_str(), ORANGE);
+  /* clipW, not substring(0, 24): the argument is a BYTE count and every
+   * Cyrillic letter costs two, so a Russian name lost half of what a Latin
+   * one kept — and a cut landing mid-codepoint left a broken byte the font
+   * drew as a box. clipW measures rendered width and cuts on codepoints. */
+  char artist[64];
+  clipW(g, m.artist.c_str(), artist, sizeof(artist), NOCT_W - 8);
+  textCenter(g, NOCT_W / 2, 138, artist, ORANGE);
 
   /* track timeline across the freed bottom band (replaces the equaliser) */
   mediaTimeline(g, m, playing, ui.now, 154);
@@ -326,7 +336,7 @@ void drawWeather(UiCtx &ui) {
       g.setFont(&F_MED);
       if (z.temp10 != -32768) {
         snprintf(v, sizeof(v), "%d", (z.temp10 + (z.temp10 < 0 ? -5 : 5)) / 10);
-        textCenter(g, x + 28, 112, v, stale ? DIM : WARN);
+        textCenter(g, x + 28, 108, v, stale ? DIM : WARN);
       } else {
         textCenter(g, x + 28, 112, "--", DIM);
       }
@@ -479,13 +489,22 @@ void drawForest(UiCtx &ui) {
       bool unknown = bars[b].val < 0;
       int val = unknown ? 0 : bars[b].val;
       if (roomy) {
+        /* F_VALUE, not F_TEXT. This is the reading the screen exists for,
+         * and eleven-pixel type subtends 3.9 arc-minutes at the metre this
+         * board is read from — under the 5' an eye resolves at all. The same
+         * percentage-with-a-bar is set in F_BIG on CLAUDE, so it was also
+         * three and a half times smaller than its own twin one screen over.
+         *
+         * The label stays small: it is a label, and it never changes. */
         g.setFont(&F_TEXT);
+        textAt(g, bx, y + 22, bars[b].l, DIM);
+        g.setFont(&F_VALUE);
         if (unknown)
-          snprintf(v, sizeof(v), "%s --", bars[b].l);
+          snprintf(v, sizeof(v), "--");
         else
-          snprintf(v, sizeof(v), "%s %d%%", bars[b].l, val);
-        textAt(g, bx, y + 26, v, DIM);
-        hBar(g, bx, y + 37, (cw - 24) / 3 - 6, 9, val, pctColor(val));
+          snprintf(v, sizeof(v), "%d%%", val);
+        textAt(g, bx + 26, y + 20, v, unknown ? DIM : TEXT);
+        hBar(g, bx, y + 38, (cw - 24) / 3 - 6, 9, val, pctColor(val));
       } else {
         hBar(g, bx, y + 26, (cw - 24) / 3 - 6, 9, val, pctColor(val));
         /* no room for a label here (4+ nodes), so mark "unknown" with a dash
@@ -522,11 +541,16 @@ void drawServices(UiCtx &ui) {
     /* latency in a slim font, right-aligned — frees width for the name */
     int nameRight = 206;
     if (e.ms >= 0) {
-      g.setFont(&F_TEXT);
+      /* F_VALUE: the latency is the only NUMBER on this screen, and it was
+       * set two steps smaller than the service name beside it — the name is
+       * the label and the number is the reading, so the sizes were the wrong
+       * way round. */
+      g.setFont(&F_VALUE);
       g.setTextSize(1);
       snprintf(v, sizeof(v), "%dms", e.ms);
       int mw = g.textWidth(v);
-      textAt(g, 206 - mw, y + 5, v, e.ms > 500 ? WARN : DIM);
+      textAt(g, 206 - mw, inkY(INK_VALUE, y, 18), v,
+             e.ms > 500 ? WARN : TEXT);
       nameRight = 206 - mw - 8;
     }
     /* name clipped by display width so multi-byte Cyrillic never cuts mid-glyph

@@ -67,7 +67,10 @@ static void drawWindow(LGFX_Sprite &g, int cx, const char *label, int d10,
 
   /* The bar grows from a common midline, so up and down are told apart by
    * direction rather than by reading the sign. */
-  const int mid = 74, maxH = 8;
+  /* The falling bar grows DOWN from mid, so mid+maxH has to stay inside the
+   * tile: the frame is at y=79 and 74+8 reached 82, putting three rows of a
+   * falling column outside its own panel and over the gap below. */
+  const int mid = 70, maxH = 8;
   if (maxAbs10 < 5) maxAbs10 = 5;
   int h = (int)((long)abs(d10) * maxH / maxAbs10);
   if (h > maxH) h = maxH;
@@ -147,11 +150,23 @@ void drawAnalysis(UiCtx &ui) {
        * the tile belongs to the second finding's detail, and putting the
        * counter there landed it on top of the words. The frame break at the
        * top is the one piece of chrome with room to spare. */
-      g.setFont(&F_SMALL);
+      /* On the LOWER tile's frame line, which is where the comment always
+       * said it was. At 76 it sat ten pixels higher — inside the pressure
+       * tile — and its own background wiped that tile's bottom border, its
+       * corner accent, and all but the first row of the 24-hour column. A
+       * falling 24-hour trend read as no change at all.
+       *
+       * F_VALUE, not F_SMALL: this is a count the reader is meant to act on
+       * ("there are more findings than fit"), and five-pixel type is below
+       * the eye's threshold at the distance this board is read from. */
+      /* F_TEXT, not F_VALUE: the word is Russian and F_VALUE is a Latin
+       * subset that would draw it as three hollow boxes. F_TEXT is the
+       * largest face that can spell it and still fit on a frame line. */
+      g.setFont(&F_TEXT);
       snprintf(v, sizeof(v), " еще %d ", st.zbFindCount - shown);
       int w = g.textWidth(v);
-      g.fillRect(308 - w, 76, w, 9, BG);
-      textRight(g, 308, 76, v, DIM);
+      g.fillRect(308 - w, 82, w, INK_TEXT.box, BG);
+      textRight(g, 308, 82, v, DIM);
     }
   }
 }
