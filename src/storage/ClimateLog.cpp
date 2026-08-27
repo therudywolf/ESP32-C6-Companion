@@ -6,6 +6,66 @@
 #include "core/config.h"
 #include "storage/SdStore.h"
 
+/* ── DayReader ───────────────────────────────────────────────────────────── */
+
+void DayReader::reset() {
+  sd_ = nullptr;
+  path_[0] = 0;
+  buf_ = "";
+  pos_ = 0;
+  off_ = size_ = 0;
+}
+
+bool DayReader::begin(SdStore *sd, const char *path) {
+  reset();
+  if (!sd || !path || !*path) return false;
+  sd_ = sd;
+  snprintf(path_, sizeof(path_), "%s", path);
+  return window();
+}
+
+bool DayReader::window() {
+  size_t total = 0;
+  /* Straight into buf_. Reading into a scratch String and assigning would
+   * hold two 4 KB buffers at once, and this runs on a board whose free heap
+   * bottoms out in the twenties with Zigbee and WiFi both up. */
+  if (!sd_ || !sd_->readWindow(path_, buf_, off_, NOCT_SD_READ_MAX, &total) ||
+      !buf_.length())
+    return false;
+  size_ = total;
+  size_t consumed = buf_.length();
+  /* Never split a row across two windows. Cut back to the last newline unless
+   * this window already reaches the end of the file, and resume exactly where
+   * this one stopped - so no row is torn and none is skipped. */
+  if (off_ + consumed < size_) {
+    int nl = buf_.lastIndexOf('\n');
+    if (nl >= 0) {
+      buf_.remove(nl + 1); /* truncates in place, no second allocation */
+      consumed = (size_t)nl + 1;
+    }
+    /* No newline in a whole window means one line longer than the window.
+     * Take it whole rather than spinning here forever. */
+  }
+  pos_ = 0;
+  off_ += consumed;
+  return true;
+}
+
+bool DayReader::next(String &out) {
+  for (;;) {
+    if (pos_ >= (int)buf_.length()) {
+      if (off_ >= size_ || !window()) return false;
+    }
+    int nl = buf_.indexOf('\n', pos_);
+    out = (nl < 0) ? buf_.substring(pos_) : buf_.substring(pos_, nl);
+    pos_ = (nl < 0) ? buf_.length() : nl + 1;
+    out.trim();
+    /* The per-file header is for whoever opens the CSV on a laptop. */
+    if (!out.length() || out.startsWith("time")) continue;
+    return true;
+  }
+}
+
 void ClimateLog::Series::clear() {
   for (int i = 0; i < kCols; i++) {
     temp10[i] = INT_MIN;
@@ -71,17 +131,12 @@ bool ClimateLog::loadSeries(int days, Series &out) {
     snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), date);
     if (!sd_->exists(path)) continue;
 
-    String text;
-    if (!sd_->readAll(path, text, NOCT_SD_READ_MAX) || !text.length()) continue;
+    DayReader rd;
+    if (!rd.begin(sd_, path)) continue;
     filesRead++;
 
-    int start = 0;
-    while (start < (int)text.length()) {
-      int nl = text.indexOf('\n', start);
-      String line = (nl < 0) ? text.substring(start) : text.substring(start, nl);
-      start = (nl < 0) ? text.length() : nl + 1;
-      line.trim();
-      if (!line.length() || line.startsWith("time")) continue;
+    String line;
+    while (rd.next(line)) {
 
       /* HH:MM,tt.t,rh,bat,press */
       int c1 = line.indexOf(',');
@@ -160,17 +215,11 @@ bool ClimateLog::trend(int hours, int &dTemp10, int &dHum, int &dPress10) {
     char date[12], path[40];
     strftime(date, sizeof(date), "%Y-%m-%d", &tmv);
     snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), date);
-    if (!sd_->exists(path)) continue;
-    String text;
-    if (!sd_->readAll(path, text, NOCT_SD_READ_MAX) || !text.length()) continue;
+    DayReader rd;
+    if (!rd.begin(sd_, path)) continue;
 
-    int start = 0;
-    while (start < (int)text.length()) {
-      int nl = text.indexOf('\n', start);
-      String line = (nl < 0) ? text.substring(start) : text.substring(start, nl);
-      start = (nl < 0) ? text.length() : nl + 1;
-      line.trim();
-      if (!line.length() || line.startsWith("time")) continue;
+    String line;
+    while (rd.next(line)) {
 
       int c1 = line.indexOf(',');
       if (c1 < 4) continue;
@@ -235,58 +284,20 @@ void ClimateLog::exportAbort() {
    * announced "archive uploaded: 0 rows" while 354 of them were arriving at
    * the other end. exportBegin() resets the count; until then it means "rows
    * sent by the last export", which is the only reading a caller wants. */
-  exDays_ = exDay_ = exPos_ = 0;
-  exOff_ = exSize_ = 0;
-  exBuf_ = "";
+  exDays_ = exDay_ = 0;
+  exRd_.reset();
   exDate_[0] = 0;
 }
 
-bool ClimateLog::exportTakeWindow(const char *path) {
-  size_t total = 0;
-  /* Straight into exBuf_. Reading into a scratch String and assigning would
-   * hold two 4 KB buffers at once, and this runs on a board whose free heap
-   * bottoms out around 14 KB with Zigbee and WiFi both up. */
-  if (!sd_->readWindow(path, exBuf_, exOff_, NOCT_SD_READ_MAX, &total) ||
-      !exBuf_.length())
-    return false;
-  exSize_ = total;
-  size_t consumed = exBuf_.length();
-  /* Never hand out half a row. Cut back to the last newline unless this
-   * window already reaches the end of the file, and start the next window
-   * where this one really stopped - so nothing is split and nothing skipped. */
-  if (exOff_ + consumed < exSize_) {
-    int nl = exBuf_.lastIndexOf('\n');
-    if (nl >= 0) {
-      exBuf_.remove(nl + 1); /* truncates in place, no second allocation */
-      consumed = (size_t)nl + 1;
-    }
-    /* No newline in a whole window means one line longer than the window.
-     * Take it whole rather than spinning here forever. */
-  }
-  exPos_ = 0;
-  exOff_ += consumed;
-  return true;
-}
-
-/* Pull the next WINDOW into the buffer: the rest of the day already open, or
- * the first window of the next dated file. Days with no file are skipped. */
-bool ClimateLog::exportLoadDay() {
-  char path[40];
-  for (;;) {
-    /* Finish the file in hand before moving on. A busy day is bigger than one
-     * window: the 23rd is 6539 bytes, and taking a single read per day sent
-     * its last 4096 and dropped everything before 11:55. */
-    if (exDate_[0] && exOff_ < exSize_) {
-      snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), exDate_);
-      if (exportTakeWindow(path)) return true;
-      exDate_[0] = 0; /* unreadable: abandon it rather than spin */
-      exOff_ = exSize_ = 0;
-    }
-    if (exDays_ <= 0) return false;
-
+/* Point the reader at the next dated file that actually has rows, oldest
+ * first. Days with no file are skipped; the walk ends when the day counter
+ * runs out. */
+bool ClimateLog::exportOpenNextDay() {
+  while (exDays_ > 0) {
     time_t t = time(nullptr) - (time_t)exDay_ * 86400;
     struct tm tmv;
     bool got = localtime_r(&t, &tmv) != nullptr;
+    char path[40];
     if (got) {
       strftime(exDate_, sizeof(exDate_), "%Y-%m-%d", &tmv);
       snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), exDate_);
@@ -297,37 +308,27 @@ bool ClimateLog::exportLoadDay() {
      * forever and the export never finishes. */
     exDay_--;
     if (exDay_ < 0) exDays_ = 0; /* that was the last file */
-    exOff_ = exSize_ = 0;
-    if (got && exportTakeWindow(path)) return true;
+    if (got && exRd_.begin(sd_, path)) return true;
     exDate_[0] = 0;
-    if (exDays_ <= 0) return false;
   }
+  return false;
 }
 
 bool ClimateLog::exportNextRow(char *out, size_t cap) {
   if (!out || cap < 24) return false;
+  String line;
   for (;;) {
-    if (exPos_ >= (int)exBuf_.length()) {
-      /* Out of buffered rows. The next window may be more of the same day or
-       * the first of the next one; false means the walk is genuinely over -
-       * days AND windows both exhausted. Asking exDays_ here instead was the
-       * bug that ended every transfer on the last file's first window. */
-      if (!exportLoadDay()) {
-        exportAbort();
-        return false;
-      }
+    if (exRd_.next(line)) {
+      snprintf(out, cap, "%s,%s", exDate_, line.c_str());
+      exRows_++;
+      return true;
     }
-    int nl = exBuf_.indexOf('\n', exPos_);
-    String line =
-        (nl < 0) ? exBuf_.substring(exPos_) : exBuf_.substring(exPos_, nl);
-    exPos_ = (nl < 0) ? exBuf_.length() : nl + 1;
-    line.trim();
-    /* The per-file header is for whoever opens the CSV on a laptop; it is
-     * noise on the wire, where the schema is already agreed. */
-    if (!line.length() || line.startsWith("time")) continue;
-    snprintf(out, cap, "%s,%s", exDate_, line.c_str());
-    exRows_++;
-    return true;
+    /* This file is done. Another day, or the walk is genuinely over - and
+     * "over" must consider the reader too, not just the day counter. */
+    if (!exportOpenNextDay()) {
+      exportAbort();
+      return false;
+    }
   }
 }
 
@@ -348,18 +349,11 @@ bool ClimateLog::percentiles(int days, int temp10, int rh, int press,
     char date[12], path[40];
     strftime(date, sizeof(date), "%Y-%m-%d", &tmv);
     snprintf(path, sizeof(path), "%s/%s.csv", dirPath(), date);
-    if (!sd_->exists(path)) continue;
-    String text;
-    if (!sd_->readAll(path, text, NOCT_SD_READ_MAX) || !text.length()) continue;
+    DayReader rd;
+    if (!rd.begin(sd_, path)) continue;
 
-    int start = 0;
-    while (start < (int)text.length()) {
-      int nl = text.indexOf('\n', start);
-      String line =
-          (nl < 0) ? text.substring(start) : text.substring(start, nl);
-      start = (nl < 0) ? text.length() : nl + 1;
-      line.trim();
-      if (!line.length() || line.startsWith("time")) continue;
+    String line;
+    while (rd.next(line)) {
 
       /* HH:MM,temp,rh,bat,press */
       int c1 = line.indexOf(',');
