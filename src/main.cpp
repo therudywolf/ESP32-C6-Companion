@@ -214,11 +214,18 @@ static void logBootRecord() {
  * owner asked for, not something in the frame path. */
 static bool saveScreenshot() {
   if (!sd.ok()) return false;
+  /* Remember where the last one landed. The scan is O(n) in shots already
+   * taken and every probe is an SD lookup on a bus shared with the display —
+   * at 288 files the command took long enough that a caller waiting eight
+   * seconds for the filename got nothing back and concluded the card had
+   * failed. Only the FIRST shot after a boot pays for the scan. */
+  static int lastIdx = 0;
   char path[32];
-  int idx = 0;
+  int idx = lastIdx;
   do {
     snprintf(path, sizeof(path), "/shots/%03d.bmp", ++idx);
   } while (idx < 999 && sd.exists(path));
+  lastIdx = idx;
 
   const int W = NOCT_W, H = NOCT_H;
   const uint32_t rowBytes = (uint32_t)W * 2;      /* 640, already 4-aligned */
