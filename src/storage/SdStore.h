@@ -59,6 +59,18 @@ public:
   /* Direct helpers — loop task only. */
   bool appendLine(const char *path, const String &line);
   bool readAll(const char *path, String &out, size_t maxBytes = NOCT_SD_READ_MAX);
+  /* One WINDOW of a file, from `offset`, with the total size handed back so
+   * the caller can walk the rest.
+   *
+   * readAll() keeps the TAIL of anything past the cap. That is right for a
+   * log being tailed and wrong for an archive being shipped: it amputates the
+   * oldest part of every file bigger than 4 KB, silently and with no error.
+   * Three days of this archive were over the cap and each arrived missing its
+   * morning - the 23rd began at 11:55 on the receiving end and at 00:00 on
+   * the card. Nothing reported a failure, because nothing had failed; the
+   * read did exactly what it was asked. */
+  bool readWindow(const char *path, String &out, size_t offset,
+                  size_t maxBytes, size_t *total = nullptr);
   bool readLastLines(const char *path, int n, String &out,
                      size_t maxBytes = NOCT_SD_READ_MAX);
   /* Halve a line file once it exceeds maxBytes, keeping the NEWEST lines.
