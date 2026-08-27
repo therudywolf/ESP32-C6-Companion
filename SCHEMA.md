@@ -176,6 +176,8 @@ Every field is optional; the sentinel means "no change this time".
 | `zbpoll` | 1 | -1 | **one-shot**: read the sensor's attributes now |
 | `zbint` | sec | -1 | ask the sensor to report at least this often |
 | `zbdump` | days | -1 | **one-shot**: upload that many days of the climate archive |
+| `blmax` | PWM | -1 | **one-shot**: raise the backlight ceiling to this value (210..255) |
+| `blmins` | min | 15 | how long `blmax` holds before the board drops it back (1..120) |
 
 > **On cadence:** an Aqara WSDCGQ11LM decides for itself — it reports on change
 > (~±0.5 °C, ±6 % RH) plus a keep-alive roughly every 50-60 minutes, and that
@@ -321,13 +323,27 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
 
 - `brd:` — the board's own vitals, every 15 s:
   `brd:temp,temp_max,load,fps,heap_free_kb,heap_min_kb,heap_largest_kb,
-  uptime_s,cpu_mhz,rssi,boots,faults,reason`. The device watched a PC all day
+  uptime_s,cpu_mhz,rssi,boots,faults,bl_now,bl_cap,bl_thermal,bl_force_left,
+  reason`. The device watched a PC all day
   and reported nothing about ITSELF — which means you only find out about it
   when it stops. `load` is the share of the frame period the render loop
   actually spent working: an Arduino sketch has no scheduler accounting to ask,
   so this is the only figure that can be measured rather than invented, and it
   is labelled as loop duty, not CPU. `heap_min` matters more than `heap_free` —
   the low-water mark is what decides whether the next TLS handshake fits.
+
+  The four `bl_*` fields (v1.33.0) say what the backlight is actually DOING,
+  as opposed to what the slider asked for: `bl_now` is the PWM being driven,
+  `bl_cap` the ceiling in force, `bl_thermal` is 0 cool / 1 warm-limited /
+  2 hot-limited, and `bl_force_left` the seconds remaining on a temporary
+  override. Night mode, the idle dim, the thermal guard and an override each
+  overrule the request silently, so without these the owner reads 210 on the
+  panel while the glass sits at 90 with nothing connecting the two.
+
+  They are inserted BEFORE `reason` on purpose. The reason is free text and
+  may contain commas, so a receiver splitting from the right would have to
+  know how many a panic message carries. A parser should detect the new shape
+  by CONTENT — four integers where they belong — rather than by field count.
 - `zbtr:` — barometric tendency over 3 h, every 5 min:
   `zbtr:dPress_tenths_hpa,dTemp_tenths_c,dHum_percent`, computed from the card
   archive rather than from the last two reports. Sent separately from the
