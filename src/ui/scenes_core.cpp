@@ -353,7 +353,10 @@ void drawDash(UiCtx &ui) {
     g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%d%%", load);
     textRight(g, t[k].x + t[k].w - 8, t[k].y + 8, v, pctColor(load));
-    trendArrow(g, t[k].x + t[k].w - 12 - g.textWidth(v), t[k].y + 8,
+    /* The arrow is 9 px wide and the percentage is right-aligned to
+     * w-8, so an offset of 12 put five of those nine pixels inside the
+     * first digit. Twenty clears it with three to spare. */
+    trendArrow(g, t[k].x + t[k].w - 20 - g.textWidth(v), t[k].y + 8,
                cpu ? ui.gr.cpuLoad : ui.gr.gpuLoad, 8, 3);
     g.setTextSize(1);
     hBar(g, t[k].x + 6, t[k].y + 45, t[k].w - 12, 11, load, pctColor(load));
