@@ -191,6 +191,62 @@ void hBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color);
 /* Vertical bar (fans etc.). */
 void vBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color);
 
+/* ── ink metrics ─────────────────────────────────────────────────────────
+ *
+ * A font has THREE heights and they are all different:
+ *
+ *   the name        "logisoso24"  — what the composer reads
+ *   the line box     35 px        — what fontHeight() returns and what the
+ *                                   renderer actually writes into
+ *   the ink          24 px        — what the eye sees
+ *
+ * Every screen in this firmware was composed against the first one, so tiles
+ * were sized 24 px for a glyph that needs 35 and the values were clipped by
+ * eleven. Measured on the board with the `fontcard` command; the rule
+ * ink_top = line_box - ascent - descent holds on all six.
+ *
+ * Centre by the INK or the digits sit visibly high; check fits by the LINE
+ * BOX or the renderer clips what the eye cannot yet see. */
+struct Ink {
+  int top;    /* leading rows above the ink */
+  int height; /* a digit or a capital */
+  int box;    /* the full line box — what fontHeight() returns */
+};
+extern const Ink INK_SMALL, INK_TEXT, INK_VALUE, INK_MED, INK_BIG, INK_HUGE;
+
+/* Cursor y that centres this font's ink in the band [top, top+h). */
+int inkY(const Ink &k, int top, int h, int size = 1);
+/* Last row the ink will occupy, for a fits-check that matches the eye. */
+int inkBottom(const Ink &k, int y, int size = 1);
+/* Last row the RENDERER will touch — the line box, which is what clips. */
+int boxBottom(const Ink &k, int y, int size = 1);
+
+/* ── layout lint ─────────────────────────────────────────────────────────
+ *
+ * Built only into the `nocturne-c6-lint` environment. Every text helper
+ * checks what it is about to draw against the rectangle it is supposed to
+ * stay inside, and reports over serial when it does not.
+ *
+ * WHY A TOOL AND NOT AN EYE. The bug that motivated this is invisible by
+ * inspection: a font called "logisoso24" occupies 35 pixels, so a tile sized
+ * from the name clips the value by eleven and nobody notices until they look
+ * at a photograph. Every screen in this firmware was composed against the
+ * NAME. Finding the rest by reading code means re-deriving the same
+ * arithmetic seventeen times and being wrong somewhere; the board can just
+ * measure it, and it measures the string that is actually on screen with the
+ * data that is actually there.
+ *
+ * The rect is set by panel()/panelM(), so a screen gets the check for free
+ * the moment it uses either. */
+void lintClip(int x, int y, int w, int h);
+void lintClear();
+/* Also reports the current SCENE, so a violation can be found without
+ * guessing which screen was up. */
+void lintScene(const char *name);
+/* Forget what has already been reported, so revisiting a screen reports it
+ * again rather than staying silent because the first visit exhausted it. */
+void lintReset();
+
 /* Text helpers (current font/size respected). */
 void textAt(LGFX_Sprite &g, int x, int y, const char *s, uint16_t color);
 void textRight(LGFX_Sprite &g, int xRight, int y, const char *s,

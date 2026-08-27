@@ -39,7 +39,13 @@ static void heroTemp(LGFX_Sprite &g, int x, int y, int t, uint16_t c) {
 }
 
 /* big number + small unit on one baseline */
-static void bigVal(LGFX_Sprite &g, int x, int y, const char *num,
+/* `y`/`h` are the BAND the value must sit in, not a cursor position.
+ *
+ * F_BIG writes a 35 px line for 24 px of digits, so a caller placing the
+ * cursor by eye clips its own number against the tile frame — measured, that
+ * is exactly what CPU's RPM and watts were doing, by a pixel each. The unit
+ * hangs off the number's baseline so the pair reads as one reading. */
+static void bigVal(LGFX_Sprite &g, int x, int y, int h, const char *num,
                    const char *unit, uint16_t c, bool rightAlign = false) {
   g.setFont(&F_BIG);
   int nw = g.textWidth(num);
@@ -47,10 +53,12 @@ static void bigVal(LGFX_Sprite &g, int x, int y, const char *num,
   int uw = unit ? g.textWidth(unit) : 0;
   int x0 = rightAlign ? x - nw - uw - 4 : x;
   g.setFont(&F_BIG);
-  textAt(g, x0, y, num, c);
+  int ty = inkY(INK_BIG, y, h);
+  textAt(g, x0, ty, num, c);
   if (unit) {
     g.setFont(&F_TEXT);
-    textAt(g, x0 + nw + 4, y + 13, unit, DIM);
+    int base = ty + INK_BIG.top + INK_BIG.height;
+    textAt(g, x0 + nw + 4, base - INK_TEXT.top - INK_TEXT.height, unit, DIM);
   }
 }
 
@@ -75,9 +83,9 @@ void drawCpu(UiCtx &ui) {
 
   panel(g, 140, 82, 176, 32, "КУЛЕР / ПИТАНИЕ");
   snprintf(v, sizeof(v), "%d", hw.fans[0]);
-  bigVal(g, 148, 86, v, "RPM", TEXT);
+  bigVal(g, 148, 85, 26, v, "RPM", TEXT);   /* плитка 82..113 */
   snprintf(v, sizeof(v), "%d", hw.pw);
-  bigVal(g, 308, 86, v, "W", TEXT, true);
+  bigVal(g, 308, 85, 26, v, "W", TEXT, true);
 
   /* grown into the freed bottom band: top-2 CPU processes + clock */
   panel(g, 4, 120, 312, 48, "ТОП ПРОЦЕССЫ / ТАКТ");
@@ -90,7 +98,7 @@ void drawCpu(UiCtx &ui) {
     textAt(g, 12, 128 + i * 20, v, i == 0 ? TEXT : DIM);
   }
   snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
-  bigVal(g, 306, 132, v, "GHz", INFO, true);
+  bigVal(g, 306, 123, 42, v, "GHz", INFO, true); /* плитка 120..167 */
 }
 
 void drawGpu(UiCtx &ui) {
@@ -123,11 +131,11 @@ void drawGpu(UiCtx &ui) {
   /* grown into the freed bottom band: clock/power/hotspot + fan & mem clock */
   panel(g, 4, 120, 312, 48, "ТАКТ / ПИТАНИЕ / ГОР.ТОЧКА");
   snprintf(v, sizeof(v), "%d", hw.gclock);
-  bigVal(g, 14, 124, v, "MHz", TEXT);
+  bigVal(g, 14, 123, 42, v, "MHz", TEXT);  /* плитка 120..167 */
   snprintf(v, sizeof(v), "%d", hw.gtdp);
-  bigVal(g, 178, 124, v, "W", TEXT);
+  bigVal(g, 178, 123, 42, v, "W", TEXT);
   snprintf(v, sizeof(v), "%d", hw.gh);
-  bigVal(g, 306, 124, v, "C", tempColor(hw.gh, 85, 95), true);
+  bigVal(g, 306, 123, 42, v, "C", tempColor(hw.gh, 85, 95), true);
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   /* the literal alone is 38 B of UTF-8, so this needs its own wider buffer */
@@ -209,17 +217,19 @@ void drawDisks(UiCtx &ui) {
   }
 
   /* disk I/O across the freed bottom band (y148..170) */
-  panel(g, 4, 148, 312, 22, "ДИСКОВЫЙ ОБМЕН");
+  /* 24 rather than 22: F_MED writes 20 rows and the slash in "K/s" uses the
+   * descent, so a 22 px tile clipped the stroke against its own frame. */
+  panel(g, 4, 146, 312, 24, "ДИСКОВЫЙ ОБМЕН");
   g.setFont(&F_MED);
   char r1[12], r2[12];
   fmtRate(r1, sizeof(r1), hw.dr);
   fmtRate(r2, sizeof(r2), hw.dw);
   g.fillTriangle(12, 154, 22, 154, 17, 163, INFO);
   snprintf(v, sizeof(v), "%s/s", r1);
-  textAt(g, 26, 152, v, INFO);
+  textAt(g, 26, inkY(INK_MED, 149, 18), v, INFO);
   g.fillTriangle(172, 163, 182, 163, 177, 154, WARN);
   snprintf(v, sizeof(v), "%s/s", r2);
-  textAt(g, 186, 152, v, WARN);
+  textAt(g, 186, inkY(INK_MED, 149, 18), v, WARN);
 }
 
 void drawFans(UiCtx &ui) {
@@ -320,19 +330,19 @@ void drawNet(UiCtx &ui) {
 
   panel(g, 4, 26, 156, 60, "ВХОДЯЩИЙ");
   fmtRate(r, sizeof(r), hw.nd);
-  bigVal(g, 14, 36, r, "Б/с", INFO);
+  bigVal(g, 14, 33, 50, r, "Б/с", INFO);   /* плитка 26..85 */
   sparkline(g, 14, 64, 134, 18, ui.gr.netDown, INFO, 1000);
 
   panel(g, 164, 26, 152, 60, "ИСХОДЯЩИЙ");
   fmtRate(r, sizeof(r), hw.nu);
-  bigVal(g, 174, 36, r, "Б/с", GOOD);
+  bigVal(g, 174, 33, 50, r, "Б/с", GOOD);
   sparkline(g, 174, 64, 132, 18, ui.gr.netUp, GOOD, 200);
 
   /* bottom panels grown into the freed band (y94..168), spacing fixed so the
    * RSSI line and the server line no longer overlap */
   panel(g, 4, 94, 156, 74, "ПИНГ");
   snprintf(v, sizeof(v), "%d", hw.pg);
-  bigVal(g, 14, 106, v, "ms", hw.pg > 80 ? WARN : GOOD);
+  bigVal(g, 14, 101, 60, v, "ms", hw.pg > 80 ? WARN : GOOD); /* 94..167 */
   g.setFont(&F_MED);
   textAt(g, 14, 142, "google:443", DIM);
 

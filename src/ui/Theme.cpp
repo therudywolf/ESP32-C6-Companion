@@ -535,6 +535,10 @@ void ditherRect(LGFX_Sprite &g, int x, int y, int w, int h, uint16_t color) {
 
 void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
            uint16_t color, uint16_t titleColor) {
+  /* The title tab deliberately sits ABOVE the frame, so the box starts a few
+   * rows higher than the tile — otherwise every outlined panel in the
+   * firmware would report its own label as a violation. */
+  lintClip(x, y - 6, w, h + 6);
   /* clean full rectangle frame + brighter L-accents at two corners (static,
    * HUD feel, no moving glint that reads as a glitch) */
   g.drawRect(x, y, w, h, color);
@@ -578,6 +582,22 @@ static float contrastOf(uint16_t a, uint16_t b) {
   return (la + 0.05f) / (lb + 0.05f);
 }
 
+/* Measured with `fontcard`, not read off the font's name. See Theme.h. */
+const Ink INK_SMALL = {1, 6, 8};
+const Ink INK_TEXT = {2, 7, 11};
+const Ink INK_VALUE = {1, 11, 15};
+const Ink INK_MED = {3, 13, 20};
+const Ink INK_BIG = {5, 24, 35};
+const Ink INK_HUGE = {7, 32, 47};
+
+int inkY(const Ink &k, int top, int h, int size) {
+  return top + (h - k.height * size) / 2 - k.top * size;
+}
+int inkBottom(const Ink &k, int y, int size) {
+  return y + (k.top + k.height) * size - 1;
+}
+int boxBottom(const Ink &k, int y, int size) { return y + k.box * size - 1; }
+
 static void deriveSurface() {
   /* Step one: lift BG until the tile is actually a tile.
    *
@@ -617,6 +637,10 @@ Rect panelM(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
             uint16_t titleColor) {
   g.fillRoundRect(x, y, w, h, 4, SURFACE);
   Rect c = {x + MPADX, y + MPADY, w - 2 * MPADX, h - 2 * MPADY};
+  /* Arm the lint box on the TILE, not on the content rect: a label drawn at
+   * the very top is legitimately outside the content rect, and flagging it
+   * would drown the real findings. */
+  lintClip(x, y, w, h);
   if (title && title[0]) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
@@ -662,7 +686,108 @@ void vBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
   }
 }
 
+#if NOCT_LAYOUT_LINT
+static int lcX = 0, lcY = 0, lcW = 0, lcH = 0;
+static bool lcOn = false;
+static const char *lcScene = "?";
+
+void lintClip(int x, int y, int w, int h) {
+  lcX = x;
+  lcY = y;
+  lcW = w;
+  lcH = h;
+  lcOn = true;
+}
+void lintClear() { lcOn = false; }
+void lintScene(const char *name) { lcScene = name ? name : "?"; }
+
+/* Report each distinct violation once per scene visit. Without this the loop
+ * prints the same overflow twenty-four times a second and the console becomes
+ * unusable — which would make the tool useless in exactly the case it exists
+ * for. */
+static uint32_t lcSeen[24];
+static int lcSeenN = 0;
+
+static bool lintFirstTime(uint32_t key) {
+  for (int i = 0; i < lcSeenN; i++)
+    if (lcSeen[i] == key) return false;
+  if (lcSeenN < (int)(sizeof(lcSeen) / sizeof(lcSeen[0])))
+    lcSeen[lcSeenN++] = key;
+  return true;
+}
+
+void lintReset() { lcSeenN = 0; }
+
+/* Which font is in the sprite right now, by its line height. Ambiguity is
+ * impossible: the six boxes are 8/11/15/20/35/47 and no multiple of one
+ * collides with another below size 3. */
+static const Ink *inkFor(int fh, int *sizeOut) {
+  static const Ink *const all[] = {&INK_SMALL, &INK_TEXT, &INK_VALUE,
+                                   &INK_MED,   &INK_BIG,  &INK_HUGE};
+  for (int sz = 1; sz <= 3; sz++)
+    for (unsigned i = 0; i < sizeof(all) / sizeof(all[0]); i++)
+      if (all[i]->box * sz == fh) {
+        *sizeOut = sz;
+        return all[i];
+      }
+  return nullptr;
+}
+
+static void lintCheck(LGFX_Sprite &g, int x, int y, const char *s) {
+  if (!lcOn || !s || !*s) return;
+  int w = g.textWidth(s);
+  int h = g.fontHeight();
+  /* Text drawn ENTIRELY outside the armed box is not an overflow of it — it
+   * is a different region of the screen that simply has no box of its own
+   * (footers, timeline labels). Reporting those buried the real findings
+   * five deep. */
+  if (y >= lcY + lcH || x >= lcX + lcW || x + w <= lcX) return;
+  /* Compare INK, not the line box. Text is drawn with a transparent
+   * background, so the empty leading rows of the line box touch nothing —
+   * measuring them reported seven pixels of overflow where the eye sees one,
+   * and would have had me move numbers that were already correct. */
+  int sz = 1;
+  const Ink *k = inkFor(h, &sz);
+  /* TWO bottoms, because they answer different questions.
+   *
+   * capB is where a digit or a capital ends — ink that is certainly there,
+   * so crossing it is certainly visible. boxB adds the descent, which only
+   * exists if the string actually contains a descending glyph. Reporting
+   * boxB alone called five correct layouts broken (the line box of
+   * logisoso32 at double size is 94 px for 64 px of digits); reporting capB
+   * alone would miss a clipped 'р'. */
+  int capB = k ? y + (k->top + k->height) * sz - 1 : y + h - 1;
+  int boxB = k ? y + k->box * sz - 1 : y + h - 1;
+  int r = x + w;
+  int cr = lcX + lcW, cb = lcY + lcH;
+  bool hard = (x < lcX) || (r > cr) || (capB >= cb);
+  bool soft = !hard && (boxB >= cb);
+  if (!hard && !soft) return;
+  int b = hard ? capB : boxB;
+  uint32_t key = ((uint32_t)(x & 0x1FF) << 20) ^ ((uint32_t)(y & 0x1FF) << 10) ^
+                 (uint32_t)(w & 0x3FF);
+  if (!lintFirstTime(key)) return;
+  Serial.printf("[LAYOUT]%s %s: \"%s\" at %d,%d ink->%d,%d; box %d,%d %dx%d;",
+                soft ? " (выносные)" : "", lcScene, s, x, y, r, b, lcX, lcY,
+                lcW, lcH);
+  if (b >= cb) Serial.printf(" ниже на %d", b - cb + 1);
+  if (r > cr) Serial.printf(" правее на %d", r - cr);
+  if (x < lcX) Serial.printf(" левее на %d", lcX - x);
+  if (y < lcY) Serial.printf(" выше на %d", lcY - y);
+  Serial.println();
+}
+#endif
+#if !NOCT_LAYOUT_LINT
+void lintClip(int, int, int, int) {}
+void lintClear() {}
+void lintScene(const char *) {}
+void lintReset() {}
+#endif
+
 void textAt(LGFX_Sprite &g, int x, int y, const char *s, uint16_t color) {
+#if NOCT_LAYOUT_LINT
+  lintCheck(g, x, y, s);
+#endif
   g.setTextColor(color);
   g.setCursor(x, y);
   g.print(s);
