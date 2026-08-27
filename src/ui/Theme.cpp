@@ -363,12 +363,30 @@ const char *bgStyleName(int s) {
   return n[(s < 0 || s >= BG_STYLES) ? 0 : s];
 }
 
+/* Every path that writes the palette ends here.
+ *
+ * applyPreset() did this and the four direct writers did not, so a custom
+ * chrome or a hand-mixed palette silently skipped BOTH derivations: the
+ * greyscale of the review mode came back in colour, and SURFACE kept the tone
+ * derived from whatever preset was active before — the material tiles were
+ * lit for a palette that no longer existed.
+ *
+ * One function so the next writer cannot forget half of it. */
+static void paletteChanged() {
+  applyMono();
+  deriveSurface();
+}
+
 void setChrome(uint8_t r, uint8_t g, uint8_t b) {
   ORANGE = rgb(r, g, b);
   ORANGE_DIM = dimmer(ORANGE);
+  paletteChanged();
 }
 
-void setAccent(uint8_t r, uint8_t g, uint8_t b) { ACCENT = rgb(r, g, b); }
+void setAccent(uint8_t r, uint8_t g, uint8_t b) {
+  ACCENT = rgb(r, g, b);
+  paletteChanged();
+}
 
 /* Role table — order MUST match COLOR_ROLES / the web editor. */
 static uint16_t *const kRoleVar[COLOR_ROLES] = {
@@ -385,15 +403,22 @@ void setColorRole(int role, uint8_t r, uint8_t g, uint8_t b) {
   if (role < 0 || role >= COLOR_ROLES) return;
   *kRoleVar[role] = rgb(r, g, b);
   if (role == 1) ORANGE_DIM = dimmer(ORANGE); /* chrome → derive inactive */
+  paletteChanged();
 }
 
 void getPalette(uint16_t out[COLOR_ROLES]) {
+  /* Caveat worth knowing: in review mode this reports the GREY values,
+   * because grey is what the palette variables actually hold. The web editor
+   * reads this to seed its swatches, so mixing colours while the mode is on
+   * would save grey over the real palette. The mode is deliberately not
+   * persisted, and the editor should be used with it off. */
   for (int i = 0; i < COLOR_ROLES; i++) out[i] = *kRoleVar[i];
 }
 
 void applyPalette(const uint16_t pal[COLOR_ROLES]) {
   for (int i = 0; i < COLOR_ROLES; i++) *kRoleVar[i] = pal[i];
   ORANGE_DIM = dimmer(ORANGE);
+  paletteChanged();
 }
 
 const char *presetName(int idx) {
