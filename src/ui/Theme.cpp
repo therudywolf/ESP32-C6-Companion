@@ -1,5 +1,7 @@
 #include "ui/Theme.h"
 
+#include <math.h>
+
 #include "storage/SdStore.h"
 
 #include <U8g2lib.h> /* font data only */
@@ -19,6 +21,10 @@ uint16_t BG, ORANGE, ORANGE_DIM, TEXT, DIM, PANEL, GOOD, WARN, CRIT, INFO,
 int currentPreset = 0;
 int bgStyle = 1;
 bool bgLight = false;
+uint16_t SURFACE = 0, SURFACE_DIM = 0;
+
+/* Defined below, called from applyPreset above it. */
+static void deriveSurface();
 unsigned long nowMs = 0;
 int reactLevel = 0;
 int weatherCode = 0;
@@ -299,6 +305,9 @@ void applyPreset(int idx) {
     ACCENT = saturate(ACCENT, 122);
   }
   applyBgLight();
+  /* Last, and after applyBgLight: both derived values read BG, TEXT and DIM
+   * in their FINAL form, and light mode rewrites all three. */
+  deriveSurface();
 }
 
 void setBgStyle(int s) { bgStyle = (s < 0 || s >= BG_STYLES) ? 0 : s; }
@@ -542,6 +551,84 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
     g.setCursor(x + 10, y - 4);
     g.print(title);
   }
+}
+
+/* WCAG relative luminance of a 565 colour. Called only when the palette
+ * changes, so the powf() costs nothing at any frame rate. */
+static float relLum(uint16_t v) {
+  int c[3] = {((v >> 11) & 0x1F) << 3, ((v >> 5) & 0x3F) << 2,
+              (v & 0x1F) << 3};
+  static const float w[3] = {0.2126f, 0.7152f, 0.0722f};
+  float L = 0.0f;
+  for (int i = 0; i < 3; i++) {
+    float x = c[i] / 255.0f;
+    x = (x <= 0.03928f) ? x / 12.92f : powf((x + 0.055f) / 1.055f, 2.4f);
+    L += w[i] * x;
+  }
+  return L;
+}
+
+static float contrastOf(uint16_t a, uint16_t b) {
+  float la = relLum(a), lb = relLum(b);
+  if (la < lb) {
+    float t = la;
+    la = lb;
+    lb = t;
+  }
+  return (la + 0.05f) / (lb + 0.05f);
+}
+
+static void deriveSurface() {
+  /* Step one: lift BG until the tile is actually a tile.
+   *
+   * Toward white on a dark theme, toward black on a light one - the direction
+   * has to follow the background or the "raised" surface sinks, and lifting a
+   * white background toward white produces white. The STEP has to follow it
+   * too: contrast is a ratio, so the same absolute step is worth about a
+   * third as much when both sides sit near white. Measured off the board, one
+   * fixed lift gave 2.41:1 on the dark theme and 1.12:1 on the light one -
+   * invisible, which is the whole feature gone on half the palettes.
+   *
+   * Solving for the ratio instead of picking a step removes the question. */
+  uint16_t target = bgLight ? 0x0000 : 0xFFFF;
+  SURFACE = lerp565(BG, target, 96);
+  for (int lift = 12; lift <= 96; lift += 4) {
+    uint16_t cand = lerp565(BG, target, lift);
+    if (contrastOf(cand, BG) >= 1.25f) {
+      SURFACE = cand;
+      break;
+    }
+  }
+  /* Step two: the label. Plain DIM was solved against BG and against PANEL,
+   * and a tile is neither - on 15 of 22 presets DIM lands between 3.9 and 4.4
+   * against the surface, under the 4.5 a small caption needs. Blended toward
+   * TEXT until it clears, which is the least loud colour that still reads. */
+  SURFACE_DIM = TEXT;
+  for (int k = 0; k <= 255; k += 8) {
+    uint16_t cand = lerp565(DIM, TEXT, k);
+    if (contrastOf(cand, SURFACE) >= 4.5f) {
+      SURFACE_DIM = cand;
+      break;
+    }
+  }
+}
+
+Rect panelM(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
+            uint16_t titleColor) {
+  g.fillRoundRect(x, y, w, h, 4, SURFACE);
+  Rect c = {x + MPADX, y + MPADY, w - 2 * MPADX, h - 2 * MPADY};
+  if (title && title[0]) {
+    g.setFont(&F_TEXT);
+    g.setTextSize(1);
+    /* Lowercase, dim, and small: a label is the least important thing in the
+     * tile and used to be drawn in chrome, competing with the number it was
+     * introducing. */
+    textAt(g, c.x, c.y, title, titleColor ? titleColor : SURFACE_DIM);
+    int lh = g.fontHeight() + 2;
+    c.y += lh;
+    c.h -= lh;
+  }
+  return c;
 }
 
 void hBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {

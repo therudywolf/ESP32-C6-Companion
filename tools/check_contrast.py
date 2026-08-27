@@ -39,6 +39,18 @@ src = io.open(os.path.join(ROOT, 'src', 'ui', 'Theme.cpp'),
 # changes underneath it.
 m = re.search(r'\(r \* (\d+) / (\d+)\) << 11', src)
 assert m, 'could not find dimmer() in Theme.cpp'
+
+# The material tiles draw on neither BG nor PANEL. They draw on SURFACE,
+# solved from the palette at runtime — so every ratio below that says "vs BG"
+# is answering about a background that text is no longer sitting on.
+#
+# This is the mistake this gate exists to catch, wearing a new name: DIM was
+# once chosen against BG and drawn on PANEL, eleven themes passed, and the
+# screen was unreadable. A tone no check knows about is that bug again.
+#
+# What follows must stay a faithful mirror of theme::deriveSurface(). If the
+# two drift, this file reports on a screen that does not exist.
+
 DIM_NUM, DIM_DEN = int(m.group(1)), int(m.group(2))
 
 i = src.index('static const Preset kPresets[THEME_PRESETS] = {')
@@ -79,6 +91,39 @@ def lum(c):
     return 0.2126 * ch(c[0]) + 0.7152 * ch(c[1]) + 0.0722 * ch(c[2])
 
 
+SURF_VS_BG = 1.25   # tile against background: a non-text boundary
+SURF_LABEL = 4.5    # label on the tile: small text, AA
+
+
+def _mix(a, b, t):
+    """lerp565 with the same 565 quantisation the board does it in — the
+    rounding matters at these small steps."""
+    return quant(tuple(int(x + (y - x) * t / 255.0) for x, y in zip(a, b)))
+
+
+def derive_surface(c):
+    """Mirror of theme::deriveSurface(): lift for visibility, then blend the
+    label toward TEXT for readability. Two separate solves because a numeric
+    sweep proved no single lift satisfies both — five of the 22 presets had no
+    workable value at any lift."""
+    bg, dim, text = quant(c['bg']), quant(c['dim']), quant(c['text'])
+    light = lum(bg) > 0.5
+    target = (0, 0, 0) if light else (255, 255, 255)
+    surf = _mix(bg, target, 96)
+    for lift in range(12, 97, 4):
+        cand = _mix(bg, target, lift)
+        if ratio(cand, bg) >= SURF_VS_BG:
+            surf = cand
+            break
+    lab = text
+    for k in range(0, 256, 8):
+        cand = _mix(dim, text, k)
+        if ratio(cand, surf) >= SURF_LABEL:
+            lab = cand
+            break
+    return surf, lab
+
+
 def ratio(a, b):
     la, lb = lum(a), lum(b)
     hi, lo = max(la, lb), min(la, lb)
@@ -95,9 +140,9 @@ for name, rest in entries:
                           for k in range(10)}))
 
 print('themes: %d   frame factor: %d/%d\n' % (len(themes), DIM_NUM, DIM_DEN))
-hdr = ('%-3s %-11s %6s %6s %6s %6s %6s %6s   %s'
+hdr = ('%-3s %-11s %6s %6s %6s %6s %6s %6s %6s %6s %6s   %s'
        % ('#', 'тема', 'TEXT', 'DIM', 'DIM/p', 'ЗАГЛ', 'ЗГЛ/p', 'РАМКА',
-          'проблемы'))
+          'TXT/s', 'DIM/s', 'плитка', 'проблемы'))
 print(hdr)
 print('-' * len(hdr))
 
@@ -113,6 +158,21 @@ for n, (name, c) in enumerate(themes):
     ti, tip = ratio(title, bg), ratio(title, pan)
     fr = ratio(frame, bg)
 
+    # On a material tile the label is DIM and the value is TEXT, both drawn on
+    # surface() rather than on BG. Checked in the mode this palette's own
+    # background implies; the light/dark switch is global, so the tone under
+    # the text follows whichever way it is thrown.
+    surf, label = derive_surface(c)
+    # The VALUE on a tile is display or title type — 16 to 64 px. WCAG's bar
+    # for large text is 4.5 at AAA, not the 7.0 this file uses for body copy;
+    # holding a 64 px numeral to the small-print rule would fail palettes that
+    # are perfectly legible across the room.
+    ts, ds = ratio(text, surf), ratio(label, surf)
+    # Tile against background: not text, so the bar is the 3.0 used for
+    # non-text boundaries rather than 4.5. Below this the tile stops reading
+    # as a raised surface and the whole material grammar is just flat colour.
+    sb = ratio(surf, bg)
+
     probs = []
     if t < 7.0:
         probs.append('TEXT %.1f' % t)
@@ -126,14 +186,20 @@ for n, (name, c) in enumerate(themes):
         probs.append('заголовок/panel %.1f' % tip)
     if fr < 3.0:
         probs.append('рамка %.1f' % fr)
+    if ts < 4.5:
+        probs.append('TEXT/surface %.1f' % ts)
+    if ds < SURF_LABEL:
+        probs.append('ярлык/surface %.1f' % ds)
+    if sb < SURF_VS_BG:
+        probs.append('плитка/фон %.2f' % sb)
     for k in ('good', 'warn', 'crit', 'info'):
         r = ratio(quant(c[k]), bg)
         if r < 3.0:
             probs.append('%s %.1f' % (k, r))
     if probs:
         bad.append((n, name, probs))
-    print('%-3d %-11s %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f   %s'
-          % (n, name, t, d, dp, ti, tip, fr,
+    print('%-3d %-11s %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.2f   %s'
+          % (n, name, t, d, dp, ti, tip, fr, ts, ds, sb,
              ', '.join(probs) if probs else 'ok'))
 
 print('\nтем с проблемами: %d из %d' % (len(bad), len(themes)))
