@@ -207,10 +207,27 @@ void vBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color);
  *
  * Centre by the INK or the digits sit visibly high; check fits by the LINE
  * BOX or the renderer clips what the eye cannot yet see. */
+/* WHICH FONTS CAN SPELL RUSSIAN. Only three of the six:
+ *
+ *   F_SMALL  5x8_t_cyrillic          8 px   yes
+ *   F_TEXT   haxrcorp4089_t_cyrillic 11 px  yes
+ *   F_MED    10x20_t_cyrillic        20 px  yes
+ *   F_VALUE  helvB10_tr              15 px  NO — Latin subset
+ *   F_BIG    logisoso24_tr           35 px  NO
+ *   F_HUGE   logisoso32_tr           47 px  NO
+ *
+ * The "_tr" faces draw a hollow box for every Cyrillic codepoint, silently.
+ * So a Russian VALUE has exactly one size that is both legible at a metre
+ * and spellable: F_MED. Digits and Latin units may use anything.
+ *
+ * This is why units get split from their numbers all over these screens —
+ * "270" in F_VALUE beside "МГц" in F_TEXT — rather than being formatted into
+ * one string. */
 struct Ink {
-  int top;    /* leading rows above the ink */
-  int height; /* a digit or a capital */
-  int box;    /* the full line box — what fontHeight() returns */
+  int top;       /* leading rows above the ink */
+  int height;    /* a digit or a capital */
+  int box;       /* the full line box — what fontHeight() returns */
+  bool latin;    /* true = "_tr" subset, cannot spell Cyrillic */
 };
 extern const Ink INK_SMALL, INK_TEXT, INK_VALUE, INK_MED, INK_BIG, INK_HUGE;
 

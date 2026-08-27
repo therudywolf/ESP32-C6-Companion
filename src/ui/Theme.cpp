@@ -550,7 +550,15 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
     g.setFont(&F_TEXT);
     g.setTextSize(1);
     int tw = g.textWidth(title);
-    g.fillRect(x + 6, y - 5, tw + 8, 11, BG); /* tab punches the frame */
+    /* Three rows above the frame, not five.
+     *
+     * F_TEXT's ink runs from y-2 to y+4 when the cursor is at y-4, so nine
+     * rows starting at y-3 cover it exactly. The old eleven starting at y-5
+     * covered nothing extra and reached two rows further up — which on a grid
+     * whose rows are four pixels apart lands precisely on the bottom frame of
+     * the tile above. That is why every second row on ПЛАТА and ДИСКИ had its
+     * neighbour's border rubbed out under the label. */
+    g.fillRect(x + 6, y - 3, tw + 8, 9, BG); /* tab punches the frame */
     g.setTextColor(titleColor);
     g.setCursor(x + 10, y - 4);
     g.print(title);
@@ -583,12 +591,12 @@ static float contrastOf(uint16_t a, uint16_t b) {
 }
 
 /* Measured with `fontcard`, not read off the font's name. See Theme.h. */
-const Ink INK_SMALL = {1, 6, 8};
-const Ink INK_TEXT = {2, 7, 11};
-const Ink INK_VALUE = {1, 11, 15};
-const Ink INK_MED = {3, 13, 20};
-const Ink INK_BIG = {5, 24, 35};
-const Ink INK_HUGE = {7, 32, 47};
+const Ink INK_SMALL = {1, 6, 8, false};
+const Ink INK_TEXT = {2, 7, 11, false};
+const Ink INK_VALUE = {1, 11, 15, true};
+const Ink INK_MED = {3, 13, 20, false};
+const Ink INK_BIG = {5, 24, 35, true};
+const Ink INK_HUGE = {7, 32, 47, true};
 
 int inkY(const Ink &k, int top, int h, int size) {
   return top + (h - k.height * size) / 2 - k.top * size;
@@ -733,7 +741,33 @@ static const Ink *inkFor(int fh, int *sizeOut) {
   return nullptr;
 }
 
+/* A "_tr" face draws a hollow box for every Cyrillic codepoint and says
+ * nothing about it. Caught here rather than on a photograph: it is silent,
+ * it looks like a rendering fault rather than a font choice, and promoting a
+ * Russian label from F_TEXT to F_VALUE is exactly the edit that causes it —
+ * which is how "МГц", "ГБ" and "еще" turned into boxes the first time this
+ * screenful of type was made bigger. */
+static void lintCyrillic(LGFX_Sprite &g, int x, int y, const char *s) {
+  int sz = 1;
+  const Ink *k = inkFor(g.fontHeight(), &sz);
+  if (!k || !k->latin) return;
+  for (const unsigned char *p = (const unsigned char *)s; *p; p++)
+    if (*p >= 0x80) {
+      static uint32_t seenCyr[8];
+      static int seenCyrN = 0;
+      uint32_t key = (uint32_t)(x & 0x3FF) << 12 ^ (uint32_t)(y & 0x3FF);
+      for (int i = 0; i < seenCyrN; i++)
+        if (seenCyr[i] == key) return;
+      if (seenCyrN < 8) seenCyr[seenCyrN++] = key;
+      Serial.printf("[LAYOUT] %s: КИРИЛЛИЦА В ЛАТИНСКОМ ШРИФТЕ \"%s\" at "
+                    "%d,%d (высота %d) - будут пустые квадраты\n",
+                    lcScene, s, x, y, g.fontHeight());
+      return;
+    }
+}
+
 static void lintCheck(LGFX_Sprite &g, int x, int y, const char *s) {
+  lintCyrillic(g, x, y, s);
   if (!lcOn || !s || !*s) return;
   int w = g.textWidth(s);
   int h = g.fontHeight();
@@ -786,7 +820,7 @@ void lintReset() {}
 
 void textAt(LGFX_Sprite &g, int x, int y, const char *s, uint16_t color) {
 #if NOCT_LAYOUT_LINT
-  lintCheck(g, x, y, s);
+  if (s && *s) lintCheck(g, x, y, s);
 #endif
   g.setTextColor(color);
   g.setCursor(x, y);

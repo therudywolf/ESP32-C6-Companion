@@ -120,9 +120,20 @@ void drawBoard(UiCtx &ui) {
     bar(g, x1 + 84, heroY + 14, cw - 92, pct, c);
     /* The low-water mark decides whether the next TLS handshake fits, so it
      * gets the line rather than the current free figure. */
-    g.setFont(&F_SMALL);
-    snprintf(v, sizeof(v), "мин %d   блок %d", st.heapMinKb, st.heapLargestKb);
-    textAt(g, x1 + 8, below, v, st.heapMinKb < 45 ? WARN : DIM);
+    /* The comment above says this number decides whether the next handshake
+     * fits — which makes it a reading, not a footnote, and it was set in the
+     * smallest face on the device. F_VALUE puts it back above the threshold
+     * an eye resolves from a metre. */
+    g.setFont(&F_TEXT);
+    textAt(g, x1 + 8, below + 4, "мин", DIM);
+    g.setFont(&F_VALUE);
+    snprintf(v, sizeof(v), "%d", st.heapMinKb);
+    textAt(g, x1 + 32, below, v, st.heapMinKb < 45 ? WARN : TEXT);
+    g.setFont(&F_TEXT);
+    textAt(g, x1 + 66, below + 4, "блок", DIM);
+    g.setFont(&F_VALUE);
+    snprintf(v, sizeof(v), "%d", st.heapLargestKb);
+    textAt(g, x1 + 96, below, v, DIM);
   }
 
   /* ── loop duty cycle ─────────────────────────────────────────────────── */
@@ -147,20 +158,53 @@ void drawBoard(UiCtx &ui) {
   panel(g, x1, y1, cw, ch, "В РАБОТЕ");
   {
     unsigned long up = st.uptimeSec;
-    g.setFont(&F_MED);
-    if (up >= 86400UL)
-      snprintf(v, sizeof(v), "%luд %luч", up / 86400UL, (up % 86400UL) / 3600UL);
-    else
-      snprintf(v, sizeof(v), "%luч %02luм", up / 3600UL, (up % 3600UL) / 60UL);
-    textAt(g, x1 + 8, y1 + 16, v, TEXT);
-    g.setFont(&F_SMALL);
+    /* F_BIG like the other three heroes of this 2x2 grid — it was the only
+     * one in F_MED, and the same role in two sizes reads as a hierarchy that
+     * is not there.
+     *
+     * But F_BIG is logisoso24_tr, a LATIN subset: "0ч 02м" set in it draws
+     * two hollow boxes where the units belong. So the digits get F_BIG and
+     * the Russian units get F_TEXT beside them, sharing one baseline. */
+    unsigned long n1, n2;
+    const char *u1, *u2;
+    if (up >= 86400UL) {
+      n1 = up / 86400UL;
+      u1 = "д";
+      n2 = (up % 86400UL) / 3600UL;
+      u2 = "ч";
+    } else {
+      n1 = up / 3600UL;
+      u1 = "ч";
+      n2 = (up % 3600UL) / 60UL;
+      u2 = "м";
+    }
+    g.setFont(&F_BIG);
+    int uy = inkY(INK_BIG, y1 + 8, 30);
+    int ub = uy + INK_BIG.top + INK_BIG.height - INK_TEXT.top - INK_TEXT.height;
+    snprintf(v, sizeof(v), "%lu", n1);
+    textAt(g, x1 + 8, uy, v, TEXT);
+    int w1 = g.textWidth(v);
+    g.setFont(&F_TEXT);
+    textAt(g, x1 + 10 + w1, ub, u1, DIM);
+    int wu = g.textWidth(u1);
+    g.setFont(&F_BIG);
+    snprintf(v, sizeof(v), "%02lu", n2);
+    textAt(g, x1 + 16 + w1 + wu, uy, v, TEXT);
+    int w2 = g.textWidth(v);
+    g.setFont(&F_TEXT);
+    textAt(g, x1 + 18 + w1 + wu + w2, ub, u2, DIM);
+    g.setFont(&F_BIG);
+    g.setFont(&F_TEXT);
     const BootInfo &b = st.boot;
     /* A self-heal on a device nobody is watching is invisible without this. */
     snprintf(v, sizeof(v), "рестарт: %s", b.reasonText);
     textAt(g, x1 + 8, y1 + 38, v, b.lastWasFault ? WARN : DIM);
+    /* The file's own header says this screen exists so a silent self-heal
+     * becomes a number. A number nobody can read from where the board sits
+     * does not do that. */
     snprintf(v, sizeof(v), "пусков %lu, сбоев %lu", (unsigned long)b.bootCount,
              (unsigned long)b.faultCount);
-    textAt(g, x1 + 8, y1 + 49, v, b.faultCount > 0 ? WARN : DIM);
+    textAt(g, x1 + 8, y1 + 50, v, b.faultCount > 0 ? WARN : DIM);
   }
 
   /* ── footer: the rest of the identity, one line ──────────────────────── */

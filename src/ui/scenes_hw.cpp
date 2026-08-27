@@ -85,7 +85,7 @@ void drawCpu(UiCtx &ui) {
   snprintf(v, sizeof(v), "%d", hw.fans[0]);
   bigVal(g, 148, 85, 26, v, "RPM", TEXT);   /* плитка 82..113 */
   snprintf(v, sizeof(v), "%d", hw.pw);
-  bigVal(g, 308, 85, 26, v, "W", TEXT, true);
+  bigVal(g, 308, 85, 26, v, "Вт", TEXT, true); /* не "W": в этом шрифте он читается как "ш" */
 
   /* grown into the freed bottom band: top-2 CPU processes + clock */
   panel(g, 4, 120, 312, 48, "ТОП ПРОЦЕССЫ / ТАКТ");
@@ -131,18 +131,36 @@ void drawGpu(UiCtx &ui) {
   /* grown into the freed bottom band: clock/power/hotspot + fan & mem clock */
   panel(g, 4, 120, 312, 48, "ТАКТ / ПИТАНИЕ / ГОР.ТОЧКА");
   snprintf(v, sizeof(v), "%d", hw.gclock);
-  bigVal(g, 14, 123, 42, v, "MHz", TEXT);  /* плитка 120..167 */
+  bigVal(g, 14, 119, 26, v, "МГц", TEXT);  /* плитка 120..167 */
   snprintf(v, sizeof(v), "%d", hw.gtdp);
-  bigVal(g, 178, 123, 42, v, "W", TEXT);
+  bigVal(g, 178, 119, 26, v, "Вт", TEXT);
   snprintf(v, sizeof(v), "%d", hw.gh);
-  bigVal(g, 306, 123, 42, v, "C", tempColor(hw.gh, 85, 95), true);
+  bigVal(g, 306, 119, 26, v, "C", tempColor(hw.gh, 85, 95), true);
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   /* the literal alone is 38 B of UTF-8, so this needs its own wider buffer */
-  char foot[64];
-  snprintf(foot, sizeof(foot), "кулер %d RPM      память %d MHz", hw.gf,
-           hw.vclock);
-  textAt(g, 14, 153, foot, DIM);
+  /* F_VALUE for the numbers, F_TEXT for the words that introduce them.
+   * Both were F_TEXT, which put the GPU's fan speed two steps below the same
+   * reading on the CPU screen — one figure, two sizes, on adjacent scenes. */
+  /* Two readings on the tile's own bottom line, below the three heroes.
+   * The units stay in F_TEXT because F_VALUE cannot spell them — it is a
+   * Latin subset and drew "МГц" as three hollow boxes, which is how this
+   * looked on the first attempt. */
+  char foot[16];
+  g.setFont(&F_TEXT);
+  textAt(g, 14, 158, "кулер", DIM);
+  g.setFont(&F_VALUE);
+  snprintf(foot, sizeof(foot), "%d", hw.gf);
+  textAt(g, 52, 154, foot, TEXT);
+  g.setFont(&F_TEXT);
+  textAt(g, 92, 158, "об/мин", DIM);
+  g.setFont(&F_TEXT);
+  textAt(g, 150, 158, "память", DIM);
+  g.setFont(&F_VALUE);
+  snprintf(foot, sizeof(foot), "%d", hw.vclock);
+  textAt(g, 198, 154, foot, TEXT);
+  g.setFont(&F_TEXT);
+  textAt(g, 246, 158, "МГц", DIM);
 }
 
 void drawRam(UiCtx &ui) {
@@ -184,9 +202,18 @@ void drawRam(UiCtx &ui) {
   }
   float freeGb = hw.ra - hw.ru;
   if (freeGb < 0) freeGb = 0;
+  /* The only place the free figure appears, and it was set in the smallest
+   * face on the screen with 200 px of empty tile to its right. */
+  /* "ГБ" cannot be set in F_VALUE — Latin subset, hollow boxes. Digits in
+   * F_VALUE, Cyrillic in F_TEXT, and the two sit on one baseline. */
   g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "свободно %.1f ГБ из %.0f", freeGb, hw.ra);
-  textAt(g, 12, 152, v, GOOD);
+  textAt(g, 12, 156, "свободно", DIM);
+  g.setFont(&F_VALUE);
+  snprintf(v, sizeof(v), "%.1f", freeGb);
+  textAt(g, 74, 152, v, GOOD);
+  g.setFont(&F_TEXT);
+  snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
+  textAt(g, 118, 156, v, DIM);
 }
 
 void drawDisks(UiCtx &ui) {
@@ -260,13 +287,20 @@ void drawFans(UiCtx &ui) {
      * (y152), but not for three: F_BIG's ink is ~30 px, so a third line landed
      * inside the rpm digits. Putting the percentage beside the name also sits
      * it next to the bar that draws the same quantity. */
+    /* The name stays small — it is a label. The duty does not: it is the
+     * quantity the bar beside it draws, and at eight pixels it was 2.8 arc-
+     * minutes from a metre away, below what an eye resolves at all. */
+    /* The duty moved up onto its own row rather than sharing one with the
+     * name: at F_VALUE it is 40 % wider than the F_SMALL it replaced, and in
+     * a 62 px tile the two ran into each other ("КОРПУ85%"). */
     g.setFont(&F_SMALL);
-    textAt(g, x + 4, 100, names[i], DIM);
+    textCenter(g, x + 31, 98, names[i], DIM);
+    g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%d%%", pct);
-    textRight(g, x + 58, 100, v, ORANGE);
+    textCenter(g, x + 31, 107, v, ORANGE);
     g.setFont(&F_BIG);
     snprintf(v, sizeof(v), "%d", rpm);
-    textCenter(g, x + 31, 112, v, TEXT);
+    textCenter(g, x + 31, 124, v, TEXT);
   }
 
   /* summary across the freed bottom band (F_TEXT stays inside y171) */
