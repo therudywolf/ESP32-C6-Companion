@@ -26,16 +26,29 @@ static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
 }
 
 /* 64 px hero temperature with a small unit; y = desired INK top */
-static void heroTemp(LGFX_Sprite &g, int x, int y, int t, uint16_t c) {
+/* Centred in the tile, not pinned to its left edge.
+ *
+ * `x`/`w` are the tile's, and the number plus its unit are measured and
+ * placed as one group. Fixed at x+10 the pair sat hard against the left
+ * border with a third of the tile empty beside it, and a two-digit reading
+ * looked lost in a box sized for three. */
+static void heroTemp(LGFX_Sprite &g, int x, int w, int y, int t, uint16_t c) {
   char v[8];
   snprintf(v, sizeof(v), "%d", t);
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   int vw = g.textWidth(v);
-  textAt(g, x, inkTop(g, y, 64), v, c);
   g.setTextSize(1);
   g.setFont(&F_MED);
-  textAt(g, x + vw + 4, y + 44, "C", DIM);
+  int uw = g.textWidth("C");
+  int x0 = x + (w - (vw + 4 + uw)) / 2;
+  if (x0 < x + 4) x0 = x + 4;
+  g.setFont(&F_HUGE);
+  g.setTextSize(2);
+  textAt(g, x0, inkTop(g, y, 64), v, c);
+  g.setTextSize(1);
+  g.setFont(&F_MED);
+  textAt(g, x0 + vw + 4, y + 44, "C", DIM);
 }
 
 /* big number + small unit on one baseline */
@@ -69,7 +82,7 @@ void drawCpu(UiCtx &ui) {
   char v[32];
 
   panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
-  heroTemp(g, 14, 36, hw.ct, tempColor(hw.ct, 75, 85));
+  heroTemp(g, 4, 130, 36, hw.ct, tempColor(hw.ct, 75, 85));
   trendArrow(g, 118, 32, ui.gr.cpuTemp, 8, 1);
 
   panel(g, 140, 26, 176, 50, "НАГРУЗКА");
@@ -113,7 +126,7 @@ void drawGpu(UiCtx &ui) {
   char v[32];
 
   panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
-  heroTemp(g, 14, 36, hw.gt, tempColor(hw.gt, 70, 80));
+  heroTemp(g, 4, 130, 36, hw.gt, tempColor(hw.gt, 70, 80));
   trendArrow(g, 118, 32, ui.gr.gpuTemp, 8, 1);
 
   panel(g, 140, 26, 176, 50, "НАГРУЗКА");
