@@ -74,6 +74,29 @@ void setBgStyle(int s);     /* 0..2 */
  * it, so nothing is lost when it goes off. */
 void setMono(bool on);
 bool monoOn();
+
+/* Per-panel tone correction: a gain per CHANNEL and a black point.
+ *
+ * One knob per channel rather than one for red, because which channel is
+ * wrong is a property of the panel in front of the owner, not something that
+ * can be decided here. The black point lifts or crushes the floor.
+ *
+ * (What follows is why this exists at all.)
+ *
+ * WHY THIS EXISTS. On this glass the test card — whose swatches are written
+ * as literal rgb() values, bypassing the palette entirely — shows the grey
+ * ramp as BLUE and the yellow patch as GREEN, while pure red, green and blue
+ * are each correct on their own. Red is present but swamped whenever it is
+ * mixed. That is a property of the panel, not of the framebuffer: the sprite
+ * was decoded pixel by pixel and its channels differ by 4 counts, which is
+ * RGB565 rounding.
+ *
+ * It matters far beyond the review mode: WARN is yellow and TEXT is white on
+ * every preset, so both are wrong on this hardware until red is lifted.
+ * Applied to the palette only — the test card stays uncorrected on purpose,
+ * so there is always one place showing what the panel really does. */
+void setTone(int gainR, int gainG, int gainB, int black);
+void getTone(int *gainR, int *gainG, int *gainB, int *black);
 void setBgLight(bool light);/* re-applies the active preset in light/dark */
 static const int BG_STYLES = 3;
 const char *bgStyleName(int s);

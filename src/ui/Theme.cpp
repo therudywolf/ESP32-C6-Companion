@@ -372,9 +372,50 @@ const char *bgStyleName(int s) {
  * lit for a palette that no longer existed.
  *
  * One function so the next writer cannot forget half of it. */
+static int toneR = 100, toneG = 100, toneB = 100, toneBlack = 0;
+
+void getTone(int *r, int *g, int *b, int *k) {
+  if (r) *r = toneR;
+  if (g) *g = toneG;
+  if (b) *b = toneB;
+  if (k) *k = toneBlack;
+}
+
+/* out = black + in * gain, rescaled so full stays full. Done on the 8-bit
+ * value before repacking: applied to the 5-bit field a gain under 100 would
+ * quantise away entirely. */
+static int toneCh(int v8, int gain) {
+  int out = toneBlack + (v8 * gain / 100) * (255 - toneBlack) / 255;
+  return out < 0 ? 0 : (out > 255 ? 255 : out);
+}
+
+static void applyTone() {
+  if (toneR == 100 && toneG == 100 && toneB == 100 && toneBlack == 0) return;
+  uint16_t *all[] = {&BG,   &ORANGE, &ORANGE_DIM, &TEXT, &DIM,   &PANEL,
+                     &GOOD, &WARN,   &CRIT,       &INFO, &ACCENT};
+  for (unsigned i = 0; i < sizeof(all) / sizeof(all[0]); i++) {
+    uint16_t c = *all[i];
+    int r = toneCh(((c >> 11) & 0x1F) << 3, toneR);
+    int g = toneCh(((c >> 5) & 0x3F) << 2, toneG);
+    int b = toneCh((c & 0x1F) << 3, toneB);
+    *all[i] = rgb((uint8_t)r, (uint8_t)g, (uint8_t)b);
+  }
+}
+
 static void paletteChanged() {
   applyMono();
+  applyTone(); /* after mono: grey needs correcting too, or it stays blue */
   deriveSurface();
+}
+
+static int clampGain(int v) { return v < 30 ? 30 : (v > 300 ? 300 : v); }
+
+void setTone(int gainR, int gainG, int gainB, int black) {
+  if (gainR > 0) toneR = clampGain(gainR);
+  if (gainG > 0) toneG = clampGain(gainG);
+  if (gainB > 0) toneB = clampGain(gainB);
+  if (black >= 0) toneBlack = black > 96 ? 96 : black;
+  applyPreset(currentPreset);
 }
 
 void setChrome(uint8_t r, uint8_t g, uint8_t b) {

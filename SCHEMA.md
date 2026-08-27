@@ -179,6 +179,15 @@ Every field is optional; the sentinel means "no change this time".
 | `blmax` | PWM | -1 | **one-shot**: raise the backlight ceiling to this value (210..255) |
 | `blmins` | min | 15 | how long `blmax` holds before the board drops it back (1..120) |
 | `mono` | 0/1 | -1 | greyscale the palette and stop the backdrop, for comparing screenshots |
+| `toner` | % | 0 | per-panel red gain applied to the palette (30..300, 0 = leave) |
+| `toneg` | % | 0 | same for green |
+| `toneb` | % | 0 | same for blue |
+| `tonek` | level | -1 | black point, 8-bit (0..96, -1 = leave) |
+
+> The four `tone*` keys are deliberately **not** one-shot. The board holds the
+> correction in RAM only, so the panel's replay is what restores it after a
+> reboot — a per-panel calibration that had to be re-entered by hand every
+> time the board restarted would not survive contact with a real week.
 
 > **On cadence:** an Aqara WSDCGQ11LM decides for itself — it reports on change
 > (~±0.5 °C, ±6 % RH) plus a keep-alive roughly every 50-60 minutes, and that

@@ -518,6 +518,10 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcBright = rc["bright"] | -1;
       state.rcBlMax = rc["blmax"] | -1;
       state.rcMono = rc["mono"] | -1;
+      state.rcToneR = rc["toner"] | 0;
+      state.rcToneG = rc["toneg"] | 0;
+      state.rcToneB = rc["toneb"] | 0;
+      state.rcToneK = rc["tonek"] | -1;
       state.rcBlMins = rc["blmins"] | 15;
       state.rcAction = (const char *)(rc["action"] | "");
       state.rcLed = rc["led"] | -1;
