@@ -87,14 +87,14 @@ void drawCpu(UiCtx &ui) {
   trendArrow(g, 118, 42, ui.gr.cpuTemp, 8, 1);
 
   /* ── правая колонка ─────────────────────────────────────────────────── */
-  panel(g, 140, 26, 176, 50, "нагрузка");
+  panel(g, 140, 26, 176, 46, "нагрузка");
   g.setFont(&F_VALUE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.cl);
   textAt(g, 148, 40, v, pctColor(hw.cl));
   g.setTextSize(1);
-  trendArrow(g, 222, 48, ui.gr.cpuLoad, 8, 3);
-  sparkline(g, 232, 40, 76, 30, ui.gr.cpuLoad, GOOD);
+  trendArrow(g, 222, 46, ui.gr.cpuLoad, 8, 3);
+  sparkline(g, 232, 40, 76, 26, ui.gr.cpuLoad, GOOD);
 
   /* 39 рядов, не 32, и полоса значения начинается ПОД ярлыком.
    *
@@ -102,26 +102,31 @@ void drawCpu(UiCtx &ui) {
    * цифры начинались на четвёртом — «1510» шло прямо сквозь слова «кулер /
    * питание». Тридцати двух рядов на ярлык (12) плюс чернила F_BIG (24) не
    * хватает в принципе; тридцати девяти хватает, и они есть. */
-  panel(g, 140, 79, 176, 39, "кулер / питание");
+  /* 75..117: ярлык 78..86, значение 91..114 — четыре ряда просвета.
+   * На 79 их был один, и слова «кулер / питание» шли впритык к цифрам. */
+  panel(g, 140, 75, 176, 43, "кулер / питание");
   snprintf(v, sizeof(v), "%d", hw.fans[0]);
-  bigVal(g, 148, 91, 26, v, "RPM", TEXT);   /* чернила 92..115 */
+  bigVal(g, 148, 89, 28, v, "RPM", TEXT);   /* чернила 91..114 */
   snprintf(v, sizeof(v), "%d", hw.pw);
-  bigVal(g, 308, 91, 26, v, "Вт", TEXT, true); /* не "W": читается как "ш" */
+  bigVal(g, 308, 89, 28, v, "Вт", TEXT, true); /* не "W": читается как "ш" */
 
   /* ── подвал: два процесса и такт ────────────────────────────────────── */
   /* 50 рядов до 169-го: вторая строка F_MED уходила выносными элементами на
    * нижнюю рамку карточки, и проверка наложений это ловила. */
-  panel(g, 4, 120, 312, 50, "топ процессы / такт");
+  /* 52 ряда и шаг 20: две строки F_MED по семнадцать рядов с выносными
+   * элементами на семнадцати сходились в ноль просвета — «pythonw.exe» и
+   * «explorer.exe» читались одной кашей. */
+  panel(g, 4, 120, 312, 52, "топ процессы / такт");
   g.setFont(&F_MED);
   g.setTextSize(1);
   for (int i = 0; i < 2; i++) {
     if (!ui.st.process.cpuNames[i].length()) continue;
     snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[i].c_str(),
              ui.st.process.cpuPercent[i]);
-    textAt(g, 12, 132 + i * 17, v, i == 0 ? TEXT : DIM);
+    textAt(g, 12, 130 + i * 20, v, i == 0 ? TEXT : DIM);
   }
   snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
-  bigVal(g, 306, 130, 24, v, "GHz", INFO, true);
+  bigVal(g, 306, 130, 26, v, "GHz", INFO, true);
 }
 
 void drawGpu(UiCtx &ui) {
