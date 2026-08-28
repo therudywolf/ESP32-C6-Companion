@@ -81,20 +81,20 @@ void drawCpu(UiCtx &ui) {
   HardwareData &hw = ui.st.hw;
   char v[32];
 
-  panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
-  heroTemp(g, 4, 130, 36, hw.ct, tempColor(hw.ct, 75, 85));
-  trendArrow(g, 118, 32, ui.gr.cpuTemp, 8, 1);
+  panel(g, 4, 26, 130, 88, "температура");
+  heroTemp(g, 4, 130, 42, hw.ct, tempColor(hw.ct, 75, 85)); /* под ярлыком */
+  trendArrow(g, 118, 40, ui.gr.cpuTemp, 8, 1);
 
-  panel(g, 140, 26, 176, 50, "НАГРУЗКА");
+  panel(g, 140, 26, 176, 50, "нагрузка");
   g.setFont(&F_VALUE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.cl);
   textAt(g, 148, 36, v, pctColor(hw.cl));
   g.setTextSize(1);
-  trendArrow(g, 218, 34, ui.gr.cpuLoad, 8, 3);
+  trendArrow(g, 222, 44, ui.gr.cpuLoad, 8, 3);
   sparkline(g, 232, 34, 76, 34, ui.gr.cpuLoad, GOOD);
 
-  panel(g, 140, 82, 176, 32, "КУЛЕР / ПИТАНИЕ");
+  panel(g, 140, 82, 176, 32, "кулер / питание");
   snprintf(v, sizeof(v), "%d", hw.fans[0]);
   /* 88, не 85. panel() рисует вкладку ярлыка заливкой на три ряда ВЫШЕ
    * своего верха — здесь это ряды 79..87, — а чернила значения начинались
@@ -104,7 +104,7 @@ void drawCpu(UiCtx &ui) {
   bigVal(g, 308, 88, 26, v, "Вт", TEXT, true); /* не "W": он читается как "ш" */
 
   /* grown into the freed bottom band: top-2 CPU processes + clock */
-  panel(g, 4, 120, 312, 48, "ТОП ПРОЦЕССЫ / ТАКТ");
+  panel(g, 4, 120, 312, 48, "топ процессы / такт");
   g.setFont(&F_MED);
   g.setTextSize(1);
   for (int i = 0; i < 2; i++) {
@@ -113,7 +113,7 @@ void drawCpu(UiCtx &ui) {
              ui.st.process.cpuPercent[i]);
     /* Шаг 19 от 126: при 20 от 128 вторая строка доставала выносными
      * элементами до нижней рамки экрана. */
-    textAt(g, 12, 126 + i * 19, v, i == 0 ? TEXT : DIM);
+    textAt(g, 12, 133 + i * 19, v, i == 0 ? TEXT : DIM);
   }
   snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
   bigVal(g, 306, 123, 42, v, "GHz", INFO, true); /* плитка 120..167 */
@@ -125,20 +125,20 @@ void drawGpu(UiCtx &ui) {
   HardwareData &hw = ui.st.hw;
   char v[32];
 
-  panel(g, 4, 26, 130, 88, "ТЕМПЕРАТУРА");
-  heroTemp(g, 4, 130, 36, hw.gt, tempColor(hw.gt, 70, 80));
-  trendArrow(g, 118, 32, ui.gr.gpuTemp, 8, 1);
+  panel(g, 4, 26, 130, 88, "температура");
+  heroTemp(g, 4, 130, 42, hw.gt, tempColor(hw.gt, 70, 80));
+  trendArrow(g, 118, 40, ui.gr.gpuTemp, 8, 1);
 
-  panel(g, 140, 26, 176, 50, "НАГРУЗКА");
+  panel(g, 140, 26, 176, 50, "нагрузка");
   g.setFont(&F_VALUE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.gl);
   textAt(g, 148, 36, v, pctColor(hw.gl));
   g.setTextSize(1);
-  trendArrow(g, 218, 34, ui.gr.gpuLoad, 8, 3);
+  trendArrow(g, 222, 44, ui.gr.gpuLoad, 8, 3);
   sparkline(g, 232, 34, 76, 34, ui.gr.gpuLoad, GOOD);
 
-  panel(g, 140, 82, 176, 32, "VRAM");
+  panel(g, 140, 82, 176, 32, "vram");
   g.setFont(&F_MED);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "%.1f/%.0fG", hw.vu, hw.vt);
@@ -147,15 +147,21 @@ void drawGpu(UiCtx &ui) {
   hBar(g, 252, 90, 56, 14, hw.gv, pctColor(hw.gv));
 
   /* grown into the freed bottom band: clock/power/hotspot + fan & mem clock */
-  panel(g, 4, 120, 312, 48, "ТАКТ / ПИТАНИЕ / ГОР.ТОЧКА");
+  /* 51, не 48: ярлык 12 + чернила значения 24 + подвал 11 не помещаются в
+   * сорок восемь. До экрана есть ещё три ряда, и они как раз закрывают
+   * разницу. */
+  /* 52 — до последнего ряда экрана. Карточке нужно 12 на ярлык, 24 на
+   * чернила значения и 11 на подвал: пятидесяти одного ряда не хватало
+   * ровно на один, и подвал ложился на нижнюю кромку. */
+  panel(g, 4, 120, 312, 52, "такт / питание / гор.точка");
   snprintf(v, sizeof(v), "%d", hw.gclock);
   /* Плитка 120..167. Полоса 119 ставила чернила ровно на верхнюю рамку и
    * под вкладку ярлыка; 124 уводит их внутрь, а подвал уходит ниже. */
-  bigVal(g, 14, 126, 26, v, "МГц", TEXT);  /* чернила 127..150 */
+  bigVal(g, 14, 132, 24, v, "МГц", TEXT);  /* чернила 132..155 */
   snprintf(v, sizeof(v), "%d", hw.gtdp);
-  bigVal(g, 178, 126, 26, v, "Вт", TEXT);
+  bigVal(g, 178, 132, 24, v, "Вт", TEXT);
   snprintf(v, sizeof(v), "%d", hw.gh);
-  bigVal(g, 306, 126, 26, v, "C", tempColor(hw.gh, 85, 95), true);
+  bigVal(g, 306, 132, 24, v, "C", tempColor(hw.gh, 85, 95), true);
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   /* the literal alone is 38 B of UTF-8, so this needs its own wider buffer */
@@ -168,19 +174,19 @@ void drawGpu(UiCtx &ui) {
    * looked on the first attempt. */
   char foot[16];
   g.setFont(&F_TEXT);
-  textAt(g, 14, 155, "кулер", DIM);
+  textAt(g, 14, 156, "кулер", DIM);
   g.setFont(&F_VALUE);
   snprintf(foot, sizeof(foot), "%d", hw.gf);
-  textAt(g, 52, 152, foot, TEXT);
+  textAt(g, 52, 157, foot, TEXT);
   g.setFont(&F_TEXT);
-  textAt(g, 92, 155, "об/мин", DIM);
+  textAt(g, 92, 156, "об/мин", DIM);
   g.setFont(&F_TEXT);
-  textAt(g, 150, 155, "память", DIM);
+  textAt(g, 150, 156, "память", DIM);
   g.setFont(&F_VALUE);
   snprintf(foot, sizeof(foot), "%d", hw.vclock);
-  textAt(g, 198, 152, foot, TEXT);
+  textAt(g, 198, 157, foot, TEXT);
   g.setFont(&F_TEXT);
-  textAt(g, 246, 155, "МГц", DIM);
+  textAt(g, 246, 156, "МГц", DIM);
 }
 
 void drawRam(UiCtx &ui) {
@@ -190,31 +196,34 @@ void drawRam(UiCtx &ui) {
   char v[40];
   int rpct = hw.ra > 0.1f ? (int)(hw.ru * 100 / hw.ra) : 0;
 
-  panel(g, 4, 26, 312, 74, "ОПЕРАТИВКА");
+  /* 80, не 74: ярлык внутри карточки занимает 12 рядов, а герой F_HUGE в
+   * двойном размере — 64 чернил. Семьдесят четыре их не вмещают, и число
+   * пробивало нижнюю кромку. Бюджет полосы 26..170 сходится: 80 + 4 + 62. */
+  panel(g, 4, 26, 312, 80, "оперативка");
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw = g.textWidth(v);
-  textAt(g, 14, inkTop(g, 34, 64), v, pctColor(rpct));
+  textAt(g, 14, inkTop(g, 34 + PANEL_LABEL_H - 6, 64), v, pctColor(rpct));
   g.setTextSize(1);
   g.setFont(&F_MED);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "/%.0fГБ", hw.ra);
-  textAt(g, 22 + vw, 76, v, DIM);
+  textAt(g, 22 + vw, 80, v, DIM);
   g.setTextSize(1);
   g.setFont(&F_VALUE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", rpct);
-  textRight(g, 306, 34, v, pctColor(rpct));
+  textRight(g, 306, 42, v, pctColor(rpct));
   g.setTextSize(1);
-  hBar(g, 230, 70, 76, 18, rpct, pctColor(rpct));
+  hBar(g, 230, 76, 76, 16, rpct, pctColor(rpct));
 
   /* grown into the freed bottom band: top-2 processes + free memory */
-  panel(g, 4, 108, 312, 58, "ТОП ПО ПАМЯТИ / СВОБОДНО");
+  panel(g, 4, 108, 312, 63, "топ по памяти / свободно");
   g.setFont(&F_MED);
   for (int i = 0; i < 2; i++) {
     if (ui.st.process.ramNames[i].length() == 0) continue;
-    int y = 112 + i * 18;
+    int y = 121 + i * 17;   /* две строки укладываются в 124..157 */
     snprintf(v, sizeof(v), "%.14s", ui.st.process.ramNames[i].c_str());
     textAt(g, 12, y, v, i == 0 ? TEXT : DIM);
     snprintf(v, sizeof(v), "%d МБ", ui.st.process.ramMb[i]);
@@ -229,13 +238,13 @@ void drawRam(UiCtx &ui) {
   g.setFont(&F_TEXT);
   /* «свободно» несёт «д», а она свисает под базовую линию и доставала
    * до нижней рамки плитки. */
-  textAt(g, 12, 152, "свободно", DIM);
+  textAt(g, 12, 158, "свободно", DIM);
   g.setFont(&F_VALUE);
   snprintf(v, sizeof(v), "%.1f", freeGb);
-  textAt(g, 74, 148, v, GOOD);
+  textAt(g, 74, 157, v, GOOD);
   g.setFont(&F_TEXT);
   snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
-  textAt(g, 118, 152, v, DIM);
+  textAt(g, 118, 158, v, DIM);
 }
 
 void drawDisks(UiCtx &ui) {
@@ -420,7 +429,7 @@ void drawMb(UiCtx &ui) {
   }
   /* 6th cell: package power (the chipset-fan reading was bogus / irrelevant) */
   int x = 6 + 2 * 104, y = 96;
-  panel(g, x, y, 100, 66, "ПИТАНИЕ");
+  panel(g, x, y, 100, 66, "питание");
   snprintf(v, sizeof(v), "%d", hw.pw);
   g.setFont(&F_HUGE);
   int vw = g.textWidth(v);
@@ -435,33 +444,33 @@ void drawNet(UiCtx &ui) {
   HardwareData &hw = ui.st.hw;
   char v[40], r[12];
 
-  panel(g, 4, 26, 156, 60, "ВХОДЯЩИЙ");
+  panel(g, 4, 26, 156, 60, "входящий");
   fmtRate(r, sizeof(r), hw.nd);
   /* Плитка 26..85. Значению нужно 24 ряда чернил, графику 18 — вместе с
    * зазором это ровно то, что есть, но полоса в 50 рядов под значение
    * опускала его чернила на шесть рядов в график. */
   /* 32: заливка вкладки ярлыка кончается на y+5, то есть на 31. */
-  bigVal(g, 14, 32, 26, r, "Б/с", INFO);
-  sparkline(g, 14, 62, 134, 18, ui.gr.netDown, INFO, 1000);
+  bigVal(g, 14, 38, 24, r, "Б/с", INFO);
+  sparkline(g, 14, 64, 134, 16, ui.gr.netDown, INFO, 1000);
 
-  panel(g, 164, 26, 152, 60, "ИСХОДЯЩИЙ");
+  panel(g, 164, 26, 152, 60, "исходящий");
   fmtRate(r, sizeof(r), hw.nu);
-  bigVal(g, 174, 32, 26, r, "Б/с", GOOD);
-  sparkline(g, 174, 62, 132, 18, ui.gr.netUp, GOOD, 200);
+  bigVal(g, 174, 38, 24, r, "Б/с", GOOD);
+  sparkline(g, 174, 64, 132, 16, ui.gr.netUp, GOOD, 200);
 
   /* bottom panels grown into the freed band (y94..168), spacing fixed so the
    * RSSI line and the server line no longer overlap */
-  panel(g, 4, 94, 156, 74, "ПИНГ");
+  panel(g, 4, 94, 156, 74, "пинг");
   snprintf(v, sizeof(v), "%d", hw.pg);
   bigVal(g, 14, 101, 60, v, "ms", hw.pg > 80 ? WARN : GOOD); /* 94..167 */
   g.setFont(&F_MED);
   textAt(g, 14, 142, "google:443", DIM);
 
-  panel(g, 164, 94, 152, 74, "УСТРОЙСТВО");
+  panel(g, 164, 94, 152, 74, "устройство");
   g.setFont(&F_MED);
   g.setTextSize(1);
   clipW(g, ui.st.link.ssid, v, sizeof(v), 140); /* codepoint-safe (no mid-glyph cut) */
-  textAt(g, 172, 102, v, TEXT);          /* y102..122 */
+  textAt(g, 172, 108, v, TEXT);          /* под ярлыком карточки */
   g.setFont(&F_TEXT);
   snprintf(v, sizeof(v), "RSSI %d dBm", ui.st.link.rssi);
   textAt(g, 172, 126, v, DIM);           /* y126..139 */

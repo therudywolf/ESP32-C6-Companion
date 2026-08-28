@@ -73,7 +73,7 @@ void drawBoard(UiCtx &ui) {
   const int x0 = 6, x1 = 164, y0 = 26, y1 = 90;
 
   /* ── die temperature ─────────────────────────────────────────────────── */
-  panel(g, x0, y0, cw, ch, "ТЕМПЕРАТУРА");
+  panel(g, x0, y0, cw, ch, "температура");
   {
     /* The same thresholds the backlight guard uses, so the screen and the
      * board agree about what "warm" means. */
@@ -98,7 +98,7 @@ void drawBoard(UiCtx &ui) {
   }
 
   /* ── heap ────────────────────────────────────────────────────────────── */
-  panel(g, x1, y0, cw, ch, "ПАМЯТЬ");
+  panel(g, x1, y0, cw, ch, "память");
   {
     /* Percentages against the free heap the board boots with. Not the chip's
      * 512 KB: most of that is gone to the framebuffer and the radio stacks
@@ -137,7 +137,7 @@ void drawBoard(UiCtx &ui) {
   }
 
   /* ── loop duty cycle ─────────────────────────────────────────────────── */
-  panel(g, x0, y1, cw, ch, "ЦИКЛ");
+  panel(g, x0, y1, cw, ch, "цикл");
   {
     uint16_t c = st.boardLoad >= 85 ? CRIT : st.boardLoad >= 60 ? WARN : GOOD;
     g.setFont(&F_BIG);
@@ -155,7 +155,7 @@ void drawBoard(UiCtx &ui) {
   }
 
   /* ── uptime and restarts ─────────────────────────────────────────────── */
-  panel(g, x1, y1, cw, ch, "В РАБОТЕ");
+  panel(g, x1, y1, cw, ch, "в работе");
   {
     unsigned long up = st.uptimeSec;
     /* F_BIG like the other three heroes of this 2x2 grid — it was the only
@@ -179,7 +179,7 @@ void drawBoard(UiCtx &ui) {
       u2 = "м";
     }
     g.setFont(&F_BIG);
-    int uy = inkY(INK_BIG, y1 + 8, 30);
+    int uy = inkY(INK_BIG, y1 + PANEL_LABEL_H, 28);
     int ub = uy + INK_BIG.top + INK_BIG.height - INK_TEXT.top - INK_TEXT.height;
     snprintf(v, sizeof(v), "%lu", n1);
     textAt(g, x1 + 8, uy, v, TEXT);

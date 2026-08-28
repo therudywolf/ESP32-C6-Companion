@@ -339,17 +339,18 @@ void drawDash(UiCtx &ui) {
   /* CPU / GPU: hero temp + load% + bar */
   for (int k = 0; k < 2; k++) {
     bool cpu = k == 0;
-    panel(g, t[k].x, t[k].y, t[k].w, t[k].h, cpu ? "CPU" : "GPU");
+    panel(g, t[k].x, t[k].y, t[k].w, t[k].h, cpu ? "cpu" : "GPU");
     int temp = cpu ? hw.ct : hw.gt;
     int load = cpu ? hw.cl : hw.gl;
     g.setFont(&F_HUGE);
     snprintf(v, sizeof(v), "%d", temp);
     int vw = g.textWidth(v);
-    textAt(g, t[k].x + 8, t[k].y + 8 - (g.fontHeight() - 32) / 2, v,
+    textAt(g, t[k].x + 8,
+           t[k].y + PANEL_LABEL_H + 2 - (g.fontHeight() - 32) / 2, v,
            tempColor(temp, cpu ? 75 : 70, cpu ? 85 : 80));
     g.setFont(&F_MED);
     g.setTextSize(1);
-    textAt(g, t[k].x + 11 + vw, t[k].y + 24, "C", DIM);
+    textAt(g, t[k].x + 11 + vw, t[k].y + 30, "C", DIM);
     g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%d%%", load);
     textRight(g, t[k].x + t[k].w - 8, t[k].y + 8, v, pctColor(load));
@@ -359,27 +360,28 @@ void drawDash(UiCtx &ui) {
     trendArrow(g, t[k].x + t[k].w - 20 - g.textWidth(v), t[k].y + 8,
                cpu ? ui.gr.cpuLoad : ui.gr.gpuLoad, 8, 3);
     g.setTextSize(1);
-    hBar(g, t[k].x + 6, t[k].y + 45, t[k].w - 12, 11, load, pctColor(load));
+    hBar(g, t[k].x + 6, t[k].y + 47, t[k].w - 12, 10, load, pctColor(load));
   }
 
   /* RAM */
-  panel(g, t[2].x, t[2].y, t[2].w, t[2].h, "RAM");
+  panel(g, t[2].x, t[2].y, t[2].w, t[2].h, "ram");
   int rpct = hw.ra > 0.1f ? (int)(hw.ru * 100 / hw.ra) : 0;
   g.setFont(&F_HUGE);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw2 = g.textWidth(v);
-  textAt(g, t[2].x + 8, t[2].y + 8 - (g.fontHeight() - 32) / 2, v,
+  textAt(g, t[2].x + 8,
+         t[2].y + PANEL_LABEL_H + 2 - (g.fontHeight() - 32) / 2, v,
          pctColor(rpct));
   g.setFont(&F_MED);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "/%.0fG", hw.ra);
-  textAt(g, t[2].x + 11 + vw2, t[2].y + 24, v, DIM);
-  trendArrow(g, t[2].x + t[2].w - 14, t[2].y + 8, ui.gr.ramUsed, 8, 1);
+  textAt(g, t[2].x + 11 + vw2, t[2].y + 26, v, DIM);
+  trendArrow(g, t[2].x + t[2].w - 14, t[2].y + 14, ui.gr.ramUsed, 8, 1);
   g.setTextSize(1);
-  hBar(g, t[2].x + 6, t[2].y + 45, t[2].w - 12, 11, rpct, pctColor(rpct));
+  hBar(g, t[2].x + 6, t[2].y + 47, t[2].w - 12, 10, rpct, pctColor(rpct));
 
   /* NET */
-  panel(g, t[3].x, t[3].y, t[3].w, t[3].h, "NET");
+  panel(g, t[3].x, t[3].y, t[3].w, t[3].h, "net");
   char r1[12], r2[12];
   fmtRate(r1, sizeof(r1), hw.nd);
   fmtRate(r2, sizeof(r2), hw.nu);
