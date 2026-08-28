@@ -968,7 +968,7 @@ static void lintCyrillic(LGFX_Sprite &g, int x, int y, const char *s) {
     if (k == &INK_TEXT)
       for (const unsigned char *p = (const unsigned char *)s; p[0] && p[1]; p++)
         if (p[0] >= 0x80 && textFontLacks(p)) {
-          lintGlyphReport("В ЭТОМ ШРИФТЕ НЕТ БУКВЫ э/Ё/ё — будет квадрат",
+          lintGlyphReport("В ЭТОМ ШРИФТЕ НЕТ БУКВЫ э/Ё/ё - будет квадрат",
                           s, x, y, g.fontHeight());
           return;
         }
@@ -976,7 +976,7 @@ static void lintCyrillic(LGFX_Sprite &g, int x, int y, const char *s) {
   }
   for (const unsigned char *p = (const unsigned char *)s; *p; p++)
     if (*p >= 0x80) {
-      lintGlyphReport("КИРИЛЛИЦА В ЛАТИНСКОМ ШРИФТЕ — будут квадраты",
+      lintGlyphReport("КИРИЛЛИЦА В ЛАТИНСКОМ ШРИФТЕ - будут квадраты",
                       s, x, y, g.fontHeight());
       return;
     }

@@ -127,9 +127,11 @@ void drawBoard(UiCtx &ui) {
     /* Two label-and-number pairs, laid out by MEASURING each piece instead
      * of by four hand-counted x offsets. "мин 15  блок 16" drifted because
      * the offsets assumed two-digit readings and the largest free block is
-     * regularly three — the owner's "мин 15 блок 16 — тоже как-то криво". */
+     * regularly three — the owner's "мин 15 блок 16 - тоже как-то криво". */
     {
-      const int fy = below + 2;
+      /* below + 0, не + 2: чернила «мин» и «блок» приходились ровно на
+       * нижнюю кромку карточки. */
+      const int fy = below - 1;
       int fx = x1 + 8;
       struct {
         const char *label;
@@ -216,11 +218,13 @@ void drawBoard(UiCtx &ui) {
     char clipped[40];
     snprintf(v, sizeof(v), "рестарт: %s", b.reasonText);
     clipW(g, v, clipped, sizeof(clipped), cw - 16);
-    textAt(g, x1 + 8, y1 + 34, clipped, b.lastWasFault ? WARN : DIM);
+    /* +38, не +34: чернила строки начинались на 126-м ряду, а цифры
+     * времени работы кончаются на 127-м, и «рестарт:» шёл по ним. */
+    textAt(g, x1 + 8, y1 + 38, clipped, b.lastWasFault ? WARN : DIM);
     snprintf(v, sizeof(v), "пусков %lu, сбоев %lu", (unsigned long)b.bootCount,
              (unsigned long)b.faultCount);
     clipW(g, v, clipped, sizeof(clipped), cw - 16);
-    textAt(g, x1 + 8, y1 + 46, clipped, b.faultCount > 0 ? WARN : DIM);
+    textAt(g, x1 + 8, y1 + 48, clipped, b.faultCount > 0 ? WARN : DIM);
   }
 
   /* ── footer: the rest of the identity, one line ──────────────────────── */

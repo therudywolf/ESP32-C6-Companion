@@ -866,7 +866,7 @@ static void consoleExec(String line) {
     /* Empty the ring. The directory grew to 405 files across one long review
      * session before the naming became a ring, and those are still there. */
     int n = sd.pruneDir("/shots", NOCT_SHOT_KEEP);
-    Serial.printf("udalen: %d\n", n);
+    Serial.printf("удалено снимков: %d\n", n);
   } else if (cmd == "shot") {
     /* Route through the SAME request the menu uses, so the capture always
      * happens right after a complete draw()+push(). Taking it straight from

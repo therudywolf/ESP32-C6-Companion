@@ -43,14 +43,14 @@ const char *title(int scene) {
 const char *actionHint(int scene, UiCtx &ui) {
   switch (scene) {
   case SCENE_DEN: {
-    if (!ui.pet.isAlive()) return "—оживить";
-    return "—действие";
+    if (!ui.pet.isAlive()) return "-оживить";
+    return "-действие";
   }
-  case SCENE_CLAUDE: return "—обновить";
+  case SCENE_CLAUDE: return "-обновить";
   case SCENE_FOREST:
-  case SCENE_SERVICES: return "—обновить";
-  case SCENE_HISTORY: return "—час/сутки";
-  case SCENE_HOME: return "—окно графика";
+  case SCENE_SERVICES: return "-обновить";
+  case SCENE_HISTORY: return "-час/сутки";
+  case SCENE_HOME: return "-окно графика";
   default: return nullptr;
   }
 }
@@ -86,7 +86,7 @@ void noSignal(UiCtx &ui) {
   if (ui.st.pcOffline) {
     g.setFont(&F_SMALL);
     textCenter(g, NOCT_W / 2, 136,
-               "работают: ЛОГОВО · ДОМ · ПЛАТА C6 · ИСТОРИЯ", ORANGE_DIM);
+               "работают: ЛОГОВО - ДОМ - ПЛАТА C6 - ИСТОРИЯ", ORANGE_DIM);
     g.setFont(&F_TEXT);
   }
 }

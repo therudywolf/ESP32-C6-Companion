@@ -13,6 +13,10 @@ namespace scenes {
 static uint16_t stColor(const char *st) {
   if (strcmp(st, "up") == 0) return GOOD;
   if (strcmp(st, "warn") == 0) return WARN;
+  /* "off" is not an outage — it is a service in the roster that has nothing
+   * to probe yet. Red would send you looking for a fault that is a blank
+   * field in config.json. */
+  if (strcmp(st, "off") == 0) return DIM;
   return CRIT;
 }
 
@@ -268,7 +272,7 @@ void drawWeather(UiCtx &ui) {
    * owner could not place: the tiles now run to the last usable row instead
    * of stopping eight pixels short of it for no reason. */
   {
-    Rect c = panelM(g, 4, 26, 312, 78, "за окном");
+    Rect c = panelM(g, 4, 26, 312, 80, "за окном");
     weatherIcon(g, c.x + 22, c.y + 32, 17, w.wmoCode, ui.now);
     g.setFont(&F_HUGE);
     g.setTextSize(2);
@@ -550,14 +554,24 @@ void drawServices(UiCtx &ui) {
    * where six were crowded into two thirds of the width. */
   Rect lc = panelM(g, 4, 26, 312, 144, "сервисы");
   int shown = s.count > 7 ? 7 : s.count;
-  int pitch = 19;
+  /* 17, не 19. Карточка отдаёт под содержимое 123 ряда; семь строк по
+   * девятнадцать — это 133, и последняя («Nocturne») резалась пополам нижней
+   * кромкой. Шаг считается от того, сколько строк реально пришло, так что
+   * четыре сервиса дышат, а семь помещаются. */
+  int pitch = shown > 0 ? (lc.h - 4) / (shown < 6 ? 6 : shown) : 19;
+  if (pitch > 22) pitch = 22;
   for (int i = 0; i < shown; i++) {
     ServiceEntry &e = s.list[i];
     int y = lc.y + 2 + i * pitch;
     uint16_t c = stColor(e.status);
     g.fillCircle(lc.x + 5, y + 8, 5, c);
     int nameRight = lc.x + lc.w - 8;
-    if (e.ms >= 0) {
+    if (strcmp(e.status, "off") == 0) {
+      g.setFont(&F_TEXT);
+      g.setTextSize(1);
+      textRight(g, lc.x + lc.w - 8, y + 4, "не настроен", DIM);
+      nameRight = lc.x + lc.w - 16 - g.textWidth("не настроен");
+    } else if (e.ms >= 0) {
       /* F_VALUE: the latency is the only NUMBER on this screen, and it was
        * set two steps smaller than the service name beside it — the name is
        * the label and the number is the reading, so the sizes were the wrong
@@ -613,7 +627,7 @@ void drawEvents(UiCtx &ui) {
               ui.st.link.tcpConnected ? GOOD : CRIT);
     g.setFont(&F_TEXT);
     textAt(g, d.x, d.y + 24,
-           "активных срабатываний нет — ни warning, ни critical", DIM);
+           "активных срабатываний нет - ни warning, ни critical", DIM);
     if (ui.st.claude.available && ui.st.claude.weeklyPct >= 0) {
       char q[40];
       snprintf(q, sizeof(q), "лимит Claude: %d%% за неделю",
@@ -640,27 +654,44 @@ void drawEvents(UiCtx &ui) {
     g.setFont(&F_TEXT);
     snprintf(v, sizeof(v), "%s x%d", e.severity, e.count);
     textRight(g, c.x + c.w, c.y + 6, v, DIM);
-    /* The human sentence, at F_MED. It was the whole point of the screen and
-     * it was set in the same face as the timestamps beside it. */
-    g.setFont(&F_MED);
-    textWrap(g, e.text, c.x, c.y + 22, c.w, 18, 1, TEXT);
+    /* The human sentence, at F_MED — the whole point of the screen, and it
+     * used to be set in the same face as the timestamps beside it.
+     *
+     * Only when it says something the title did not. Alertmanager often
+     * repeats the rule name as the annotation, and the screen printed
+     * "Claude wk 83%" twice in two cards, the second existing to repeat the
+     * first. */
+    if (strcmp(e.text, e.top) != 0) {
+      g.setFont(&F_MED);
+      textWrap(g, e.text, c.x, c.y + 22, c.w, 18, 1, TEXT);
+    }
   }
 
   /* Everything else that is firing. */
   {
     Rect c2 = panelM(g, 4, 86, 312, 84,
-                     e.count > 1 ? "ещё горит" : "подробности");
-    g.setFont(&F_MED);
-    g.setTextSize(1);
-    textWrap(g, e.text, c2.x, c2.y + 2, c2.w, 18, 2, DIM);
-    int shown = 0;
-    g.setFont(&F_TEXT);
-    for (int i = 1; i < e.count && i < EventsData::kMaxList; i++) {
-      if (!e.list[i][0]) continue;
-      snprintf(v, sizeof(v), "+ %s", e.list[i]);
-      textAt(g, c2.x, c2.y + 40 + shown * 14, v, DIM);
-      shown++;
-      if (shown >= 2) break;
+                     e.count > 1 ? "еще горит" : "что дальше");
+    int row = 0;
+    if (e.count > 1) {
+      g.setFont(&F_MED);
+      g.setTextSize(1);
+      for (int i = 1; i < e.count && i < EventsData::kMaxList; i++) {
+        if (!e.list[i][0]) continue;
+        char nm2[40];
+        clipW(g, e.list[i], nm2, sizeof(nm2), c2.w);
+        textAt(g, c2.x, c2.y + 2 + row * 19, nm2, DIM);
+        if (++row >= 3) break;
+      }
+    }
+    if (!row) {
+      /* One alert and nothing more to list. Say what the state IS rather than
+       * repeating the alert a second time in a second card. */
+      g.setFont(&F_MED);
+      g.setTextSize(1);
+      textAt(g, c2.x, c2.y + 2, "больше ничего не горит", DIM);
+      g.setFont(&F_TEXT);
+      textAt(g, c2.x, c2.y + 26,
+             "долгое нажатие - обновить статус с сервера", DIM);
     }
   }
 }
