@@ -453,7 +453,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
         toast("дом сброшен на волка");
       } else {
         s.pinnedScene = scene_;
-        toast("этот экран — дом");
+        toast("этот экран - дом");
       }
       settings::save(s);
     }
@@ -1481,7 +1481,14 @@ void SceneManager::draw(UiCtx &ui) {
       lastNotifSeq_ = nt.seq;
     } else if (nt.seq != lastNotifSeq_) {
       lastNotifSeq_ = nt.seq; /* consume even when off, so re-enabling won't replay */
-      if (ui.st.settings.notifShow && nt.seq > 0 &&
+      /* Review mode drops these too.
+       *
+       * alertCard() already refused, but the PC's notification flyover is a
+       * separate path and it was not gated: a Telegram message slid over the
+       * screen mid-walk and the overlap report came back with forty findings
+       * about "@deaswing" crossing "OFFLINE". A review mode that lets a chat
+       * notification cover the screen is not a review mode. */
+      if (!review_ && ui.st.settings.notifShow && nt.seq > 0 &&
           (nt.title.length() || nt.body.length())) {
         notifAt_ = ui.now;
         notifDurMs_ = nt.durSec > 0 ? (unsigned long)nt.durSec * 1000UL : 7000UL;

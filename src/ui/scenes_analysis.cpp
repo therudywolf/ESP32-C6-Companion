@@ -74,9 +74,9 @@ static void quantity(LGFX_Sprite &g, int x, int y, int w, int h,
     textAt(g, c.x + nw + 3, base - INK_TEXT.top - INK_TEXT.height, unit, DIM);
   }
   g.setFont(&F_TEXT);
-  int wy = c.y + INK_BIG.height + 8;
+  int wy = c.y + INK_BIG.height + 6;
   if (w3) textAt(g, c.x, wy, w3, DIM);
-  if (w24) textAt(g, c.x, wy + INK_TEXT.box + 2, w24, DIM);
+  if (w24) textAt(g, c.x, wy + INK_TEXT.box + 1, w24, DIM);
 }
 
 /* One horizon of the forecast: "через 3 ч", the value with its band, and the
@@ -95,12 +95,22 @@ static void horizon(LGFX_Sprite &g, int x, int y, int w, int hours, int t10,
   textAt(g, x + 62, y, v, TEXT);
   int nw = g.textWidth(v);
 
-  /* The band, drawn as ± and small. It is the honest half of the number and
-   * it must not be the loud half: quoted at the same size it reads as a
-   * second measurement rather than as this one's uncertainty. */
+  /* The band, drawn small. It is the honest half of the number and it must
+   * not be the loud half: quoted at the same size it reads as a second
+   * measurement rather than as this one's uncertainty.
+   *
+   * The plus-minus is DRAWN, not typed. None of the board's three Cyrillic
+   * faces carries U+00B1 — they cover ASCII plus the Cyrillic block and
+   * nothing else — so the character that makes this a band rather than a
+   * second reading would have been a hollow rectangle. Five pixels of line
+   * work says it and cannot go missing. */
   g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "±%d,%d C", sd10 / 10, abs(sd10 % 10));
-  textAt(g, x + 66 + nw, y + 4, v, DIM);
+  const int px = x + 66 + nw, py = y + 6;
+  g.drawFastHLine(px, py + 2, 5, DIM);
+  g.drawFastVLine(px + 2, py, 5, DIM);
+  g.drawFastHLine(px, py + 6, 5, DIM);
+  snprintf(v, sizeof(v), "%d,%d C", sd10 / 10, abs(sd10 % 10));
+  textAt(g, px + 8, y + 4, v, DIM);
 
   int rx = x + w - 4;
   if (rh >= 0) {
@@ -126,16 +136,18 @@ void drawAnalysis(UiCtx &ui) {
   const ZbSensor &z = have ? st.zb.list[0] : st.zb.list[0];
 
   /* ── три карточки: то, что датчик действительно меряет ───────────────── */
-  const int CW = 101, CH = 70;
+  /* 72, не 70: вторая строка окна ложилась чернилами на нижнюю кромку
+   * карточки — на всех трёх сразу, потому что все три считались одинаково. */
+  const int CW = 101, CH = 72;
 
   /* влажность */
   if (have && z.humidity >= 0) {
     snprintf(v, sizeof(v), "%d", z.humidity);
-    snprintf(a, sizeof(a), w.okH3 ? "3ч %+d" : "3ч —", w.dH_3h);
-    snprintf(b, sizeof(b), w.okH24 ? "сут %+d" : "сут —", w.dH_24h);
+    snprintf(a, sizeof(a), w.okH3 ? "3ч %+d" : "3ч -", w.dH_3h);
+    snprintf(b, sizeof(b), w.okH24 ? "сут %+d" : "сут -", w.dH_24h);
     quantity(g, 4, 26, CW, CH, "влажность", v, "%", INFO, a, b);
   } else {
-    quantity(g, 4, 26, CW, CH, "влажность", "—", nullptr, DIM, nullptr,
+    quantity(g, 4, 26, CW, CH, "влажность", "-", nullptr, DIM, nullptr,
              nullptr);
   }
 
@@ -143,12 +155,12 @@ void drawAnalysis(UiCtx &ui) {
   if (have && z.temp10 != -32768) {
     snprintf(v, sizeof(v), "%d,%d", z.temp10 / 10, abs(z.temp10 % 10));
     if (w.okT3) fmtDelta(a, sizeof(a), w.dT10_3h, "за 3ч");
-    else snprintf(a, sizeof(a), "3ч —");
+    else snprintf(a, sizeof(a), "3ч -");
     if (w.okT24) fmtDelta(b, sizeof(b), w.dT10_24h, "за сут");
-    else snprintf(b, sizeof(b), "сут —");
+    else snprintf(b, sizeof(b), "сут -");
     quantity(g, 109, 26, CW, CH, "температура", v, "C", TEXT, a, b);
   } else {
-    quantity(g, 109, 26, CW, CH, "температура", "—", nullptr, DIM, nullptr,
+    quantity(g, 109, 26, CW, CH, "температура", "-", nullptr, DIM, nullptr,
              nullptr);
   }
 
@@ -161,18 +173,22 @@ void drawAnalysis(UiCtx &ui) {
                                                       : TEXT;
     snprintf(v, sizeof(v), "%d", z.pressure);
     if (w.okP3) fmtDelta(a, sizeof(a), w.dP10_3h, "за 3ч");
-    else snprintf(a, sizeof(a), "3ч —");
+    else snprintf(a, sizeof(a), "3ч -");
     if (w.okP24) fmtDelta(b, sizeof(b), w.dP10_24h, "за сут");
-    else snprintf(b, sizeof(b), "сут —");
+    else snprintf(b, sizeof(b), "сут -");
     quantity(g, 214, 26, 102, CH, "давление", v, "гПа", pc, a, b);
   } else {
-    quantity(g, 214, 26, 102, CH, "давление", "—", nullptr, DIM, nullptr,
+    quantity(g, 214, 26, 102, CH, "давление", "-", nullptr, DIM, nullptr,
              nullptr);
   }
 
   /* ── прогноз по датчику ──────────────────────────────────────────────── */
   {
-    Rect c = panelM(g, 4, 100, 312, 70, "прогноз по датчику");
+    /* Ярлык несёт СОСТОЯНИЕ. «прогноз по датчику» над строкой «прогноза пока
+     * нет» — это заголовок, который спорит со своим содержимым, и он же
+     * съедал ряд, которого потом не хватало причине отказа. */
+    Rect c = panelM(g, 4, 102, 312, 68,
+                    st.roomcast.ok ? "прогноз по датчику" : "прогноза пока нет");
     const RoomForecast &rc = st.roomcast;
 
     if (rc.ok) {
@@ -188,28 +204,30 @@ void drawAnalysis(UiCtx &ui) {
          * is itself the news. */
         textAt(g, c.x, c.y + 46, rc.risk.c_str(), WARN);
       } else if (st.zbPressPct >= 0) {
-        snprintf(v, sizeof(v), "давление выше %d%% всех показаний за всё время",
+        snprintf(v, sizeof(v), "давление выше %d%% всех показаний за все время",
                  st.zbPressPct);
         textAt(g, c.x, c.y + 46, v, DIM);
       }
     } else {
       /* No forecast is a fact with a reason, and the reason is the useful
        * part: it says what is missing and therefore when to look again. */
-      g.setFont(&F_MED);
-      g.setTextSize(1);
-      textAt(g, c.x, c.y + 4, "прогноза пока нет", DIM);
       g.setFont(&F_TEXT);
+      g.setTextSize(1);
       const char *why = rc.why.length()
                             ? rc.why.c_str()
                             : (rc.received ? "сервер не прислал причину"
                                            : "нет связи с сервером");
-      textWrap(g, why, c.x, c.y + 26, c.w, 13, 2, DIM);
+      textWrap(g, why, c.x, c.y + 2, c.w, 14, 2, DIM);
       if (st.zbFindCount > 0) {
         /* Something to say while the model warms up: the strongest pattern
-         * the on-board analysis found, which needs no history but today's. */
+         * the on-board analysis found, which needs no history but today's.
+         * F_TEXT, not F_MED — на F_MED эта строка вылезала на восемь рядов
+         * ниже карточки, а места между ней и причиной отказа нет. */
         const analysis::Finding &f = st.zbFind[0];
         uint16_t fc = f.severity >= 2 ? CRIT : (f.severity == 1 ? WARN : GOOD);
-        textAt(g, c.x, c.y + 52, f.title, fc);
+        char ft[48];
+        clipW(g, f.title, ft, sizeof(ft), c.w);
+        textAt(g, c.x, c.y + 30, ft, fc);
       }
     }
   }

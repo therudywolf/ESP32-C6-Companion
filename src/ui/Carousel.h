@@ -150,7 +150,7 @@ static const Preset PRESETS[] = {
                   FQ_OFF, FQ_OFF, FQ_EVERY, FQ_OFF, FQ_OFF, FQ_OFF)},
     /* 5 — всё поровну: every enabled screen, one turn each. The old
      * behaviour, kept because it is the one that needs no explaining. */
-    {"всё поровну",
+    {"все поровну",
      NOCT_CAR_ROW(FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY,
                   FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY,
                   FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY, FQ_EVERY,

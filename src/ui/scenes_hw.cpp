@@ -189,12 +189,26 @@ void drawRam(UiCtx &ui) {
   /* 80, не 74: ярлык внутри карточки занимает 12 рядов, а герой F_HUGE в
    * двойном размере — 64 чернил. Семьдесят четыре их не вмещают, и число
    * пробивало нижнюю кромку. Бюджет полосы 26..170 сходится: 80 + 4 + 62. */
-  panel(g, 4, 26, 312, 80, "оперативка");
+  /* 84 рядa, не 80. Ярлык занимает 12, герой — 64, и на выносные элементы
+   * единицы измерения оставалось меньше, чем они занимают. Заодно ярлык
+   * перестал задевать верх цифр: на восьмидесяти между ними было минус два
+   * ряда. */
+  panel(g, 4, 26, 312, 84, "оперативка");
   g.setFont(&F_HUGE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%.1f", hw.ru);
   int vw = g.textWidth(v);
-  textAt(g, 14, inkTop(g, 34 + PANEL_LABEL_H - 6, 64), v, pctColor(rpct));
+  /* Считается ЗДЕСЬ, пока выбран F_HUGE.
+   *
+   * inkTop() смотрит на g.fontHeight(), а вызывался он ниже — уже после
+   * setFont(&F_MED). Смещение считалось для строки в двадцать рядов вместо
+   * девяноста четырёх, единица уезжала на пятнадцать рядов вниз и ложилась
+   * на нижнюю кромку карточки. На бумаге арифметика выглядела правильной. */
+  const int ramHeroY = inkTop(g, 40, 64);
+  /* 37, не 40. Ярлык занимает 12 рядов, герой — 64, карточка — 80: на
+   * выносные единицы измерения оставалось четыре ряда, а нужно ровно
+   * четыре, и косая черта в «/32ГБ» ложилась на нижнюю кромку. */
+  textAt(g, 14, ramHeroY, v, pctColor(rpct));
   g.setTextSize(1);
   g.setFont(&F_MED);
   /* On the hero's own baseline, derived from where the hero actually landed.
@@ -202,8 +216,7 @@ void drawRam(UiCtx &ui) {
    * moved the hero, which is the "чуть долизать" the owner could see and
    * could not name. */
   {
-    const int heroTop = inkTop(g, 34 + PANEL_LABEL_H - 6, 64);
-    const int base = heroTop + (INK_HUGE.top + INK_HUGE.height) * 2;
+    const int base = ramHeroY + (INK_HUGE.top + INK_HUGE.height) * 2;
     snprintf(v, sizeof(v), "/%.0fГБ", hw.ra);
     textAt(g, 22 + vw, base - INK_MED.top - INK_MED.height, v, DIM);
   }
@@ -216,11 +229,11 @@ void drawRam(UiCtx &ui) {
   hBar(g, 230, 76, 76, 16, rpct, pctColor(rpct));
 
   /* grown into the freed bottom band: top-2 processes + free memory */
-  panel(g, 4, 108, 312, 63, "топ по памяти / свободно");
+  panel(g, 4, 112, 312, 58, "топ по памяти / свободно");
   g.setFont(&F_MED);
   for (int i = 0; i < 2; i++) {
     if (ui.st.process.ramNames[i].length() == 0) continue;
-    int y = 121 + i * 17;   /* две строки укладываются в 124..157 */
+    int y = 124 + i * 17;   /* чернила 127..139 и 144..156 */
     snprintf(v, sizeof(v), "%.14s", ui.st.process.ramNames[i].c_str());
     textAt(g, 12, y, v, i == 0 ? TEXT : DIM);
     snprintf(v, sizeof(v), "%d МБ", ui.st.process.ramMb[i]);
@@ -238,15 +251,15 @@ void drawRam(UiCtx &ui) {
   {
     int fx = 12;
     g.setFont(&F_TEXT);
-    textAt(g, fx, 158, "свободно", DIM);
+    textAt(g, fx, 157, "свободно", DIM);
     fx += g.textWidth("свободно") + 8;
     g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%.1f", freeGb);
-    textAt(g, fx, 157, v, GOOD);
+    textAt(g, fx, 156, v, GOOD);
     fx += g.textWidth(v) + 6;
     g.setFont(&F_TEXT);
     snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
-    textAt(g, fx, 158, v, DIM);
+    textAt(g, fx, 157, v, DIM);
   }
 }
 
@@ -279,7 +292,10 @@ void drawDisks(UiCtx &ui) {
     /* Under the row's ink, not under its cursor: the capacity string carries
      * a slash, which hangs below the baseline, and a bar placed by the cursor
      * cut its tail off. */
-    hBar(g, 34, y + 18, 274, 7, pct, pctColor(pct));
+    /* +20, не +18. Строка ёмкости содержит косую черту, а она свисает под
+     * базовую линию: на восемнадцати полоса срезала ей хвост на два ряда,
+     * на всех четырёх дисках сразу. */
+    hBar(g, 34, y + 20, 274, 7, pct, pctColor(pct));
   }
 
   /* Throughput in its own card. It used to be a rule with numbers hanging
