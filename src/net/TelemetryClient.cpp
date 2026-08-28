@@ -324,6 +324,22 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   hw.dw = doc["dw"] | hw.dw;
 
   if (!doc["wt"].isNull() || doc["wd"].is<const char *>()) {
+    RoomForecast &rc = state.roomcast;
+    if (doc.containsKey("rcok")) {
+      rc.ok = (int)(doc["rcok"] | 0) != 0;
+      rc.received = true;
+      rc.temp10[0] = doc["rct3"] | 0;
+      rc.sd10[0] = doc["rcs3"] | 0;
+      rc.rh[0] = doc["rch3"] | -1;
+      rc.temp10[1] = doc["rct12"] | 0;
+      rc.sd10[1] = doc["rcs12"] | 0;
+      rc.rh[1] = doc["rch12"] | -1;
+      rc.haveStreet = doc.containsKey("rco3");
+      rc.street10[0] = doc["rco3"] | 0;
+      rc.street10[1] = doc["rco12"] | 0;
+      rc.why = doc["rcw"] ? stripGlyphs((const char *)doc["rcw"]) : String("");
+      rc.risk = doc["rcr"] ? stripGlyphs((const char *)doc["rcr"]) : String("");
+    }
     state.weather.temp = doc["wt"] | state.weather.temp;
     state.weather.precip = doc["wp"] | state.weather.precip;
     if (doc["wd"].is<const char *>())
@@ -521,6 +537,19 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     state.rcToneB = rc["toneb"] | 0;
     state.rcToneK = rc["tonek"] | -1;
     state.rcMono = rc["mono"] | -1;
+    /* Same reasoning as the tone above: these describe how the CAROUSEL is
+     * shaped, not an action to perform once, so they are read on every
+     * payload and applied only when they differ from what the board holds.
+     * Behind the seq gate they were lost at the next reboot. */
+    state.rcReview = rc["review"] | -1;
+    state.rcCarMode = rc["carmode"] | -1;
+    {
+      JsonArrayConst cf = rc["carfreq"];
+      state.rcCarFreqN = 0;
+      if (!cf.isNull())
+        for (int i = 0; i < SCENE_COUNT && i < (int)cf.size(); i++)
+          state.rcCarFreq[state.rcCarFreqN++] = (uint8_t)(cf[i] | 0);
+    }
     long seq = rc["seq"] | -1L;
     if (seq >= 0 && seq != state.rcSeq) {
       state.rcSeq = seq;

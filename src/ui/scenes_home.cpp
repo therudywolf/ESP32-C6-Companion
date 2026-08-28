@@ -63,43 +63,64 @@ static int inkTop(LGFX_Sprite &g, int wantTop, int inkH) {
  * height as the rest of the ring. */
 static void hero(LGFX_Sprite &g, const Rect &c, const char *num,
                  const char *frac, const char *unit, uint16_t col) {
-  const int x = c.x;
+  /* The whole reading is CENTRED in its tile, and it is measured before it is
+   * placed. It used to start hard against the left padding, which put a
+   * two-digit room temperature and a three-digit one in visibly different
+   * places and left a growing hole on the right - the owner read that as the
+   * number having slid into a corner, because it had.
+   *
+   * The group is the big digits plus a narrow column carrying the tenth over
+   * the unit, so its width depends on the reading. Measure, then centre. */
   g.setFont(&F_HUGE);
   g.setTextSize(2);
-  int vw = g.textWidth(num);
+  const int vw = g.textWidth(num);
+
+  /* The tenth steps up from F_MED to F_BIG: 24 px of ink against 13.
+   *
+   * A room moves BY tenths - the two big digits sit still for hours while
+   * this one changes - and at the reading distance of half a metre to a
+   * metre the old size was the smallest thing on the screen carrying the
+   * fastest-moving information. */
+  g.setFont(&F_BIG);
+  g.setTextSize(1);
+  const int fw = frac ? g.textWidth(frac) : 0;
+  g.setFont(&F_MED);
+  const int uw = unit ? g.textWidth(unit) : 0;
+
+  const int colW = fw > uw ? fw : uw;
+  const int gap = colW ? 6 : 0;
+  int x = c.x + (c.w - (vw + gap + colW)) / 2;
+  if (x < c.x) x = c.x;
+
+  g.setFont(&F_HUGE);
+  g.setTextSize(2);
   /* Placed by the font's INK, not by its name and not by its line box.
    * F_HUGE at double size writes a 94 px line for 64 px of digits: sizing a
    * tile from "logisoso32" clips the glyph, and centring on the line box
    * leaves it visibly high with the empty leading hanging below. */
-  int y = inkY(INK_HUGE, c.y, c.h, 2);
+  const int y = inkY(INK_HUGE, c.y, c.h, 2);
   textAt(g, x, y, num, col);
   const int numTop = y + INK_HUGE.top * 2;
   const int numBot = numTop + INK_HUGE.height * 2 - 1;
+
   g.setTextSize(1);
+  const int cx = x + vw + gap;
   /* The tenth and the unit stack in one narrow column to the RIGHT of the
    * digits, tenth on top. Read downward it says "23 , 4 C" in that order.
    * The tenth used to sit in the tile's bottom-left corner, which put it
    * nowhere near the number it belongs to - it read as a stray mark rather
-   * than as part of the reading. A room moves by tenths, so the digit has to
-   * stay; it just has to stay ATTACHED. */
+   * than as part of the reading. */
   if (frac) {
-    /* F_MED, not F_TEXT. The tenth is part of the reading, not a footnote:
-     * a room moves BY tenths, so this is the digit that changes while the
-     * two big ones sit still. Drawn in the smallest face on the screen it
-     * was invisible from the far side of the room - which is where this
-     * board is read from. Same colour as the number it belongs to, for the
-     * same reason. */
-    g.setFont(&F_MED);
-    /* Hung off the big number's own ink: the tenth sits in its lower half,
-     * the unit ends level with its baseline. Both used to be offsets from
-     * the CURSOR, which is 14 rows above the ink at this size — which is how
-     * the unit ended up eleven pixels below the tile. */
-    textAt(g, x + vw + 4, numTop + INK_HUGE.height - INK_MED.top, frac, col);
+    g.setFont(&F_BIG);
+    /* Hung off the big number's own ink, not off the cursor: the tenth's
+     * ink starts a third of the way down the big digits. Both used to be
+     * offsets from the CURSOR, which is 14 rows above the ink at this size -
+     * which is how the unit ended up eleven pixels below the tile. */
+    textAt(g, cx, numTop + INK_HUGE.height / 3 - INK_BIG.top, frac, col);
   }
   if (unit) {
     g.setFont(&F_MED);
-    textAt(g, x + vw + 4, numBot - INK_MED.height - INK_MED.top + 1, unit,
-           DIM);
+    textAt(g, cx, numBot - INK_MED.height - INK_MED.top + 1, unit, DIM);
   }
 }
 

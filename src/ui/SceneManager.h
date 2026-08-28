@@ -11,6 +11,7 @@
 #include "led/StatusLed.h"
 #include "net/TelemetryClient.h"
 #include "net/WifiManager.h"
+#include "ui/Carousel.h"
 #include "ui/Display.h"
 #include "ui/Scenes.h"
 
@@ -39,6 +40,32 @@ public:
   int currentScene() const { return scene_; }
   /* remote-control: jump to a scene on the next draw (companion app). */
   void requestScene(int s) { pendingScene_ = s; }
+
+  /* ── ОСМОТР ───────────────────────────────────────────────────────────
+   * One switch that makes the screen hold still long enough to be measured.
+   *
+   * Every layout check so far has been fighting the device: the carousel
+   * rotates mid-capture so the file is named for a screen it does not show,
+   * a toast slides in over the content and the overlap report fills with
+   * "на связи," crossing everything, and the wolf's idle animation moves
+   * pixels between one shot and the next so two captures of the same screen
+   * never diff clean.
+   *
+   * With this on: the carousel is parked, toasts and notification cards are
+   * dropped rather than queued, the alert takeover is refused, the screen
+   * never dims, and (through theme::setMono) the palette collapses to grey
+   * so a shifted glyph is visible as ink rather than as colour. It is the
+   * mode the owner asked for in as many words — "отключи анимацию, сделай
+   * ЧБ фон, чтобы нормально следить попиксельно, что куда уехало". */
+  void setReview(bool on) {
+    review_ = on;
+    if (on) {
+      toastUntil_ = 0;
+      notifUntil_ = 0;
+      lastInput_ = millis();
+    }
+  }
+  bool reviewOn() const { return review_; }
   /* ИСТОРИЯ scale, read into UiCtx by main so the scene can pick a series.
    * 0 = hour, 1 = day, 2 = the card archive. */
   int historyMode() const { return histMode_; }
@@ -130,6 +157,7 @@ private:
   void drawGame(UiCtx &ui);      /* the one-button runner */
   void gameReset();
   /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
+  int carouselStep(UiCtx &ui);
   int nextVisibleScene(int from, uint32_t mask, bool allowDen,
                        bool pcOffline = false) const;
   void menuAction(UiCtx &ui, int itemId);
@@ -196,6 +224,8 @@ private:
   int denSel_ = 0;
   unsigned long denModeAt_ = 0;
 
+  /* Set by setReview(): hold everything that moves. */
+  bool review_ = false;
   String toast_;
   String toastTitle_;
   int toastKind_ = 0;
@@ -203,6 +233,11 @@ private:
   unsigned long toastAt_ = 0; /* for the slide-in */
 
   unsigned long lastCarousel_ = 0;
+  /* Where the carousel is in its pass. The round has to be REMEMBERED rather
+   * than derived from the current scene: "every fifth round" is a fact about
+   * the sequence, and a scene alone cannot say which round it is in. */
+  int carRound_ = 0;
+  int carSlot_ = -1;
   unsigned long lastInput_ = 0;
   unsigned long sceneOsdAt_ = 0; /* scene-change name OSD timer */
   bool dimmed_ = false;

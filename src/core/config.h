@@ -120,6 +120,11 @@
  * the phrase cache: it rotated at 8 KB while only the newest 4 KB was ever
  * sampled. Keep every cap <= this. */
 #define NOCT_SD_READ_MAX 4096
+
+/* How many screenshots the card keeps. A ring, not a history: every shot is
+ * pulled off within seconds, and an unbounded directory made `shot` itself
+ * slower with every use until it crashed the board at 405 files. */
+#define NOCT_SHOT_KEEP 24
 #define NOCT_SD_PHRASE_MAX 4096   /* per phrase-cache bucket, bytes */
 #define NOCT_SD_DIARY_MAX 32768   /* /wolf/memory.jsonl (only its tail is read) */
 /* Entries drained per flush(). ONE, because measurement says so: a 1332-byte
@@ -175,6 +180,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.39.0"
+#define NOCT_VERSION "1.40.0"
 
 #endif

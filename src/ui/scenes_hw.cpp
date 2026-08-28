@@ -81,42 +81,47 @@ void drawCpu(UiCtx &ui) {
   HardwareData &hw = ui.st.hw;
   char v[32];
 
-  panel(g, 4, 26, 130, 88, "температура");
-  heroTemp(g, 4, 130, 42, hw.ct, tempColor(hw.ct, 75, 85)); /* под ярлыком */
-  trendArrow(g, 118, 40, ui.gr.cpuTemp, 8, 1);
+  /* ── левая колонка: температура, единственный герой экрана ─────────── */
+  panel(g, 4, 26, 130, 92, "температура");
+  heroTemp(g, 4, 130, 44, hw.ct, tempColor(hw.ct, 75, 85));
+  trendArrow(g, 118, 42, ui.gr.cpuTemp, 8, 1);
 
+  /* ── правая колонка ─────────────────────────────────────────────────── */
   panel(g, 140, 26, 176, 50, "нагрузка");
   g.setFont(&F_VALUE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.cl);
-  textAt(g, 148, 36, v, pctColor(hw.cl));
+  textAt(g, 148, 40, v, pctColor(hw.cl));
   g.setTextSize(1);
-  trendArrow(g, 222, 44, ui.gr.cpuLoad, 8, 3);
-  sparkline(g, 232, 34, 76, 34, ui.gr.cpuLoad, GOOD);
+  trendArrow(g, 222, 48, ui.gr.cpuLoad, 8, 3);
+  sparkline(g, 232, 40, 76, 30, ui.gr.cpuLoad, GOOD);
 
-  panel(g, 140, 82, 176, 32, "кулер / питание");
+  /* 39 рядов, не 32, и полоса значения начинается ПОД ярлыком.
+   *
+   * Ярлык теперь внутри карточки и занимает её первые двенадцать рядов, а
+   * цифры начинались на четвёртом — «1510» шло прямо сквозь слова «кулер /
+   * питание». Тридцати двух рядов на ярлык (12) плюс чернила F_BIG (24) не
+   * хватает в принципе; тридцати девяти хватает, и они есть. */
+  panel(g, 140, 79, 176, 39, "кулер / питание");
   snprintf(v, sizeof(v), "%d", hw.fans[0]);
-  /* 88, не 85. panel() рисует вкладку ярлыка заливкой на три ряда ВЫШЕ
-   * своего верха — здесь это ряды 79..87, — а чернила значения начинались
-   * на 86. Два ряда цифр стирались подложкой собственного заголовка. */
-  bigVal(g, 148, 88, 26, v, "RPM", TEXT);   /* плитка 82..113 */
+  bigVal(g, 148, 91, 26, v, "RPM", TEXT);   /* чернила 92..115 */
   snprintf(v, sizeof(v), "%d", hw.pw);
-  bigVal(g, 308, 88, 26, v, "Вт", TEXT, true); /* не "W": он читается как "ш" */
+  bigVal(g, 308, 91, 26, v, "Вт", TEXT, true); /* не "W": читается как "ш" */
 
-  /* grown into the freed bottom band: top-2 CPU processes + clock */
-  panel(g, 4, 120, 312, 48, "топ процессы / такт");
+  /* ── подвал: два процесса и такт ────────────────────────────────────── */
+  /* 50 рядов до 169-го: вторая строка F_MED уходила выносными элементами на
+   * нижнюю рамку карточки, и проверка наложений это ловила. */
+  panel(g, 4, 120, 312, 50, "топ процессы / такт");
   g.setFont(&F_MED);
   g.setTextSize(1);
   for (int i = 0; i < 2; i++) {
     if (!ui.st.process.cpuNames[i].length()) continue;
     snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[i].c_str(),
              ui.st.process.cpuPercent[i]);
-    /* Шаг 19 от 126: при 20 от 128 вторая строка доставала выносными
-     * элементами до нижней рамки экрана. */
-    textAt(g, 12, 133 + i * 19, v, i == 0 ? TEXT : DIM);
+    textAt(g, 12, 132 + i * 17, v, i == 0 ? TEXT : DIM);
   }
   snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
-  bigVal(g, 306, 123, 42, v, "GHz", INFO, true); /* плитка 120..167 */
+  bigVal(g, 306, 130, 24, v, "GHz", INFO, true);
 }
 
 void drawGpu(UiCtx &ui) {
@@ -125,68 +130,53 @@ void drawGpu(UiCtx &ui) {
   HardwareData &hw = ui.st.hw;
   char v[32];
 
-  panel(g, 4, 26, 130, 88, "температура");
-  heroTemp(g, 4, 130, 42, hw.gt, tempColor(hw.gt, 70, 80));
-  trendArrow(g, 118, 40, ui.gr.gpuTemp, 8, 1);
+  /* Та же сетка, что на ЦПУ: один герой слева, две карточки справа, подвал
+   * во всю ширину. Соседние экраны должны читаться как один экран с другими
+   * числами, а не как две разные вёрстки. */
+  panel(g, 4, 26, 130, 92, "температура");
+  heroTemp(g, 4, 130, 44, hw.gt, tempColor(hw.gt, 70, 80));
+  trendArrow(g, 118, 42, ui.gr.gpuTemp, 8, 1);
 
-  panel(g, 140, 26, 176, 50, "нагрузка");
+  panel(g, 140, 26, 176, 42, "нагрузка");
   g.setFont(&F_VALUE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.gl);
-  textAt(g, 148, 36, v, pctColor(hw.gl));
+  textAt(g, 148, 40, v, pctColor(hw.gl));
   g.setTextSize(1);
-  trendArrow(g, 222, 44, ui.gr.gpuLoad, 8, 3);
-  sparkline(g, 232, 34, 76, 34, ui.gr.gpuLoad, GOOD);
+  trendArrow(g, 222, 46, ui.gr.gpuLoad, 8, 3);
+  sparkline(g, 232, 40, 76, 24, ui.gr.gpuLoad, GOOD);
 
-  panel(g, 140, 82, 176, 32, "vram");
+  /* Такт памяти переехал сюда, к самой памяти. Он стоял в подвале среди
+   * тактов ядра и мощности, где к нему нечего было отнести. */
+  panel(g, 140, 71, 176, 47, "vram / такт памяти");
   g.setFont(&F_MED);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "%.1f/%.0fG", hw.vu, hw.vt);
-  textAt(g, 148, 90, v, TEXT);
-  g.setTextSize(1);
-  hBar(g, 252, 90, 56, 14, hw.gv, pctColor(hw.gv));
+  textAt(g, 148, 83, v, TEXT);
+  hBar(g, 252, 87, 56, 12, hw.gv, pctColor(hw.gv));
+  snprintf(v, sizeof(v), "%d МГц", hw.vclock);
+  textAt(g, 148, 99, v, DIM);
 
-  /* grown into the freed bottom band: clock/power/hotspot + fan & mem clock */
-  /* 51, не 48: ярлык 12 + чернила значения 24 + подвал 11 не помещаются в
-   * сорок восемь. До экрана есть ещё три ряда, и они как раз закрывают
-   * разницу. */
-  /* 52 — до последнего ряда экрана. Карточке нужно 12 на ярлык, 24 на
-   * чернила значения и 11 на подвал: пятидесяти одного ряда не хватало
-   * ровно на один, и подвал ложился на нижнюю кромку. */
-  panel(g, 4, 120, 312, 52, "такт / питание / гор.точка");
-  snprintf(v, sizeof(v), "%d", hw.gclock);
-  /* Плитка 120..167. Полоса 119 ставила чернила ровно на верхнюю рамку и
-   * под вкладку ярлыка; 124 уводит их внутрь, а подвал уходит ниже. */
-  bigVal(g, 14, 132, 24, v, "МГц", TEXT);  /* чернила 132..155 */
-  snprintf(v, sizeof(v), "%d", hw.gtdp);
-  bigVal(g, 178, 132, 24, v, "Вт", TEXT);
-  snprintf(v, sizeof(v), "%d", hw.gh);
-  bigVal(g, 306, 132, 24, v, "C", tempColor(hw.gh, 85, 95), true);
-  g.setFont(&F_TEXT);
+  /* ── подвал: два блока вместо одного на пять чисел ────────────────────
+   *
+   * Пять показаний в одной карточке оставляли каждому по одиннадцать
+   * пикселей высоты. На расстоянии полуметра-метра, с которого этот экран
+   * читают, это ниже разрешения глаза — владелец так и написал: «нижние
+   * цифры кулер, память и т.д. слишком мелкие, нечитаемые». Теперь их
+   * четыре, по два на карточку, и все в F_MED. */
+  panel(g, 4, 120, 154, 50, "такт / питание");
+  g.setFont(&F_MED);
   g.setTextSize(1);
-  /* the literal alone is 38 B of UTF-8, so this needs its own wider buffer */
-  /* F_VALUE for the numbers, F_TEXT for the words that introduce them.
-   * Both were F_TEXT, which put the GPU's fan speed two steps below the same
-   * reading on the CPU screen — one figure, two sizes, on adjacent scenes. */
-  /* Two readings on the tile's own bottom line, below the three heroes.
-   * The units stay in F_TEXT because F_VALUE cannot spell them — it is a
-   * Latin subset and drew "МГц" as three hollow boxes, which is how this
-   * looked on the first attempt. */
-  char foot[16];
-  g.setFont(&F_TEXT);
-  textAt(g, 14, 156, "кулер", DIM);
-  g.setFont(&F_VALUE);
-  snprintf(foot, sizeof(foot), "%d", hw.gf);
-  textAt(g, 52, 157, foot, TEXT);
-  g.setFont(&F_TEXT);
-  textAt(g, 92, 156, "об/мин", DIM);
-  g.setFont(&F_TEXT);
-  textAt(g, 150, 156, "память", DIM);
-  g.setFont(&F_VALUE);
-  snprintf(foot, sizeof(foot), "%d", hw.vclock);
-  textAt(g, 198, 157, foot, TEXT);
-  g.setFont(&F_TEXT);
-  textAt(g, 246, 156, "МГц", DIM);
+  snprintf(v, sizeof(v), "%d МГц", hw.gclock);
+  textAt(g, 12, 132, v, TEXT);
+  snprintf(v, sizeof(v), "%d Вт", hw.gtdp);   /* не "W": читается как "ш" */
+  textAt(g, 12, 150, v, TEXT);
+
+  panel(g, 162, 120, 154, 50, "гор.точка / кулер");
+  snprintf(v, sizeof(v), "%d C", hw.gh);
+  textAt(g, 170, 132, v, tempColor(hw.gh, 85, 95));
+  snprintf(v, sizeof(v), "%d об/мин", hw.gf);
+  textAt(g, 170, 150, v, TEXT);
 }
 
 void drawRam(UiCtx &ui) {
@@ -207,9 +197,16 @@ void drawRam(UiCtx &ui) {
   textAt(g, 14, inkTop(g, 34 + PANEL_LABEL_H - 6, 64), v, pctColor(rpct));
   g.setTextSize(1);
   g.setFont(&F_MED);
-  g.setTextSize(1);
-  snprintf(v, sizeof(v), "/%.0fГБ", hw.ra);
-  textAt(g, 22 + vw, 80, v, DIM);
+  /* On the hero's own baseline, derived from where the hero actually landed.
+   * At a fixed y=80 the two sat at different heights whenever the label band
+   * moved the hero, which is the "чуть долизать" the owner could see and
+   * could not name. */
+  {
+    const int heroTop = inkTop(g, 34 + PANEL_LABEL_H - 6, 64);
+    const int base = heroTop + (INK_HUGE.top + INK_HUGE.height) * 2;
+    snprintf(v, sizeof(v), "/%.0fГБ", hw.ra);
+    textAt(g, 22 + vw, base - INK_MED.top - INK_MED.height, v, DIM);
+  }
   g.setTextSize(1);
   g.setFont(&F_VALUE);
   g.setTextSize(2);
@@ -235,16 +232,22 @@ void drawRam(UiCtx &ui) {
    * face on the screen with 200 px of empty tile to its right. */
   /* "ГБ" cannot be set in F_VALUE — Latin subset, hollow boxes. Digits in
    * F_VALUE, Cyrillic in F_TEXT, and the two sit on one baseline. */
-  g.setFont(&F_TEXT);
-  /* «свободно» несёт «д», а она свисает под базовую линию и доставала
-   * до нижней рамки плитки. */
-  textAt(g, 12, 158, "свободно", DIM);
-  g.setFont(&F_VALUE);
-  snprintf(v, sizeof(v), "%.1f", freeGb);
-  textAt(g, 74, 157, v, GOOD);
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
-  textAt(g, 118, 158, v, DIM);
+  /* Measured, not counted. Three fragments at x=12, 74 and 118 are the right
+   * gaps for "10.7" and the wrong ones for "7.4" or "104.2" — the row
+   * re-spaced itself every time the number changed width. */
+  {
+    int fx = 12;
+    g.setFont(&F_TEXT);
+    textAt(g, fx, 158, "свободно", DIM);
+    fx += g.textWidth("свободно") + 8;
+    g.setFont(&F_VALUE);
+    snprintf(v, sizeof(v), "%.1f", freeGb);
+    textAt(g, fx, 157, v, GOOD);
+    fx += g.textWidth(v) + 6;
+    g.setFont(&F_TEXT);
+    snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
+    textAt(g, fx, 158, v, DIM);
+  }
 }
 
 void drawDisks(UiCtx &ui) {
@@ -253,9 +256,11 @@ void drawDisks(UiCtx &ui) {
   HardwareData &hw = ui.st.hw;
   char v[40];
 
-  /* 4 fixed rows at 30px pitch (y26,56,86,116): label+stats line + a bar
-   * just under it. Everything stays inside its row; I/O panel sits below. */
-  static const int rowY[NOCT_HDD_COUNT] = {26, 56, 86, 116};
+  /* One card for the four drives, one for the throughput. Four separate
+   * cards would spend a label row per drive on a word the letter already
+   * says; one card with four rows spends it once. */
+  panel(g, 4, 26, 312, 116, "диски");
+  static const int rowY[NOCT_HDD_COUNT] = {38, 63, 88, 113};
   for (int i = 0; i < NOCT_HDD_COUNT; i++) {
     HddEntry &d = hw.hdd[i];
     if (d.total_gb < 0.1f) continue;
@@ -263,43 +268,38 @@ void drawDisks(UiCtx &ui) {
     int pct = (int)(d.used_gb * 100 / d.total_gb);
     g.setFont(&F_MED);
     snprintf(v, sizeof(v), "%s", d.name);
-    textAt(g, 8, y, v, ORANGE);
+    textAt(g, 12, y, v, ORANGE);
     if (d.total_gb >= 1000)
       snprintf(v, sizeof(v), "%.2f/%.2fT", d.used_gb / 1000, d.total_gb / 1000);
     else
       snprintf(v, sizeof(v), "%.0f/%.0fG", d.used_gb, d.total_gb);
-    textAt(g, 150, y, v, TEXT);
+    textAt(g, 148, y, v, TEXT);
     snprintf(v, sizeof(v), "%dC", d.temp);
-    textRight(g, 314, y, v, tempColor(d.temp, 45, 55));
-    /* y+20, не y+18: строка ёмкости содержит косую черту, а она свисает
-     * под базовую линию, и полоса срезала ей хвост на два ряда. */
-    hBar(g, 30, y + 20, 284, 8, pct, pctColor(pct)); /* y+20..y+27 */
+    textRight(g, 308, y, v, tempColor(d.temp, 45, 55));
+    /* Under the row's ink, not under its cursor: the capacity string carries
+     * a slash, which hangs below the baseline, and a bar placed by the cursor
+     * cut its tail off. */
+    hBar(g, 34, y + 18, 274, 7, pct, pctColor(pct));
   }
 
-  /* Disk I/O along the bottom, as a RULE rather than a tile.
-   *
-   * A tile costs a label row, and panel() draws that label as a background
-   * wipe three rows above its own top edge — on a 172 px screen with the
-   * fourth bar ending at 143 there is nowhere to put it that does not erase
-   * something. The rule says the same thing in one pixel.
-   *
-   * MB/s rather than KB/s: this is an NVMe, and four or five digits of
-   * kilobytes is a number nobody reads as a speed. */
-  lintRect(LK_FRAME, 8, 146, NOCT_W - 16, 1, "линейка");
-  g.drawFastHLine(8, 146, NOCT_W - 16, ORANGE_DIM);
-  char r1[12], r2[12];
-  fmtRateMb(r1, sizeof(r1), hw.dr);
-  fmtRateMb(r2, sizeof(r2), hw.dw);
-  const int ioY = inkY(INK_MED, 150, 20);
-  g.setFont(&F_MED);
-  g.fillTriangle(12, 154, 22, 154, 17, 162, INFO);
-  snprintf(v, sizeof(v), "%s", r1);
-  textAt(g, 28, ioY, v, INFO);
-  g.fillTriangle(172, 162, 182, 162, 177, 154, WARN);
-  snprintf(v, sizeof(v), "%s", r2);
-  textAt(g, 188, ioY, v, WARN);
-  g.setFont(&F_TEXT);
-  textRight(g, NOCT_W - 8, ioY + 5, "МБ/с", DIM);
+  /* Throughput in its own card. It used to be a rule with numbers hanging
+   * off it — the one thing on the screen that was not a card, and the owner
+   * read exactly that as "цифры налазят на текст". */
+  {
+    Rect c = panelM(g, 4, 146, 312, 24);
+    char r1[12], r2[12];
+    fmtRateMb(r1, sizeof(r1), hw.dr);
+    fmtRateMb(r2, sizeof(r2), hw.dw);
+    const int iy = inkY(INK_MED, c.y, c.h);
+    g.setFont(&F_MED);
+    g.fillTriangle(c.x, c.y + 4, c.x + 10, c.y + 4, c.x + 5, c.y + 12, INFO);
+    textAt(g, c.x + 16, iy, r1, INFO);
+    g.fillTriangle(c.x + 156, c.y + 12, c.x + 166, c.y + 12, c.x + 161,
+                   c.y + 4, WARN);
+    textAt(g, c.x + 172, iy, r2, WARN);
+    g.setFont(&F_TEXT);
+    textRight(g, c.x + c.w, iy + 5, "МБ/с", DIM);
+  }
 }
 
 void drawFans(UiCtx &ui) {
@@ -311,7 +311,11 @@ void drawFans(UiCtx &ui) {
 
   int sum = 0, mx = 0;
   for (int i = 0; i < NOCT_FAN_COUNT; i++) {
-    int x = 10 + i * 78;
+    /* A card per fan. The extremes then have somewhere to be: inside their
+     * own fan's card, beside its own bar — "минимум и максимум надо писать
+     * справа у каждого графика", which is where they now are. */
+    const int x = 4 + i * 78;
+    panel(g, x, 26, 74, 120, names[i]);
     int rpm = hw.fans[i];
     int pct = hw.fan_controls[i];
     sum += pct;
@@ -324,76 +328,48 @@ void drawFans(UiCtx &ui) {
      * fallback is still better than an empty bar, so it stays as the else. */
     int barPct = pct > 0 ? pct : (rpm * 100 / 2200);
     if (barPct > 100) barPct = 100;
-    /* Extremes since boot, per fan.
-     *
-     * The owner asked for them beside each bar, and there was nowhere to read
-     * them from — nothing anywhere tracked a fan's range. Kept here rather
-     * than in the shared state because they are a property of this VIEW: the
-     * question "how hard does this fan ever work" only exists on this screen,
-     * and putting it in the payload would mean the PC computing something the
-     * board can see for itself.
-     *
-     * Since BOOT, not since forever: a reboot is when the machine's workload
-     * changed, and carrying yesterday's peak past it would make the number
-     * describe a session nobody remembers. Zeroes are skipped — a fan reading
-     * 0 is a fan not reporting, and it would pin every minimum to zero. */
+    /* Extremes since BOOT, per fan. Not since forever: a reboot is when the
+     * machine's workload changed, and carrying yesterday's peak past it would
+     * make the number describe a session nobody remembers. Zeroes are skipped
+     * — a fan reading 0 is a fan not reporting, and it would pin every
+     * minimum to zero. */
     static int fanMin[NOCT_FAN_COUNT] = {0};
     static int fanMax[NOCT_FAN_COUNT] = {0};
     if (rpm > 0) {
       if (!fanMin[i] || rpm < fanMin[i]) fanMin[i] = rpm;
       if (rpm > fanMax[i]) fanMax[i] = rpm;
     }
-    /* Bar narrowed from 30 to 22 to make room: at 78 px of pitch there is no
-     * third column, so the extremes stack in the one the bar gives back. */
-    vBar(g, x + 4, 28, 22, 68, barPct, rpm > 0 ? GOOD : PANEL);
+    vBar(g, x + 6, 42, 18, 52, barPct, rpm > 0 ? GOOD : PANEL);
     g.setFont(&F_TEXT);
     if (fanMax[i]) {
       snprintf(v, sizeof(v), "%d", fanMax[i]);
-      textAt(g, x + 30, 30, v, DIM);
+      textAt(g, x + 28, 42, v, DIM);
+      textAt(g, x + 28, 56, "макс", DIM);
       snprintf(v, sizeof(v), "%d", fanMin[i]);
-      textAt(g, x + 30, 82, v, DIM);
-      /* Which is which, once per screen — four repetitions of "макс" would
-       * cost more room than the numbers themselves. */
-      if (i == 0) {
-        textAt(g, x + 30, 44, "макс", DIM);
-        textAt(g, x + 30, 68, "мин", DIM);
-      }
+      textAt(g, x + 28, 70, v, DIM);
+      textAt(g, x + 28, 84, "мин", DIM);
     }
-    /* Name and duty share ONE line above the rpm. There is room for a label
-     * row and a hero number between the bar (ends y96) and the footer rule
-     * (y152), but not for three: F_BIG's ink is ~30 px, so a third line landed
-     * inside the rpm digits. Putting the percentage beside the name also sits
-     * it next to the bar that draws the same quantity. */
-    /* The name stays small — it is a label. The duty does not: it is the
-     * quantity the bar beside it draws, and at eight pixels it was 2.8 arc-
-     * minutes from a metre away, below what an eye resolves at all. */
-    /* The duty moved up onto its own row rather than sharing one with the
-     * name: at F_VALUE it is 40 % wider than the F_SMALL it replaced, and in
-     * a 62 px tile the two ran into each other ("КОРПУ85%"). */
-    g.setFont(&F_SMALL);
-    textCenter(g, x + 31, 99, names[i], DIM);
+    /* The duty is the quantity the bar beside it draws; the rpm is the
+     * reading. Both above the eye's threshold at a metre, which the old
+     * eight-pixel name row was not. */
     g.setFont(&F_VALUE);
     snprintf(v, sizeof(v), "%d%%", pct);
-    textCenter(g, x + 31, 108, v, ORANGE);
+    textCenter(g, x + 37, 98, v, ORANGE);
     g.setFont(&F_BIG);
     snprintf(v, sizeof(v), "%d", rpm);
-    /* 116, not 124: F_BIG's ink runs 24 rows from five below the cursor, so
-     * at 124 the digits reached 152 and crossed the summary rule at 150.
-     * The rule is drawn with drawFastHLine and never registered, so the
-     * overlap check could not see this one — worth registering later. */
-    textCenter(g, x + 31, 116, v, TEXT);
+    textCenter(g, x + 37, 112, v, TEXT);
   }
 
-  /* summary across the freed bottom band (F_TEXT stays inside y171) */
+  /* The summary is a card like everything else — it was a rule with text
+   * under it, the one block on the screen in a different idiom. */
   if (uiOn(UI_STRIPS)) {
-    lintRect(LK_FRAME, 8, 150, NOCT_W - 16, 1, "линейка");
-  g.drawFastHLine(8, 150, NOCT_W - 16, ORANGE_DIM);
+    Rect c = panelM(g, 4, 150, 312, 21);
     g.setFont(&F_TEXT);
     g.setTextSize(1);
-    char sum2[64]; /* "среднее ..." + "максимум ..." is 42 B before the numbers */
+    char sum2[64];
     snprintf(sum2, sizeof(sum2), "среднее %d%%      максимум %d%%",
              sum / NOCT_FAN_COUNT, mx);
-    textCenter(g, NOCT_W / 2, 156, sum2, ORANGE);
+    textCenter(g, NOCT_W / 2, inkY(INK_TEXT, c.y, c.h), sum2, ORANGE);
   }
 }
 
@@ -414,28 +390,49 @@ void drawMb(UiCtx &ui) {
   };
   /* 6 cells in a 3x2 grid filling y26..164 (taller than before) */
   char v[12];
-  for (int i = 0; i < 5; i++) {
-    int x = 6 + (i % 3) * 104;
-    int y = 26 + (i / 3) * 70; /* rows y26..92, y96..162 */
-    panel(g, x, y, 100, 66, tiles[i].n);
-    snprintf(v, sizeof(v), "%d", tiles[i].t);
+
+  /* One placement rule for all six cells, measured rather than counted.
+   *
+   * Every cell used to put its number at a fixed x+12 with the degree mark
+   * hung off the number's width, so a 3-digit reading sat where a 2-digit one
+   * did not and neither was centred — the owner's "цифры везде скачут и не по
+   * центру клеток" is a description of exactly that arithmetic. Centring the
+   * number-and-mark PAIR makes a cell look the same whatever it reads. */
+  for (int i = 0; i < 6; i++) {
+    const int x = 6 + (i % 3) * 104;
+    const int y = 26 + (i / 3) * 70; /* ряды 26..91 и 96..161 */
+    const bool power = i == 5;
+    panel(g, x, y, 100, 66, power ? "питание" : tiles[i].n);
+    snprintf(v, sizeof(v), "%d", power ? hw.pw : tiles[i].t);
+    uint16_t c = power ? ACCENT
+                       : tempColor(tiles[i].t, tiles[i].warn, tiles[i].crit);
     g.setFont(&F_HUGE);
-    uint16_t c = tempColor(tiles[i].t, tiles[i].warn, tiles[i].crit);
-    int vw = g.textWidth(v);
-    textAt(g, x + 12, y + 14 - (g.fontHeight() - 32) / 2, v, c);
-    g.setFont(&F_MED);
-    g.drawCircle(x + 18 + vw, y + 22, 4, DIM); /* ° */
-    g.drawCircle(x + 18 + vw, y + 22, 3, DIM);
+    g.setTextSize(1);
+    const int vw = g.textWidth(v);
+    /* The mark: a 9 px ring for a degree, or the word for watts. */
+    int mw = 9;
+    if (power) {
+      g.setFont(&F_MED);
+      mw = g.textWidth("Вт");
+      g.setFont(&F_HUGE);
+    }
+    const int x0 = x + (100 - (vw + 4 + mw)) / 2;
+    const int ty = inkY(INK_HUGE, y + PANEL_LABEL_H, 66 - PANEL_LABEL_H);
+    textAt(g, x0, ty, v, c);
+    const int inkTopY = ty + INK_HUGE.top;
+    if (power) {
+      g.setFont(&F_MED);
+      /* On the number's baseline, so the pair reads as one reading. */
+      textAt(g, x0 + vw + 4,
+             inkTopY + INK_HUGE.height - INK_MED.top - INK_MED.height, "Вт",
+             DIM);
+    } else {
+      /* The ring sits at the digits' TOP, where a degree mark belongs. */
+      const int cy = inkTopY + 5;
+      g.drawCircle(x0 + vw + 8, cy, 4, DIM);
+      g.drawCircle(x0 + vw + 8, cy, 3, DIM);
+    }
   }
-  /* 6th cell: package power (the chipset-fan reading was bogus / irrelevant) */
-  int x = 6 + 2 * 104, y = 96;
-  panel(g, x, y, 100, 66, "питание");
-  snprintf(v, sizeof(v), "%d", hw.pw);
-  g.setFont(&F_HUGE);
-  int vw = g.textWidth(v);
-  textAt(g, x + 12, y + 14 - (g.fontHeight() - 32) / 2, v, ACCENT);
-  g.setFont(&F_MED);
-  textAt(g, x + 16 + vw, y + 30, "Вт", DIM);
 }
 
 void drawNet(UiCtx &ui) {

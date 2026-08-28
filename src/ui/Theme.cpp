@@ -193,6 +193,44 @@ static const Preset kPresets[THEME_PRESETS] = {
      rgb(136, 148, 168), rgb(34, 42, 52), rgb(126, 206, 168),
      rgb(230, 196, 110), rgb(238, 108, 108), rgb(140, 186, 232),
      rgb(178, 198, 220)},
+
+    /* 22 ЖК — a reflective segment LCD. The calculator, the old Nokia, the
+     * thermometer on the wall.
+     *
+     * DARK ON LIGHT, and one ink. A segment display has a single polarised
+     * layer, so it cannot have colours: what it has is segments that are on
+     * or off, and the only way it ever distinguished anything was by which
+     * segments were lit. So every role here is the same blue-grey ink at a
+     * different weight, and the "panel" is the ground very slightly darkened
+     * — the shadow a real cell casts when it is off but not empty.
+     *
+     * The ink is darker than a real LCD's. A genuine reflective panel sits
+     * near 4:1 against its ground and is read from thirty centimetres; this
+     * one is read from a metre, so it keeps the WCAG floor instead of the
+     * period detail. */
+    {"ЖК", rgb(178, 190, 150), rgb(38, 48, 44), rgb(24, 32, 30),
+     /* Подобрано счётом, а не на глаз: при rgb(96,108,96) контраст к фону был
+      * 2.7 — ниже порога, и подписи на карточках просто пропадали. */
+     rgb(60, 67, 60), rgb(166, 178, 138), rgb(40, 62, 40), rgb(70, 62, 24),
+     rgb(28, 20, 20), rgb(36, 46, 60), rgb(52, 62, 56)},
+
+    /* 23 Диодное — a dot-matrix departure board.
+     *
+     * Amber phosphor on black glass, and NOTHING is white: an LED sign has no
+     * white element, and one white glyph would break the illusion faster than
+     * any amount of getting the amber right. The three alert roles are the
+     * three colours such a sign really has — amber, red, green — and the dim
+     * role is the same amber run at a quarter of the current, which is what
+     * a half-lit LED actually looks like.
+     *
+     * Useful as well as fun: with the palette collapsed onto one hue at a few
+     * intensities, a glyph that has moved by a pixel shows as a lit dot where
+     * the grid says there should not be one. */
+    {"Диодное", rgb(6, 4, 2), rgb(255, 148, 20), rgb(255, 186, 70),
+     /* Тот же счёт: янтарь вполнакала при rgb(128,72,8) давал 2.8 к чёрному
+      * стеклу. Диод вполнакала выглядит именно так, но читать его нельзя. */
+     rgb(187, 108, 18), rgb(26, 16, 6), rgb(90, 255, 90), rgb(255, 190, 40),
+     rgb(255, 60, 40), rgb(255, 138, 30), rgb(255, 168, 48)},
 };
 
 /* Slightly darker chrome for inactive frames — and this is the colour EVERY
@@ -894,21 +932,52 @@ static const Ink *inkFor(int fh, int *sizeOut) {
  * Russian label from F_TEXT to F_VALUE is exactly the edit that causes it —
  * which is how "МГц", "ГБ" and "еще" turned into boxes the first time this
  * screenful of type was made bigger. */
+static void lintGlyphReport(const char *why, const char *s, int x, int y,
+                            int fh) {
+  static uint32_t seenCyr[8];
+  static int seenCyrN = 0;
+  uint32_t key = (uint32_t)(x & 0x3FF) << 12 ^ (uint32_t)(y & 0x3FF);
+  for (int i = 0; i < seenCyrN; i++)
+    if (seenCyr[i] == key) return;
+  if (seenCyrN < 8) seenCyr[seenCyrN++] = key;
+  Serial.printf("[LAYOUT] %s: %s \"%s\" at %d,%d (высота %d)\n",
+                lcScene, why, s, x, y, fh);
+}
+
+/* The letters haxrcorp4089_t_cyrillic does NOT have.
+ *
+ * Its name says cyrillic and it draws 61 of the 66 Russian letters, so the
+ * gap is invisible until a string happens to use one of the five it lacks —
+ * which is how "что это значит" reached the pressure screen reading
+ * "что [] то значит". The list comes from parsing the font's own glyph
+ * table, not from reading a photograph: lowercase э, Ё and ё are absent,
+ * uppercase Э is present.
+ *
+ * Written as UTF-8 byte pairs because that is the form they arrive in. */
+static bool textFontLacks(const unsigned char *p) {
+  if (p[0] == 0xD1 && (p[1] == 0x8D || p[1] == 0x91)) return true; /* э ё */
+  if (p[0] == 0xD0 && p[1] == 0x81) return true;                   /* Ё */
+  return false;
+}
+
 static void lintCyrillic(LGFX_Sprite &g, int x, int y, const char *s) {
   int sz = 1;
   const Ink *k = inkFor(g.fontHeight(), &sz);
-  if (!k || !k->latin) return;
+  if (!k) return;
+  if (!k->latin) {
+    if (k == &INK_TEXT)
+      for (const unsigned char *p = (const unsigned char *)s; p[0] && p[1]; p++)
+        if (p[0] >= 0x80 && textFontLacks(p)) {
+          lintGlyphReport("В ЭТОМ ШРИФТЕ НЕТ БУКВЫ э/Ё/ё — будет квадрат",
+                          s, x, y, g.fontHeight());
+          return;
+        }
+    return;
+  }
   for (const unsigned char *p = (const unsigned char *)s; *p; p++)
     if (*p >= 0x80) {
-      static uint32_t seenCyr[8];
-      static int seenCyrN = 0;
-      uint32_t key = (uint32_t)(x & 0x3FF) << 12 ^ (uint32_t)(y & 0x3FF);
-      for (int i = 0; i < seenCyrN; i++)
-        if (seenCyr[i] == key) return;
-      if (seenCyrN < 8) seenCyr[seenCyrN++] = key;
-      Serial.printf("[LAYOUT] %s: КИРИЛЛИЦА В ЛАТИНСКОМ ШРИФТЕ \"%s\" at "
-                    "%d,%d (высота %d) - будут пустые квадраты\n",
-                    lcScene, s, x, y, g.fontHeight());
+      lintGlyphReport("КИРИЛЛИЦА В ЛАТИНСКОМ ШРИФТЕ — будут квадраты",
+                      s, x, y, g.fontHeight());
       return;
     }
 }
@@ -980,7 +1049,18 @@ static void lintCheck(LGFX_Sprite &g, int x, int y, const char *s) {
    * logisoso32 at double size is 94 px for 64 px of digits); reporting capB
    * alone would miss a clipped 'р'. */
   int capB = k ? y + (k->top + k->height) * sz - 1 : y + h - 1;
-  int boxB = k ? y + k->box * sz - 1 : y + h - 1;
+  /* The descender bottom, and ONLY for a string that has a descender.
+   *
+   * This used to be the full line box, which for the two logisoso faces is
+   * far taller than anything they draw — 94 rows for 64 of digits at double
+   * size, the rest leading above and below. Every correctly placed hero on
+   * the device was therefore reported as five pixels over its card, and three
+   * such findings were the entire remaining output of the layout check.
+   *
+   * Descent is what the box has left once the cap and the leading above it
+   * are taken out, so it is derived rather than stored. */
+  int descent = k ? (k->box - k->top - k->height) * sz : 0;
+  int boxB = hasDescender(s) ? capB + descent : capB;
   int r = x + w;
   int cr = lcX + lcW, cb = lcY + lcH;
   bool hard = (x < lcX) || (r > cr) || (capB >= cb);

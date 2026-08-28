@@ -214,18 +214,22 @@ static void logBootRecord() {
  * owner asked for, not something in the frame path. */
 static bool saveScreenshot() {
   if (!sd.ok()) return false;
-  /* Remember where the last one landed. The scan is O(n) in shots already
-   * taken and every probe is an SD lookup on a bus shared with the display —
-   * at 288 files the command took long enough that a caller waiting eight
-   * seconds for the filename got nothing back and concluded the card had
-   * failed. Only the FIRST shot after a boot pays for the scan. */
-  static int lastIdx = 0;
+  /* A RING of NOCT_SHOT_KEEP names, overwritten in turn. No search at all.
+   *
+   * Finding a free number by probing 001, 002, 003 … is O(n) in shots already
+   * taken, and every probe is an SD lookup on a bus shared with the display.
+   * At 405 files and 44 MB that stopped being slow and started being fatal:
+   * the command took the board down mid-scan — heap back to a fresh-boot 83 KB,
+   * scene reset, WiFi renegotiating.
+   *
+   * Nobody reads an old screenshot: every one of them is pulled off the card
+   * within seconds of being taken. So the file name cycles and the directory
+   * never grows, which also means the cost of a shot no longer depends on how
+   * many were taken before it. */
+  static int ringIdx = -1;
   char path[32];
-  int idx = lastIdx;
-  do {
-    snprintf(path, sizeof(path), "/shots/%03d.bmp", ++idx);
-  } while (idx < 999 && sd.exists(path));
-  lastIdx = idx;
+  ringIdx = (ringIdx + 1) % NOCT_SHOT_KEEP;
+  snprintf(path, sizeof(path), "/shots/%03d.bmp", ringIdx);
 
   const int W = NOCT_W, H = NOCT_H;
   const uint32_t rowBytes = (uint32_t)W * 2;      /* 640, already 4-aligned */
@@ -786,6 +790,83 @@ static void consoleExec(String line) {
     if (sec > 3600) sec = 3600;
     sceneMgr.snoozeAlert(sec * 1000UL);
     Serial.printf("alert takeover snoozed for %lu s\n", sec);
+  } else if (cmd == "review") {
+    /* Hold the screen still: no carousel, no toasts, no alert takeover, no
+     * transitions, no blinking wolf, and a grey palette. Everything the
+     * owner asked for in one word, because every one of those is a reason a
+     * capture of screen N turned out to be a picture of something else. */
+    bool on = !(arg == "off" || arg == "0" || arg == "выкл");
+    sceneMgr.setReview(on);
+    theme::setMono(on);
+    Serial.printf("осмотр: %s\n", on ? "включен (ЧБ, без движения)"
+                                      : "выключен");
+  } else if (cmd == "carousel") {
+    Settings &cs = state.settings;
+    String a1 = arg, a2 = "";
+    int sp = arg.indexOf(' ');
+    if (sp > 0) {
+      a1 = arg.substring(0, sp);
+      a2 = arg.substring(sp + 1);
+      a2.trim();
+    }
+    if (a1 == "off" || a1 == "0") {
+      cs.carouselEnabled = false;
+    } else if (a1 == "mode") {
+      if (a2.length()) {
+        int m = a2.toInt();
+        if (m >= 0 && m < carousel::PRESET_N) {
+          cs.carPreset = m;
+          memcpy(cs.carFreq, carousel::PRESETS[m].freq, sizeof(cs.carFreq));
+          settings::save(state.settings);
+        }
+      }
+      for (int i = 0; i < carousel::PRESET_N; i++)
+        Serial.printf("  %d %s %s\n", i,
+                      i == cs.carPreset ? "*" : " ", carousel::PRESETS[i].name);
+    } else if (a1 == "freq") {
+      /* «carousel freq 10 5» — сцена 10 раз в пять кругов. Меняет ТОЛЬКО
+       * свою строку и переводит режим в «свою», иначе следующее нажатие
+       * пресета в вебе молча вернуло бы всё назад. */
+      int sp2 = a2.indexOf(' ');
+      if (sp2 > 0) {
+        int sc = a2.substring(0, sp2).toInt();
+        int fq = a2.substring(sp2 + 1).toInt();
+        if (sc >= 0 && sc < SCENE_COUNT && fq >= 0 && fq < carousel::FQ_COUNT) {
+          cs.carFreq[sc] = (uint8_t)fq;
+          cs.carPreset = 0;
+          settings::save(state.settings);
+        }
+      }
+      for (int i = 0; i < SCENE_COUNT; i++)
+        Serial.printf("  %2d %-14s %s\n", i, scenes::title(i),
+                      carousel::freqName(cs.carFreq[i]));
+    } else if (a1 == "plan") {
+      int rounds = a2.length() ? a2.toInt() : 5;
+      if (rounds < 1) rounds = 1;
+      if (rounds > 30) rounds = 30;
+      uint8_t list[carousel::ROUND_MAX];
+      for (int r = 0; r < rounds; r++) {
+        int n = carousel::buildRound(cs.carFreq, cs.sceneMask, r, nullptr,
+                                     nullptr, list);
+        Serial.printf("круг %d (%d):", r, n);
+        for (int i = 0; i < n; i++) Serial.printf(" %s", scenes::title(list[i]));
+        Serial.println();
+      }
+    } else if (a1.length()) {
+      int sec = a1.toInt();
+      if (sec >= 3 && sec <= 600) {
+        cs.carouselIntervalSec = sec;
+        cs.carouselEnabled = true;
+      }
+    }
+    Serial.printf("карусель: %s, %d с, режим «%s»\n",
+                  cs.carouselEnabled ? "вкл" : "выкл", cs.carouselIntervalSec,
+                  carousel::PRESETS[cs.carPreset].name);
+  } else if (cmd == "shotclean") {
+    /* Empty the ring. The directory grew to 405 files across one long review
+     * session before the naming became a ring, and those are still there. */
+    int n = sd.pruneDir("/shots", NOCT_SHOT_KEEP);
+    Serial.printf("udalen: %d\n", n);
   } else if (cmd == "shot") {
     /* Route through the SAME request the menu uses, so the capture always
      * happens right after a complete draw()+push(). Taking it straight from
@@ -1422,6 +1503,40 @@ void loop() {
    * they act, so the steady-state cost is four integer comparisons. */
   theme::setTone(state.rcToneR, state.rcToneG, state.rcToneB, state.rcToneK);
   if (state.rcMono >= 0) theme::setMono(state.rcMono != 0);
+  /* Review mode from the panel, idempotently. setReview clears the toast
+   * queue, so calling it every tick with the same value would keep clearing
+   * a queue that should be filling — hence the comparison. */
+  if (state.rcReview >= 0) {
+    bool want = state.rcReview != 0;
+    if (want != sceneMgr.reviewOn()) {
+      sceneMgr.setReview(want);
+      theme::setMono(want || state.rcMono > 0);
+    }
+  }
+  /* Carousel shape. Written to NVS only on a real change: this arrives with
+   * every payload, and saving it at 1 Hz would be a flash write per second. */
+  {
+    Settings &cs = state.settings;
+    bool dirty = false;
+    if (state.rcCarMode >= 0 && state.rcCarMode < carousel::PRESET_N &&
+        state.rcCarMode != cs.carPreset) {
+      cs.carPreset = state.rcCarMode;
+      memcpy(cs.carFreq, carousel::PRESETS[cs.carPreset].freq,
+             sizeof(cs.carFreq));
+      dirty = true;
+    }
+    if (state.rcCarFreqN == SCENE_COUNT) {
+      for (int i = 0; i < SCENE_COUNT; i++) {
+        uint8_t f = state.rcCarFreq[i];
+        if (f < carousel::FQ_COUNT && f != cs.carFreq[i]) {
+          cs.carFreq[i] = f;
+          cs.carPreset = 0; /* «своя»: иначе следующий пресет молча вернёт всё */
+          dirty = true;
+        }
+      }
+    }
+    if (dirty) settings::save(cs);
+  }
 
   /* Hub state upstream, so the panel's "check connection" shows the board's
    * answer rather than the server's guess. */
@@ -1841,6 +1956,7 @@ void loop() {
       ui.homeMode = hm2;
       ui.climate = climateSeriesOk ? &climView : nullptr;
     }
+    ui.review = sceneMgr.reviewOn();
     sceneMgr.draw(ui);
     display.push();
     frameBusyUs += micros() - frameT0;

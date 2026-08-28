@@ -34,6 +34,10 @@ struct UiCtx {
    * 2 = the week. `climate` is only non-null for 1 and 2. */
   int homeMode = 0;
   const struct ClimateSeriesView *climate = nullptr;
+  /* ОСМОТР: hold every moving thing still so two captures of one screen can
+   * be diffed pixel for pixel. Reaches the scenes, not just the manager,
+   * because the animation that actually breaks a diff is the wolf blinking. */
+  bool review = false;
 };
 
 /* A loaded climate series, flattened so the UI does not include the storage

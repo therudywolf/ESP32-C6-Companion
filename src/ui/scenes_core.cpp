@@ -31,7 +31,10 @@ const char *title(int scene) {
   case SCENE_HISTORY: return "ИСТОРИЯ / ЧАС";
   case SCENE_HOME: return "ДОМ";
   case SCENE_BOARD: return "ПЛАТА C6";
-  case SCENE_ANALYSIS: return "АНАЛИЗ";
+  /* «ДАВЛЕНИЕ», не «АНАЛИЗ»: экран называли по тому, что на нём делают,
+   * а не по тому, что на нём показано. Владелец про него так и написал —
+   * «надо написать Давление». */
+  case SCENE_ANALYSIS: return "ДАВЛЕНИЕ";
   case SCENE_FORZA: return "FORZA";
   default: return "NOCTURNE";
   }
@@ -95,6 +98,11 @@ void noSignal(UiCtx &ui) {
  * through ADL on the enum, which is far too clever to leave lying around. */
 static const unsigned char *currentWolfFrame(UiCtx &ui) {
   unsigned long now = ui.now;
+  /* One fixed frame under inspection. The blink lasts 220 ms out of every
+   * 3.2 s, so two captures of ЛОГОВО taken a minute apart differ by a whole
+   * pair of eyes — which is indistinguishable, in a diff, from the layout
+   * having moved. */
+  if (ui.review) return wolfFrame(WOLF_IDLE);
   if (!ui.pet.isAlive()) return wolfFrame(WOLF_BLINK);
   if (ui.st.alertActive) return wolfFrame(WOLF_AGGRO);
   if (ui.brain.talkingAnim(now))
@@ -287,10 +295,17 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
    * navigating to the one screen that owns the sensor. A toast announces the
    * change once; this is what the change left behind. */
   if (!actionMode && uiOn(UI_STRIPS)) {
-    g.setFont(&F_TEXT);
+    /* F_MED, not F_TEXT. This is the line the owner reads without leaving
+     * ЛОГОВО, and it was set in the second-smallest face on the device —
+     * "только нижняя надпись маловата, будто её можно чуть увеличить".
+     *
+     * F_MED is a 10 px fixed pitch, so the two halves are split across the
+     * width instead of being run together in one string: "возраст 12 дн
+     * в сети 5ч 02м" as one line is 310 px of a 320 px screen. */
     g.setTextSize(1);
     char vb[80];
     unsigned long upm = now / 60000UL;
+    const int by = 150; /* чернила F_MED 153..165, выносные до 169 */
 
     bool said = false;
     if (ui.st.zbTrendOk) {
@@ -299,22 +314,27 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
         /* Amber only for the fast drop — the one worth turning your head for.
          * Colouring every tendency would make the colour mean nothing. */
         uint16_t c = barometer::headacheWatch(t) ? WARN : ORANGE_DIM;
-        int aw = baroArrow(g, 10, 160, barometer::direction(t),
+        int aw = baroArrow(g, 10, by + 4, barometer::direction(t),
                            barometer::isSharp(t), c);
-        snprintf(vb, sizeof(vb), "%s", barometer::forecast(t));
-        textAt(g, 10 + aw, 160, vb, c);
+        g.setFont(&F_MED);
+        char clipped[40];
+        snprintf(vb, sizeof(vb), "%luч %02luм", upm / 60, upm % 60);
+        int uw = g.textWidth(vb);
+        clipW(g, barometer::forecast(t), clipped, sizeof(clipped),
+              NOCT_W - 20 - aw - uw - 10);
+        textAt(g, 10 + aw, by, clipped, c);
+        textRight(g, NOCT_W - 10, by, vb, DIM);
         said = true;
       }
     }
     if (!said) {
+      g.setFont(&F_MED);
       /* ageDays() is uint32_t: %d was a format mismatch, and the widest case
        * overran the buffer by a few bytes. */
-      snprintf(vb, sizeof(vb), "возраст %lu дн     в сети %luч %02luм",
-               (unsigned long)ui.pet.ageDays(), upm / 60, upm % 60);
-      textAt(g, 10, 160, vb, DIM);
-    } else {
-      snprintf(vb, sizeof(vb), "%luч %02luм", upm / 60, upm % 60);
-      textRight(g, NOCT_W - 10, 160, vb, DIM);
+      snprintf(vb, sizeof(vb), "возраст %lu дн", (unsigned long)ui.pet.ageDays());
+      textAt(g, 10, by, vb, DIM);
+      snprintf(vb, sizeof(vb), "в сети %luч %02luм", upm / 60, upm % 60);
+      textRight(g, NOCT_W - 10, by, vb, DIM);
     }
   }
 }

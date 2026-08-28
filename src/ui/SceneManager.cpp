@@ -123,6 +123,10 @@ void SceneManager::toast(const String &msg) {
 
 void SceneManager::alertCard(AlertKind kind, const char *title,
                              const String &msg) {
+  /* Dropped, not queued. In review mode a card that arrives now and is shown
+   * when the mode ends is worse than one that never arrives: it would slide
+   * over whatever screen happened to be up at the time. */
+  if (review_) return;
   toast_ = msg;
   toastTitle_ = title ? title : "";
   toastKind_ = (int)kind;
@@ -133,6 +137,8 @@ void SceneManager::alertCard(AlertKind kind, const char *title,
 }
 
 bool SceneManager::alertActive(UiCtx &ui) const {
+  if (review_) return false; /* the takeover would replace the screen under
+                              * inspection with a different one entirely */
   return ui.st.alertActive && (long)(ui.now - alertSnoozeUntil_) >= 0;
 }
 
@@ -1149,6 +1155,41 @@ void SceneManager::drawGame(UiCtx &ui) {
   }
 }
 
+/* Scenes with nothing to show. Passed to the round builder so Carousel.h
+ * never has to know what a dark PC is. */
+static bool carSkip(int scene, void *ctx) {
+  return *(const bool *)ctx && sceneNeedsPc(scene);
+}
+
+/* Advance one place in the pass, rolling into the next round at the end.
+ *
+ * The empty-round case is real, not defensive: with the PC dark and a mode
+ * like «железо», a whole round can consist of scenes that are all skipped.
+ * Rolling forward finds the next round that has something in it — bounded by
+ * the least common multiple of the periods (1, 2, 3, 5 → 30), because past
+ * that the pattern repeats and there is genuinely nothing to show. */
+int SceneManager::carouselStep(UiCtx &ui) {
+  const Settings &s = ui.st.settings;
+  bool off = ui.st.pcOffline;
+  uint8_t list[carousel::ROUND_MAX];
+
+  for (int tries = 0; tries < 30; tries++) {
+    int n = carousel::buildRound(s.carFreq, s.sceneMask, carRound_, carSkip,
+                                 &off, list);
+    if (n > 0) {
+      carSlot_++;
+      if (carSlot_ >= 0 && carSlot_ < n) return list[carSlot_];
+    }
+    carRound_++;
+    carSlot_ = -1;
+    /* Keep the counter small enough that `round % period` stays meaningful
+     * for years of uptime, and land on a multiple of 30 so every period
+     * restarts together rather than mid-cycle. */
+    if (carRound_ >= 30000) carRound_ = 0;
+  }
+  return -1;
+}
+
 int SceneManager::nextVisibleScene(int from, uint32_t mask, bool allowDen,
                                    bool pcOffline) const {
   for (int k = 1; k <= SCENE_FORZA; k++) {
@@ -1465,19 +1506,21 @@ void SceneManager::draw(UiCtx &ui) {
    * denActionMode_ already cover "the owner is interacting with the wolf", and
    * nextVisibleScene(..., allowDen=false) still keeps the den out of the ring —
    * so the carousel can leave home but never rotates back onto it. */
-  if (s.carouselEnabled && !menuOpen_ && !sysInfo_ && !achView_ && !editMode_ &&
+  if (s.carouselEnabled && !review_ && !menuOpen_ && !sysInfo_ && !achView_ &&
+      !editMode_ &&
       !scenePickMode_ && !elemPickMode_ && !mediaPeekUntil_ && !alertActive(ui) &&
       !notifUntil_ && scene_ != SCENE_FORZA &&
       !denActionMode_ && ui.now - lastInput_ > 5000 &&
       ui.now - lastCarousel_ > (unsigned long)s.carouselIntervalSec * 1000UL) {
     lastCarousel_ = ui.now;
-    gotoScene(nextVisibleScene(scene_, s.sceneMask, false, ui.st.pcOffline),
-              ui);
+    int next = carouselStep(ui);
+    gotoScene(next >= 0 ? next : SCENE_DEN, ui);
   }
 
   /* screensaver: after the dim timeout, dim a little and show the ambient
    * clock+wolf scene (not a black screen). Any input wakes it. */
-  if (s.displayTimeoutSec > 0 && !dimmed_ && !ui.forzaLive && !editMode_ &&
+  if (s.displayTimeoutSec > 0 && !review_ && !dimmed_ && !ui.forzaLive &&
+      !editMode_ &&
       !menuOpen_ && !gameMode_ && !scenePickMode_ && !elemPickMode_ &&
       !notifUntil_ &&
       ui.now - lastInput_ > (unsigned long)s.displayTimeoutSec * 1000UL &&
@@ -1678,7 +1721,7 @@ void SceneManager::draw(UiCtx &ui) {
    * (fades in/out; skipped over modals and the Forza HUD) */
   {
     unsigned long osdAge = ui.now - sceneOsdAt_;
-    if (sceneOsdAt_ && osdAge < 850 && !menuOpen_ && !editMode_ &&
+    if (sceneOsdAt_ && !review_ && osdAge < 850 && !menuOpen_ && !editMode_ &&
         !scenePickMode_ && !elemPickMode_ && !sysInfo_ && !achView_ &&
         scene_ != SCENE_FORZA) {
       int a = osdAge < 130     ? (int)(osdAge * 255 / 130)
@@ -1779,6 +1822,10 @@ void SceneManager::draw(UiCtx &ui) {
   }
 
   /* scene-change wipe (180 ms), directional: forward reveals L→R, back R→L */
+  /* The slide reveal is the last moving thing: a capture taken during it
+   * contains two scenes at once, which is exactly the "torn screenshot" that
+   * made an earlier round of this work unmeasurable. */
+  if (review_) transStart_ = 0;
   if (transStart_ && ui.now - transStart_ < NOCT_TRANSITION_MS) {
     int p = (int)((ui.now - transStart_) * NOCT_W / NOCT_TRANSITION_MS);
     int edge = transDir_ >= 0 ? p : NOCT_W - p;
