@@ -651,44 +651,57 @@ void ditherRect(LGFX_Sprite &g, int x, int y, int w, int h, uint16_t color) {
 
 void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
            uint16_t color, uint16_t titleColor) {
-  /* The title tab deliberately sits ABOVE the frame, so the box starts a few
-   * rows higher than the tile — otherwise every outlined panel in the
-   * firmware would report its own label as a violation. */
-  lintClip(x, y - 6, w, h + 6);
-  /* The four border LINES, one pixel each — not the tile's area. Registering
-   * the area would make every value inside it a "collision". */
-  const int own = lintOwner(x, y); /* unique per tile, never 0 */
-  lintRectOwned(LK_FRAME, x, y, w, 1, "рамка+", own);
-  lintRectOwned(LK_FRAME, x, y + h - 1, w, 1, "рамка-", own);
-  lintRectOwned(LK_FRAME, x, y, 1, h, "рамка<", own);
-  lintRectOwned(LK_FRAME, x + w - 1, y, 1, h, "рамка>", own);
-  /* clean full rectangle frame + brighter L-accents at two corners (static,
-   * HUD feel, no moving glint that reads as a glitch) */
-  g.drawRect(x, y, w, h, color);
-  g.drawFastHLine(x, y, 10, titleColor);
-  g.drawFastVLine(x, y, 8, titleColor);
-  g.drawFastHLine(x + w - 10, y + h - 1, 10, titleColor);
-  g.drawFastVLine(x + w - 1, y + h - 8, 8, titleColor);
+  /* ONE grammar for the whole device: a filled surface, the label inside it,
+   * no outline at all.
+   *
+   * The outlined tile with its label punched through the top border was the
+   * original look. Shown both, the owner judged the filled cards easier to
+   * read — and keeping both was the worst of the three options, which is what
+   * he actually complained about: half the screens in one idiom, half in the
+   * other.
+   *
+   * The card grows UPWARD to make room for the label, so every caller's
+   * content coordinates keep meaning what they meant. The old tab already
+   * occupied the rows above the frame; the label now occupies the same band,
+   * inside the surface instead of punched through it. Converting forty call
+   * sites by hand would have been forty chances to move something by a pixel.
+   *
+   * `color` is unused now — there is no outline to colour — and stays in the
+   * signature because thirty call sites pass it; `titleColor` still dims a
+   * whole card when a caller marks it stale. */
+  (void)color;
+  /* The card sits EXACTLY where the outlined tile sat, and the label rides
+   * its top edge.
+   *
+   * Growing the card upward to house the label was the obvious move and it
+   * does not fit: the grids here run on a 70 px pitch with 66 px tiles, so
+   * there are four pixels between rows and a label needs eleven. Measured,
+   * that produced 78 collisions — every lower card's label lying on the
+   * upper card's bottom rim.
+   *
+   * The alternative — pushing every screen's content down by the label
+   * height — is a hundred coordinates moved by hand, which is a hundred
+   * chances to be wrong by a pixel.
+   *
+   * So the label goes where it always went: on the boundary. On an outlined
+   * tile it punched a hole in the border; on a filled one it simply sits on
+   * the top edge, which is what a tab looks like anyway. Nothing else moves. */
+  const int own = lintOwner(x, y);
+  g.fillRoundRect(x, y, w, h, 4, SURFACE);
+  lintClip(x, y, w, h);
+  lintRectOwned(LK_FRAME, x, y, w, 1, "карточка+", own);
+  lintRectOwned(LK_FRAME, x, y + h - 1, w, 1, "карточка-", own);
+
   if (title && title[0]) {
     g.setFont(&F_TEXT);
     g.setTextSize(1);
-    int tw = g.textWidth(title);
-    /* Three rows above the frame, not five.
-     *
-     * F_TEXT's ink runs from y-2 to y+4 when the cursor is at y-4, so nine
-     * rows starting at y-3 cover it exactly. The old eleven starting at y-5
-     * covered nothing extra and reached two rows further up — which on a grid
-     * whose rows are four pixels apart lands precisely on the bottom frame of
-     * the tile above. That is why every second row on ПЛАТА and ДИСКИ had its
-     * neighbour's border rubbed out under the label. */
-    /* A FILL: it erases whatever is under it, which is the whole point and
-     * also the whole danger — this is what rubbed out the neighbour's border
-     * on ПЛАТА and ДИСКИ. */
-    lintRectOwned(LK_FILL, x + 6, y - 3, tw + 8, 9, title, own);
-    g.fillRect(x + 6, y - 3, tw + 8, 9, BG); /* tab punches the frame */
-    g.setTextColor(titleColor);
-    g.setCursor(x + 10, y - 4);
-    g.print(title);
+    /* Inside the card, at its top — the shape the owner picked out of the two
+     * on ДОМ. Content therefore starts at PANEL_LABEL_H, and every screen
+     * that still places something above that line is reported by the overlap
+     * check rather than found by eye. */
+    lintOwnNext(own);
+    textAt(g, x + MPADX, y + 1, title,
+           titleColor == DIM ? DIM : SURFACE_DIM);
   }
 }
 
@@ -1025,8 +1038,20 @@ void lintRectOwned(int kind, int x, int y, int w, int h, const char *what,
   snprintf(r.what, sizeof(r.what), "%s", what ? what : "?");
 }
 
+/* The owner the NEXT registered text inherits, then cleared. A card's label
+ * is drawn through textAt like any other string, so without this it would be
+ * registered as an ownerless rectangle and collide with the card's own rim —
+ * the design reported as a fault, on every card, every frame. */
+static int lintOwnNextVal = 0;
+void lintOwnNext(int own) { lintOwnNextVal = own; }
+
 void lintRect(int kind, int x, int y, int w, int h, const char *what) {
-  lintRectOwned(kind, x, y, w, h, what, 0);
+  int own = 0;
+  if (kind == LK_TEXT && lintOwnNextVal) {
+    own = lintOwnNextVal;
+    lintOwnNextVal = 0;
+  }
+  lintRectOwned(kind, x, y, w, h, what, own);
 }
 
 int lintOwner(int x, int y) { return y * 512 + x + 1; }
@@ -1086,6 +1111,7 @@ void lintResetOverlap() { lrN = 0; }
 #else
 void lintRect(int, int, int, int, int, const char *) {}
 void lintRectOwned(int, int, int, int, int, const char *, int) {}
+void lintOwnNext(int) {}
 int lintOwner(int, int) { return 0; }
 void lintFrameEnd() {}
 #endif

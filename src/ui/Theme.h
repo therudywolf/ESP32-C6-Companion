@@ -311,6 +311,10 @@ void lintRectOwned(int kind, int x, int y, int w, int h, const char *what,
  * own chrome onto a tile's frame on purpose — a counter sitting on the border
  * the way a label tab does — tags it with this and the check stays quiet. */
 int lintOwner(int x, int y);
+/* Tag the NEXT registered text with a tile's owner — see lintRect. */
+void lintOwnNext(int own);
+/* Rows a card's label occupies from the card's top. Content starts here. */
+static const int PANEL_LABEL_H = 12;
 /* Test the frame's registered rectangles and report collisions. */
 void lintFrameEnd();
 void lintClear();

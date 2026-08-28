@@ -378,7 +378,7 @@ void drawClaude(UiCtx &ui) {
   }
 
   /* 5h window gauge (grown to fill height) */
-  panel(g, 4, 28, 200, 64, "ОКНО 5Ч");
+  panel(g, 4, 28, 200, 64, "окно 5ч");
   int win = c.windowPct < 0 ? 0 : c.windowPct;
   g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.windowPct < 0 ? "n/a" : "%d%%", win);
@@ -393,7 +393,7 @@ void drawClaude(UiCtx &ui) {
   }
 
   /* weekly gauge */
-  panel(g, 4, 100, 200, 64, "НЕДЕЛЯ");
+  panel(g, 4, 100, 200, 64, "неделя");
   int wk = c.weeklyPct < 0 ? 0 : c.weeklyPct;
   g.setFont(&F_BIG);
   snprintf(v, sizeof(v), c.weeklyPct < 0 ? "n/a" : "%d%%", wk);
@@ -407,7 +407,7 @@ void drawClaude(UiCtx &ui) {
   }
 
   /* right column: plan + today numbers */
-  panel(g, 212, 28, 104, 136, "СЕГОДНЯ");
+  panel(g, 212, 28, 104, 136, "сегодня");
   g.setFont(&F_MED);
   g.setTextSize(1);
   if (c.plan.length()) {
@@ -568,7 +568,7 @@ void drawServices(UiCtx &ui) {
   }
 
   /* docker + totals on the right, grown to fill the height */
-  panel(g, 216, 28, 100, 66, "DOCKER");
+  panel(g, 216, 28, 100, 66, "docker");
   g.setFont(&F_BIG);
   if (s.dockUp >= 0) {
     snprintf(v, sizeof(v), "%d/%d", s.dockUp, s.dockTotal);
@@ -579,7 +579,7 @@ void drawServices(UiCtx &ui) {
   g.setFont(&F_TEXT);
   textCenter(g, 266, 80, "контейнеры", DIM);
 
-  panel(g, 216, 100, 100, 64, "СЕРВИСЫ");
+  panel(g, 216, 100, 100, 64, "сервисы");
   g.setFont(&F_BIG);
   snprintf(v, sizeof(v), "%d/%d", s.up, s.count);
   textCenter(g, 266, 118, v, s.up == s.count ? GOOD : CRIT);
@@ -721,7 +721,7 @@ void drawHistory(UiCtx &ui) {
 void drawAchievements(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   if (!ui.ach) return;
-  panel(g, 8, 26, 304, 122, "ДОСТИЖЕНИЯ");
+  panel(g, 8, 26, 304, 122, "достижения");
   g.setFont(&F_TEXT);
   g.setTextSize(1);
   const int rows = Achievements::ACH_COUNT / 2; /* 5 rows, 2 columns */
@@ -770,7 +770,7 @@ void drawAchievements(UiCtx &ui) {
 void drawSysInfo(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   char v[64];
-  panel(g, 8, 26, 304, 122, "СИСТЕМА");
+  panel(g, 8, 26, 304, 122, "система");
   g.setFont(&F_TEXT);
   const int rowH = 14; /* 8 rows have to fit the 122 px panel */
   int y = 34;

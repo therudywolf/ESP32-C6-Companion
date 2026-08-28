@@ -39,7 +39,7 @@ static void drawWindow(LGFX_Sprite &g, int cx, const char *label, int d10,
    * title's. The window labels were landing inside it - "1 ч" sat on top of
    * "ДАВЛЕНИЕ ПО ОКНАМ" and read as a rendering fault. */
   g.setFont(&F_SMALL);
-  textCenter(g, cx, 35, label, DIM);
+  textCenter(g, cx, 40, label, DIM);
 
   if (!ok) {
     /* An empty window is a fact worth its own word. A bare dash reads as a
@@ -47,7 +47,7 @@ static void drawWindow(LGFX_Sprite &g, int cx, const char *label, int d10,
      * sensor speaks roughly hourly, so an hour-old sample often does not
      * exist. */
     g.setFont(&F_SMALL);
-    textCenter(g, cx, 50, "нет", DIM);
+    textCenter(g, cx, 55, "нет", DIM);
     return;
   }
   char v[12];
@@ -62,7 +62,7 @@ static void drawWindow(LGFX_Sprite &g, int cx, const char *label, int d10,
    * face as its own unit label, so the eye had nothing to land on and the
    * whole row read as small print. */
   g.setFont(&F_MED);
-  textCenter(g, cx, 45, v, c);
+  textCenter(g, cx, 50, v, c);
   g.setFont(&F_TEXT);
 
   /* The bar grows from a common midline, so up and down are told apart by
@@ -110,7 +110,7 @@ void drawAnalysis(UiCtx &ui) {
   }
 
   /* ── the findings ─────────────────────────────────────────────────────── */
-  panel(g, 4, 86, 312, 82, "ЧТО ЭТО ЗНАЧИТ");
+  panel(g, 4, 86, 312, 82, "что это значит");
   {
     if (st.zbFindCount <= 0) {
       g.setFont(&F_MED);
