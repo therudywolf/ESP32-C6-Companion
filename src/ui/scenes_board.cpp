@@ -69,7 +69,11 @@ void drawBoard(UiCtx &ui) {
   const AppState &st = ui.st;
   char v[48];
 
-  const int cw = 150, ch = 60;
+  /* 62, а не 60. Нижняя карточка держит четыре яруса — ярлык, герой и две
+   * строки, — и в шестидесяти рядах они укладывались только вплотную: между
+   * «в работе» и цифрами времени работы оставался ноль рядов фона. Подвальная
+   * линейка сдвинута на два ряда вниз, места там хватает. */
+  const int cw = 150, ch = 62;
   const int x0 = 6, x1 = 164, y0 = 26, y1 = 90;
 
   /* ── die temperature ─────────────────────────────────────────────────── */
@@ -194,7 +198,9 @@ void drawBoard(UiCtx &ui) {
       u2 = "м";
     }
     g.setFont(&F_BIG);
-    int uy = inkY(INK_BIG, y1 + PANEL_LABEL_H, 28);
+    /* Чернила ложатся на 102..125: три ряда от ярлыка сверху и три до
+     * первой строки подвала снизу. */
+    int uy = inkY(INK_BIG, y1 + 13, 26);
     int ub = uy + INK_BIG.top + INK_BIG.height - INK_TEXT.top - INK_TEXT.height;
     snprintf(v, sizeof(v), "%lu", n1);
     textAt(g, x1 + 8, uy, v, TEXT);
@@ -224,19 +230,22 @@ void drawBoard(UiCtx &ui) {
     snprintf(v, sizeof(v), "пусков %lu, сбоев %lu", (unsigned long)b.bootCount,
              (unsigned long)b.faultCount);
     clipW(g, v, clipped, sizeof(clipped), cw - 16);
-    textAt(g, x1 + 8, y1 + 48, clipped, b.faultCount > 0 ? WARN : DIM);
+    /* +47: чернила первой строки кончаются на y1+45, второй начинаются на
+     * y1+49 — четыре ряда просвета, и последний ряд чернил y1+55 не
+     * доходит до кромки карточки на y1+59. */
+    textAt(g, x1 + 8, y1 + 49, clipped, b.faultCount > 0 ? WARN : DIM);
   }
 
   /* ── footer: the rest of the identity, one line ──────────────────────── */
   g.setFont(&F_SMALL);
-  lintRect(LK_FRAME, 8, 152, NOCT_W - 16, 1, "линейка");
-  g.drawFastHLine(8, 152, NOCT_W - 16, ORANGE_DIM);
+  lintRect(LK_FRAME, 8, 155, NOCT_W - 16, 1, "линейка");
+  g.drawFastHLine(8, 155, NOCT_W - 16, ORANGE_DIM);
   snprintf(v, sizeof(v), "v%s   %d МГц   wifi %d dBm", NOCT_VERSION, st.cpuMhz,
            st.link.rssi);
-  textAt(g, 8, 158, v, DIM);
+  textAt(g, 8, 160, v, DIM);
   snprintf(v, sizeof(v), "SD %s   zigbee %s", st.link.sdOk ? "есть" : "нет",
            st.link.zbUp ? "кан.25" : "выкл");
-  textRight(g, NOCT_W - 8, 158, v, DIM);
+  textRight(g, NOCT_W - 8, 160, v, DIM);
 }
 
 } // namespace scenes

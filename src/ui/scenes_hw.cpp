@@ -137,25 +137,36 @@ void drawGpu(UiCtx &ui) {
   heroTemp(g, 4, 130, 44, hw.gt, tempColor(hw.gt, 70, 80));
   trendArrow(g, 118, 42, ui.gr.gpuTemp, 8, 1);
 
-  panel(g, 140, 26, 176, 42, "нагрузка");
+  panel(g, 140, 26, 176, 38, "нагрузка");
   g.setFont(&F_VALUE);
   g.setTextSize(2);
   snprintf(v, sizeof(v), "%d%%", hw.gl);
-  textAt(g, 148, 40, v, pctColor(hw.gl));
+  textAt(g, 148, 38, v, pctColor(hw.gl));
   g.setTextSize(1);
-  trendArrow(g, 222, 46, ui.gr.gpuLoad, 8, 3);
-  sparkline(g, 232, 40, 76, 24, ui.gr.gpuLoad, GOOD);
+  trendArrow(g, 222, 44, ui.gr.gpuLoad, 8, 3);
+  sparkline(g, 232, 40, 76, 20, ui.gr.gpuLoad, GOOD);
 
   /* Такт памяти переехал сюда, к самой памяти. Он стоял в подвале среди
    * тактов ядра и мощности, где к нему нечего было отнести. */
-  panel(g, 140, 71, 176, 47, "vram / такт памяти");
+  /* 51 ряд, а не 47, и шаг восемнадцать.
+   *
+   * Две строки F_MED — это тринадцать рядов чернил плюс четыре выносных
+   * каждая: в сорок семь они влезали только вплотную, и хвост косой черты в
+   * «2.1/12G» ложился на верх «810 МГц», а «ц» уходила за нижнюю кромку.
+   * Пока такт памяти был трёхзначным, это было не видно. */
+  /* Два числа в ОДНУ строку, полоса под ними.
+   *
+   * Двумя строками они помещались только вплотную: хвост косой черты в
+   * «2.0/12G» приходил на верх «810 МГц» — ноль рядов просвета. Рядом они
+   * читаются лучше и занимают на семнадцать рядов меньше. */
+  panel(g, 140, 67, 176, 51, "vram / такт памяти");
   g.setFont(&F_MED);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "%.1f/%.0fG", hw.vu, hw.vt);
-  textAt(g, 148, 83, v, TEXT);
-  hBar(g, 252, 87, 56, 12, hw.gv, pctColor(hw.gv));
+  textAt(g, 148, 81, v, TEXT);
   snprintf(v, sizeof(v), "%d МГц", hw.vclock);
-  textAt(g, 148, 99, v, DIM);
+  textRight(g, 308, 81, v, DIM);
+  hBar(g, 148, 104, 160, 8, hw.gv, pctColor(hw.gv));
 
   /* ── подвал: два блока вместо одного на пять чисел ────────────────────
    *
@@ -164,19 +175,21 @@ void drawGpu(UiCtx &ui) {
    * читают, это ниже разрешения глаза — владелец так и написал: «нижние
    * цифры кулер, память и т.д. слишком мелкие, нечитаемые». Теперь их
    * четыре, по два на карточку, и все в F_MED. */
-  panel(g, 4, 120, 154, 50, "такт / питание");
+  /* 52 ряда до последнего ряда экрана: ярлык 12 плюс две строки F_MED по
+   * семнадцать — это сорок шесть, и на просвет между ними нужны ещё три. */
+  panel(g, 4, 120, 154, 52, "такт / питание");
   g.setFont(&F_MED);
   g.setTextSize(1);
   snprintf(v, sizeof(v), "%d МГц", hw.gclock);
   textAt(g, 12, 132, v, TEXT);
   snprintf(v, sizeof(v), "%d Вт", hw.gtdp);   /* не "W": читается как "ш" */
-  textAt(g, 12, 150, v, TEXT);
+  textAt(g, 12, 152, v, TEXT);
 
-  panel(g, 162, 120, 154, 50, "гор.точка / кулер");
+  panel(g, 162, 120, 154, 52, "гор.точка / кулер");
   snprintf(v, sizeof(v), "%d C", hw.gh);
   textAt(g, 170, 132, v, tempColor(hw.gh, 85, 95));
   snprintf(v, sizeof(v), "%d об/мин", hw.gf);
-  textAt(g, 170, 150, v, TEXT);
+  textAt(g, 170, 152, v, TEXT);
 }
 
 void drawRam(UiCtx &ui) {
@@ -204,7 +217,12 @@ void drawRam(UiCtx &ui) {
    * setFont(&F_MED). Смещение считалось для строки в двадцать рядов вместо
    * девяноста четырёх, единица уезжала на пятнадцать рядов вниз и ложилась
    * на нижнюю кромку карточки. На бумаге арифметика выглядела правильной. */
-  const int ramHeroY = inkTop(g, 40, 64);
+  /* 43, а не 40: чернила ярлыка кончаются на 37-м ряду, и на сорока между
+   * ним и верхом цифр оставался один ряд. */
+  /* 41: чернила ярлыка кончаются на 35-м ряду, чернила героя начинаются
+   * на 40-м — четыре ряда просвета. Ниже 41 не уйти, единица упрётся в
+   * нижнюю кромку; выше 41 не уйти, герой сядет на ярлык. */
+  const int ramHeroY = inkTop(g, 41, 64);
   /* 37, не 40. Ярлык занимает 12 рядов, герой — 64, карточка — 80: на
    * выносные единицы измерения оставалось четыре ряда, а нужно ровно
    * четыре, и косая черта в «/32ГБ» ложилась на нижнюю кромку. */
@@ -217,7 +235,11 @@ void drawRam(UiCtx &ui) {
    * could not name. */
   {
     const int base = ramHeroY + (INK_HUGE.top + INK_HUGE.height) * 2;
-    snprintf(v, sizeof(v), "/%.0fГБ", hw.ra);
+    /* Просто «ГБ». Косая черта — выносной элемент, и она свисала на
+     * нижнюю кромку карточки; а объём и так назван строкой ниже
+     * («свободно 21.0 ГБ из 32»), так что «/32» здесь ничего не добавлял. */
+    snprintf(v, sizeof(v), "ГБ");
+    (void)hw.ra;
     textAt(g, 22 + vw, base - INK_MED.top - INK_MED.height, v, DIM);
   }
   g.setTextSize(1);
@@ -229,38 +251,51 @@ void drawRam(UiCtx &ui) {
   hBar(g, 230, 76, 76, 16, rpct, pctColor(rpct));
 
   /* grown into the freed bottom band: top-2 processes + free memory */
-  panel(g, 4, 112, 312, 58, "топ по памяти / свободно");
+  /* Свободная память переехала на строку ЯРЛЫКА.
+   *
+   * Три строки по семнадцать рядов в пятидесяти восьми оставляли последней
+   * ноль пикселей просвета: чернила «claude.exe» кончались на 156-м ряду,
+   * «свободно» начиналось на 157-м. Проверка наложений это пропускает —
+   * пересечения нет, — а глаз видит кашу, о чём владелец и написал.
+   *
+   * Ярлык всё равно назывался «топ по памяти / свободно» и обещал обе вещи;
+   * теперь он их обе и показывает, а двум строкам процессов достаётся весь
+   * остаток карточки. */
+  panel(g, 4, 112, 312, 58, "топ по памяти");
+  {
+    float freeTop = hw.ra - hw.ru;
+    if (freeTop < 0) freeTop = 0;
+    int fx = 306;
+    g.setFont(&F_TEXT);
+    g.setTextSize(1);
+    snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
+    int wUnit = g.textWidth(v);
+    textAt(g, fx - wUnit, 114, v, DIM);
+    fx -= wUnit + 6;
+    g.setFont(&F_VALUE);
+    snprintf(v, sizeof(v), "%.1f", freeTop);
+    int wNum = g.textWidth(v);
+    textAt(g, fx - wNum, 113, v, GOOD);
+    fx -= wNum + 6;
+    g.setFont(&F_TEXT);
+    textAt(g, fx - g.textWidth("свободно"), 114, "свободно", DIM);
+  }
   g.setFont(&F_MED);
   for (int i = 0; i < 2; i++) {
     if (ui.st.process.ramNames[i].length() == 0) continue;
-    int y = 124 + i * 17;   /* чернила 127..139 и 144..156 */
+    /* Шаг 21, а не 17: чернила F_MED — тринадцать рядов, выносные элементы
+     * ещё четыре, и на семнадцати между строками остаётся ровно ноль. */
+    int y = 128 + i * 21;   /* чернила 131..143 и 152..164 */
     snprintf(v, sizeof(v), "%.14s", ui.st.process.ramNames[i].c_str());
     textAt(g, 12, y, v, i == 0 ? TEXT : DIM);
     snprintf(v, sizeof(v), "%d МБ", ui.st.process.ramMb[i]);
     textRight(g, 306, y, v, INFO);
   }
-  float freeGb = hw.ra - hw.ru;
-  if (freeGb < 0) freeGb = 0;
+
   /* The only place the free figure appears, and it was set in the smallest
    * face on the screen with 200 px of empty tile to its right. */
   /* "ГБ" cannot be set in F_VALUE — Latin subset, hollow boxes. Digits in
    * F_VALUE, Cyrillic in F_TEXT, and the two sit on one baseline. */
-  /* Measured, not counted. Three fragments at x=12, 74 and 118 are the right
-   * gaps for "10.7" and the wrong ones for "7.4" or "104.2" — the row
-   * re-spaced itself every time the number changed width. */
-  {
-    int fx = 12;
-    g.setFont(&F_TEXT);
-    textAt(g, fx, 157, "свободно", DIM);
-    fx += g.textWidth("свободно") + 8;
-    g.setFont(&F_VALUE);
-    snprintf(v, sizeof(v), "%.1f", freeGb);
-    textAt(g, fx, 156, v, GOOD);
-    fx += g.textWidth(v) + 6;
-    g.setFont(&F_TEXT);
-    snprintf(v, sizeof(v), "ГБ из %.0f", hw.ra);
-    textAt(g, fx, 157, v, DIM);
-  }
 }
 
 void drawDisks(UiCtx &ui) {
@@ -463,13 +498,13 @@ void drawNet(UiCtx &ui) {
    * зазором это ровно то, что есть, но полоса в 50 рядов под значение
    * опускала его чернила на шесть рядов в график. */
   /* 32: заливка вкладки ярлыка кончается на y+5, то есть на 31. */
-  bigVal(g, 14, 38, 24, r, "Б/с", INFO);
-  sparkline(g, 14, 64, 134, 16, ui.gr.netDown, INFO, 1000);
+  bigVal(g, 14, 41, 24, r, "Б/с", INFO);
+  sparkline(g, 14, 68, 134, 12, ui.gr.netDown, INFO, 1000);
 
   panel(g, 164, 26, 152, 60, "исходящий");
   fmtRate(r, sizeof(r), hw.nu);
-  bigVal(g, 174, 38, 24, r, "Б/с", GOOD);
-  sparkline(g, 174, 64, 132, 16, ui.gr.netUp, GOOD, 200);
+  bigVal(g, 174, 41, 24, r, "Б/с", GOOD);
+  sparkline(g, 174, 68, 132, 12, ui.gr.netUp, GOOD, 200);
 
   /* bottom panels grown into the freed band (y94..168), spacing fixed so the
    * RSSI line and the server line no longer overlap */

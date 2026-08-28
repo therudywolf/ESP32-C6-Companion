@@ -1192,9 +1192,22 @@ int SceneManager::carouselStep(UiCtx &ui) {
 
 int SceneManager::nextVisibleScene(int from, uint32_t mask, bool allowDen,
                                    bool pcOffline) const {
-  for (int k = 1; k <= SCENE_FORZA; k++) {
-    int n = from + k;
-    while (n >= SCENE_FORZA) n -= SCENE_FORZA; /* wrap inside the ring */
+  /* Walks carousel::ORDER, not the enum.
+   *
+   * The carousel was reordered into something that reads as a sentence — the
+   * wolf, the machine, the network, the board, the room, the sky — and the
+   * BUTTON was left walking SceneId order, which is the order the screens
+   * were written in. So the ring rotated one way and pressing the button
+   * went another, which is worse than either order on its own.
+   *
+   * The enum keeps its numbering: every saved scnMask bit and every screen:N
+   * the server has ever sent still means what it meant. Only the path
+   * through it changes. */
+  int at = 0;
+  for (int i = 0; i < carousel::ORDER_N; i++)
+    if (carousel::ORDER[i] == from) at = i;
+  for (int k = 1; k <= carousel::ORDER_N; k++) {
+    int n = carousel::ORDER[(at + k) % carousel::ORDER_N];
     if (n == SCENE_DEN) {
       if (allowDen) return n;
       continue;

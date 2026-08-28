@@ -333,8 +333,16 @@ void drawWeather(UiCtx &ui) {
       /* The tile is 56 px wide; measure the label in the font it will actually
        * be drawn in, or "ForestHome" silently becomes "ForestHom" — which
        * reads as a typo rather than as a truncation. */
+      /* Имя датчика — или слово «дома», если имя не влезает целиком.
+       *
+       * «ForestHome» в плитке шириной 56 обрезается до «ForestHom», и это
+       * читается как опечатка, а не как усечение. Короткое слово, которое
+       * помещается, честнее длинного, которое нет. */
       g.setFont(&F_TEXT);
-      clipW(g, z.name[0] ? z.name : "дома", tab, sizeof(tab), 48);
+      g.setTextSize(1);
+      const char *tabSrc = z.name[0] ? z.name : "дома";
+      if (g.textWidth(tabSrc) > 48) tabSrc = "дома";
+      clipW(g, tabSrc, tab, sizeof(tab), 48);
       panel(g, x, 108, 56, 62, tab, stale ? DIM : ORANGE_DIM,
             stale ? DIM : ORANGE);
       g.setFont(&F_MED);
@@ -472,7 +480,12 @@ void drawForest(UiCtx &ui) {
    * it left each card 48 px and the band 22 px short. It also meant a single
    * OFFLINE node drew a 122 px card with one word in it — the owner's "снизу
    * пусто" on a screen where the emptiness was structural. */
-  int chh = (144 - (rows - 1) * 4) / rows;
+  /* 138, а не 144: полоса кончается на 164-м ряду, а не на 170-м.
+   *
+   * Карточка — это заливка без рамки, и «закрытой» она выглядит за счёт
+   * зазора под собой. У последней зазора было два ряда, и она читалась как
+   * обрезанная краем экрана. */
+  int chh = (138 - (rows - 1) * 4) / rows;
   for (int i = 0; i < shown; i++) {
     ForestNode &n = f.nodes[i];
     int x = 4 + (i % cols) * (cw + 4);
@@ -488,7 +501,12 @@ void drawForest(UiCtx &ui) {
     clipW(g, n.name, nm, sizeof(nm), cw - 28);
     textAt(g, x + 22, y + 4, nm, TEXT);
     if (down) {
-      textAt(g, x + 22, y + 22, "OFFLINE", CRIT);
+      /* «Нет метрик» и «хост лежит» — разные вещи, и на этой плате разница
+       * сейчас существенная: экспортёры ноутбука и роутера не отчитываются
+       * неделю, тогда как сами устройства могут быть совершенно живы. */
+      bool noData = n.cpu < 0 && n.ram < 0 && n.disk < 0;
+      textAt(g, x + 22, y + 22, noData ? "НЕТ МЕТРИК" : "OFFLINE",
+             noData ? WARN : CRIT);
       g.setTextSize(1);
       continue;
     }
@@ -515,15 +533,18 @@ void drawForest(UiCtx &ui) {
          * three and a half times smaller than its own twin one screen over.
          *
          * The label stays small: it is a label, and it never changes. */
+        /* +25, а не +22: имя ноды в F_MED кончается чернилами на
+         * тринадцатом ряду от своего верха, и на двадцати двух между ним и
+         * подписью ресурса оставался один ряд. */
         g.setFont(&F_TEXT);
-        textAt(g, bx, y + 22, bars[b].l, DIM);
+        textAt(g, bx, y + 25, bars[b].l, DIM);
         g.setFont(&F_VALUE);
         if (unknown)
           snprintf(v, sizeof(v), "--");
         else
           snprintf(v, sizeof(v), "%d%%", val);
-        textAt(g, bx + 26, y + 20, v, unknown ? DIM : TEXT);
-        hBar(g, bx, y + 38, (cw - 24) / 3 - 6, 9, val, pctColor(val));
+        textAt(g, bx + 26, y + 23, v, unknown ? DIM : TEXT);
+        hBar(g, bx, y + 41, (cw - 24) / 3 - 6, 9, val, pctColor(val));
       } else {
         hBar(g, bx, y + 26, (cw - 24) / 3 - 6, 9, val, pctColor(val));
         /* no room for a label here (4+ nodes), so mark "unknown" with a dash
@@ -553,24 +574,30 @@ void drawServices(UiCtx &ui) {
    * takes the 100 px it was using. Seven services fit at a legible pitch
    * where six were crowded into two thirds of the width. */
   Rect lc = panelM(g, 4, 26, 312, 144, "сервисы");
-  int shown = s.count > 7 ? 7 : s.count;
-  /* 17, не 19. Карточка отдаёт под содержимое 123 ряда; семь строк по
-   * девятнадцать — это 133, и последняя («Nocturne») резалась пополам нижней
-   * кромкой. Шаг считается от того, сколько строк реально пришло, так что
-   * четыре сервиса дышат, а семь помещаются. */
-  int pitch = shown > 0 ? (lc.h - 4) / (shown < 6 ? 6 : shown) : 19;
-  if (pitch > 22) pitch = 22;
+  /* ДВА СТОЛБЦА по четыре.
+   *
+   * В один столбец восемь сервисов помещаются только при шаге семнадцать, а
+   * чернила F_MED — тринадцать рядов плюс четыре на выносные: хвост «y» в
+   * «rudywolf» ложился ровно на «Grafana». Проверка наложений этого не видит
+   * (пересечения нет, зазор ровно ноль), а глаз видит. В два столбца шаг
+   * двадцать шесть, и просвета девять рядов. */
+  const int COLW = 148;
+  int shown = s.count > 8 ? 8 : s.count;
+  int perCol = (shown + 1) / 2;
+  if (perCol < 1) perCol = 1;
   for (int i = 0; i < shown; i++) {
     ServiceEntry &e = s.list[i];
-    int y = lc.y + 2 + i * pitch;
+    int col = i / perCol;
+    int cx0 = lc.x + col * COLW;
+    int y = lc.y + 4 + (i % perCol) * 26;
     uint16_t c = stColor(e.status);
-    g.fillCircle(lc.x + 5, y + 8, 5, c);
-    int nameRight = lc.x + lc.w - 8;
+    g.fillCircle(cx0 + 4, y + 8, 4, c);
+    int nameRight = cx0 + COLW - 10;
     if (strcmp(e.status, "off") == 0) {
       g.setFont(&F_TEXT);
       g.setTextSize(1);
-      textRight(g, lc.x + lc.w - 8, y + 4, "не настроен", DIM);
-      nameRight = lc.x + lc.w - 16 - g.textWidth("не настроен");
+      textRight(g, cx0 + COLW - 10, y + 4, "нет адреса", DIM);
+      nameRight = cx0 + COLW - 14 - g.textWidth("нет адреса");
     } else if (e.ms >= 0) {
       /* F_VALUE: the latency is the only NUMBER on this screen, and it was
        * set two steps smaller than the service name beside it — the name is
@@ -580,23 +607,31 @@ void drawServices(UiCtx &ui) {
       g.setTextSize(1);
       snprintf(v, sizeof(v), "%dms", e.ms);
       int mw = g.textWidth(v);
-      textAt(g, lc.x + lc.w - 8 - mw, inkY(INK_VALUE, y, 18), v,
+      textAt(g, cx0 + COLW - 10 - mw, inkY(INK_VALUE, y, 18), v,
              e.ms > 500 ? WARN : TEXT);
-      nameRight = lc.x + lc.w - 16 - mw;
+      nameRight = cx0 + COLW - 14 - mw;
     }
     /* name clipped by display width so multi-byte Cyrillic never cuts mid-glyph
      * (was "%.11s" → "Игровой сервер" became broken "Игров") */
     char nm[40];
     g.setFont(&F_MED);
     g.setTextSize(1);
-    clipW(g, e.name, nm, sizeof(nm), nameRight - lc.x - 20);
-    textAt(g, lc.x + 16, y, nm, TEXT);
+    clipW(g, e.name, nm, sizeof(nm), nameRight - cx0 - 14);
+    textAt(g, cx0 + 12, y, nm, TEXT);
   }
-  /* The tally where the label is, so it costs no row of its own. */
-  g.setFont(&F_TEXT);
-  g.setTextSize(1);
-  snprintf(v, sizeof(v), "%d из %d на связи", s.up, s.count);
-  textRight(g, lc.x + lc.w, 28, v, s.up == s.count ? GOOD : WARN);
+  /* Итог на строке ярлыка, чтобы не тратить свой ряд.
+   *
+   * Своя строка на 40 байт, а не общая на 24: «2 из 7 на связи» — это
+   * двадцать шесть байт в UTF-8, и snprintf обрезал её до «2 из 7 на связ».
+   * Обрезание молчаливое, и выглядит оно как обрезание по ширине экрана,
+   * которого тут нет. */
+  {
+    char tally[40];
+    g.setFont(&F_TEXT);
+    g.setTextSize(1);
+    snprintf(tally, sizeof(tally), "%d из %d на связи", s.up, s.count);
+    textRight(g, lc.x + lc.w, 28, tally, s.up == s.count ? GOOD : WARN);
+  }
 }
 
 /* ── EVENTS ──────────────────────────────────────────────────────────── */

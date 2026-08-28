@@ -1164,7 +1164,35 @@ void lintFrameEnd() {
       int x1 = (a.x + a.w) < (b.x + b.w) ? (a.x + a.w) : (b.x + b.w);
       int y1 = (a.y + a.h) < (b.y + b.h) ? (a.y + a.h) : (b.y + b.h);
       int ow = x1 - x0, oh = y1 - y0;
-      if (ow <= 0 || oh <= 0) continue;
+      if (ow <= 0 || oh <= 0) {
+        /* Не пересеклись — но, может быть, сошлись вплотную.
+         *
+         * Ноль пикселей фона между двумя строками читается как одна строка
+         * поверх другой, и проверка на пересечение этого не видит по
+         * определению. Четыре замечания владельца подряд были именно про
+         * это, и ни одно из них отчёт не показал.
+         *
+         * Только текст на текст, и только при заметном перекрытии по
+         * горизонтали: две колонки на одной высоте — это вёрстка, а не
+         * теснота. */
+        if (a.kind == LK_TEXT && b.kind == LK_TEXT && ow >= 8 && oh > -2 &&
+            !(a.own && a.own == b.own)) {
+          uint32_t tk = (uint32_t)(a.x & 0x1FF) << 20 ^
+                        (uint32_t)(a.y & 0x1FF) << 11 ^
+                        (uint32_t)(b.y & 0x1FF) << 2;
+          bool td = false;
+          for (int k = 0; k < seenN; k++)
+            if (seen[k] == tk) td = true;
+          if (!td) {
+            if (seenN < 32) seen[seenN++] = tk;
+            Serial.printf("[TIGHT] %s: \"%s\" (%d,%d %dx%d) и \"%s\" "
+                          "(%d,%d %dx%d) - просвет %d ряд(а)\n",
+                          lcScene, a.what, a.x, a.y, a.w, a.h, b.what, b.x,
+                          b.y, b.w, b.h, -oh);
+          }
+        }
+        continue;
+      }
       /* Art and text touching by a single row is kerning, not a collision;
        * two rows is where it starts to read as one thing on top of another. */
       if (a.kind != LK_FILL && b.kind != LK_FILL && ow * oh <= 2) continue;
