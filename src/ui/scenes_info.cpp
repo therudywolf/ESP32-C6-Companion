@@ -272,29 +272,44 @@ void drawWeather(UiCtx &ui) {
    * owner could not place: the tiles now run to the last usable row instead
    * of stopping eight pixels short of it for no reason. */
   {
-    Rect c = panelM(g, 4, 26, 312, 80, "за окном");
-    weatherIcon(g, c.x + 22, c.y + 32, 17, w.wmoCode, ui.now);
+    /* Герой в ОДИНАРНОМ размере, и карточка на треть ниже.
+     *
+     * В двойном это 64 ряда чернил, и вместе с ярлыком и просветами они не
+     * оставляли карточке ничего: цифра ложилась на её нижнюю кромку. Ниже
+     * тоже некуда — под карточкой пять плиток дней, которым нужны иконка и
+     * две температуры, и они упирались в край экрана по той же причине.
+     *
+     * Тридцать два ряда чернил — это всё ещё самое крупное на этом экране, и
+     * температура за окном не обязана спорить с температурой в комнате: та
+     * герой всего устройства, эта — одна из двадцати цифр. Освободившиеся
+     * сорок рядов уходят плиткам, где нижняя температура наконец становится
+     * читаемой. */
+    /* 61 ряд: описание погоды переносится на две строки, когда правая
+     * колонка уже героя — «малая облачность» это 160 пикселей при 158
+     * доступных, — и вторая строка вылезала за карточку на одиннадцать
+     * рядов. */
+    Rect c = panelM(g, 4, 26, 312, 61, "за окном");
+    weatherIcon(g, c.x + 20, c.y + 20, 15, w.wmoCode, ui.now);
     g.setFont(&F_HUGE);
-    g.setTextSize(2);
-    snprintf(v, sizeof(v), "%+d", w.temp);
-    /* Ink-anchored: F_HUGE at double size writes a 94 px line for 64 px of
-     * digits, so a cursor placed by eye puts a third of the glyph outside
-     * whatever it was aimed at. */
-    const int ty = inkY(INK_HUGE, c.y, c.h, 2);
-    textAt(g, c.x + 44, ty, v, TEXT);
-    const int heroEnd = c.x + 44 + g.textWidth(v) + 10;
     g.setTextSize(1);
+    snprintf(v, sizeof(v), "%+d", w.temp);
+    /* Ink-anchored: F_HUGE writes a 47 px line for 32 px of digits, so a
+     * cursor placed by eye puts a third of the glyph outside whatever it was
+     * aimed at. */
+    const int ty = inkY(INK_HUGE, c.y, c.h);
+    textAt(g, c.x + 40, ty, v, TEXT);
+    const int heroEnd = c.x + 40 + g.textWidth(v) + 10;
 
     /* The right column starts where the hero ENDS, measured: a two-digit
      * sub-zero reading is wider than "+5", and a fixed column collided. */
-    const int dx = heroEnd > 176 ? heroEnd : 176;
+    const int dx = heroEnd > 150 ? heroEnd : 150;
     const int bw = c.x + c.w - dx;
     g.setFont(&F_TEXT);
     snprintf(v, sizeof(v), "осадки %d%%", w.precip);
-    textAt(g, dx, c.y + 2, v, w.precip >= 50 ? INFO : DIM);
+    textAt(g, dx, c.y, v, w.precip >= 50 ? INFO : DIM);
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
-    textWrap(g, d.c_str(), dx, c.y + 20, bw, 19, 2, ORANGE);
+    textWrap(g, d.c_str(), dx, c.y + 10, bw, 16, 2, ORANGE);
   }
 
   /* Forecast, CENTRED so it isn't lopsided when fewer than 5 days arrive.
@@ -312,14 +327,16 @@ void drawWeather(UiCtx &ui) {
     int x0 = (NOCT_W - totalW) / 2;
     for (int i = 0; i < nd; i++) {
       int x = x0 + i * 62;
-      panel(g, x, 108, 56, 62, dayNames[i]);
-      weatherIcon(g, x + 28, 132, 11, w.wfCode[i], ui.now);
+      /* 84..171: ярлык 87..93, иконка 97..123, максимум 127..139,
+       * минимум 143..155 — по три ряда просвета, и обе температуры в
+       * F_MED вместо «крупная сверху, мелкая снизу». */
+      panel(g, x, 90, 56, 82, dayNames[i]);
+      weatherIcon(g, x + 28, 116, 13, w.wfCode[i], ui.now);
       g.setFont(&F_MED);
       snprintf(v, sizeof(v), "%d", w.wfMax[i]);
-      textCenter(g, x + 28, 144, v, WARN); /* hi */
-      g.setFont(&F_TEXT);
+      textCenter(g, x + 28, 132, v, WARN); /* максимум, чернила 135..147 */
       snprintf(v, sizeof(v), "%d", w.wfMin[i]);
-      textCenter(g, x + 28, 160, v, INFO); /* lo, чернила 162..168 */
+      textCenter(g, x + 28, 151, v, INFO); /* минимум, чернила 154..166 */
     }
 
     if (indoor) {
@@ -343,23 +360,22 @@ void drawWeather(UiCtx &ui) {
       const char *tabSrc = z.name[0] ? z.name : "дома";
       if (g.textWidth(tabSrc) > 48) tabSrc = "дома";
       clipW(g, tabSrc, tab, sizeof(tab), 48);
-      panel(g, x, 108, 56, 62, tab, stale ? DIM : ORANGE_DIM,
+      panel(g, x, 90, 56, 82, tab, stale ? DIM : ORANGE_DIM,
             stale ? DIM : ORANGE);
       g.setFont(&F_MED);
       if (z.temp10 != -32768) {
         snprintf(v, sizeof(v), "%d", (z.temp10 + (z.temp10 < 0 ? -5 : 5)) / 10);
-        textCenter(g, x + 28, 122, v, stale ? DIM : WARN);
+        textCenter(g, x + 28, 106, v, stale ? DIM : WARN);
       } else {
-        textCenter(g, x + 28, 122, "--", DIM);
+        textCenter(g, x + 28, 106, "--", DIM);
       }
-      g.setFont(&F_TEXT);
       if (z.humidity >= 0) {
         snprintf(v, sizeof(v), "%d%%", z.humidity);
-        textCenter(g, x + 28, 142, v, stale ? DIM : INFO);
+        textCenter(g, x + 28, 130, v, stale ? DIM : INFO);
       }
       /* battery as a tiny bar: the number matters far less than "is it dying" */
       if (z.battery >= 0) {
-        int bw2 = 34, bx = x + 11, by = 158;
+        int bw2 = 34, bx = x + 11, by = 156;
         g.drawRect(bx, by, bw2, 7, stale ? DIM : ORANGE_DIM);
         g.fillRect(bx + bw2, by + 2, 2, 3, stale ? DIM : ORANGE_DIM);
         int fill = (bw2 - 2) * z.battery / 100;
@@ -367,7 +383,8 @@ void drawWeather(UiCtx &ui) {
           g.fillRect(bx + 1, by + 1, fill, 5,
                      z.battery < 20 ? CRIT : (stale ? DIM : GOOD));
       } else if (stale) {
-        textCenter(g, x + 28, 156, "молчит", DIM);
+        g.setFont(&F_TEXT);
+        textCenter(g, x + 28, 154, "молчит", DIM);
       }
     }
   }
@@ -619,9 +636,12 @@ void drawServices(UiCtx &ui) {
       g.setTextSize(1);
       snprintf(v, sizeof(v), "%dms", e.ms);
       int mw = g.textWidth(v);
-      textAt(g, cx0 + COLW - 10 - mw, inkY(INK_VALUE, y, 18), v,
+      textAt(g, cx0 + COLW - 8 - mw, inkY(INK_VALUE, y, 18), v,
              e.ms > 500 ? WARN : TEXT);
-      nameRight = cx0 + COLW - 14 - mw;
+      /* -10, а не -14: колонка отдаёт имени ровно столько, сколько
+       * остаётся от задержки, и четыре лишних пикселя отступа — это
+       * половина буквы в F_MED. «OneToThree» на них и не помещалось. */
+      nameRight = cx0 + COLW - 10 - mw;
     }
     /* name clipped by display width so multi-byte Cyrillic never cuts mid-glyph
      * (was "%.11s" → "Игровой сервер" became broken "Игров") */
