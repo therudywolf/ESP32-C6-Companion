@@ -505,7 +505,10 @@ void drawForest(UiCtx &ui) {
        * сейчас существенная: экспортёры ноутбука и роутера не отчитываются
        * неделю, тогда как сами устройства могут быть совершенно живы. */
       bool noData = n.cpu < 0 && n.ram < 0 && n.disk < 0;
-      textAt(g, x + 22, y + 22, noData ? "НЕТ МЕТРИК" : "OFFLINE",
+      /* +25, а не +22: имя ноды в F_MED кончается чернилами на семнадцатом
+       * ряду от верха строки, и на двадцати двух между ним и состоянием
+       * оставался один ряд. */
+      textAt(g, x + 25, y + 25, noData ? "НЕТ МЕТРИК" : "OFFLINE",
              noData ? WARN : CRIT);
       g.setTextSize(1);
       continue;
@@ -546,14 +549,23 @@ void drawForest(UiCtx &ui) {
         textAt(g, bx + 26, y + 23, v, unknown ? DIM : TEXT);
         hBar(g, bx, y + 41, (cw - 24) / 3 - 6, 9, val, pctColor(val));
       } else {
-        hBar(g, bx, y + 26, (cw - 24) / 3 - 6, 9, val, pctColor(val));
-        /* no room for a label here (4+ nodes), so mark "unknown" with a dash
-         * across the empty bar — otherwise it is identical to a real 0%. */
+        /* Узкая карточка — но не настолько, чтобы остаться без чисел.
+         *
+         * С тремя нодами высота ушла ниже порога «просторно», и от ресурса
+         * оставалась одна голая полоса. Полоса отвечает на «примерно
+         * сколько», а экран существует ради «сколько»: подпись и значение
+         * в F_TEXT занимают семь рядов и помещаются. */
+        const int bw = (cw - 24) / 3 - 6;
+        g.setFont(&F_TEXT);
+        g.setTextSize(1);
+        textAt(g, bx, y + 22, bars[b].l, DIM);
         if (unknown) {
-          int bw = (cw - 24) / 3 - 6;
-          lintRect(LK_FRAME, bx + bw / 2 - 2, y + 30, 5, 1, "линейка");
-  g.drawFastHLine(bx + bw / 2 - 2, y + 30, 5, DIM);
+          textRight(g, bx + bw, y + 22, "--", DIM);
+        } else {
+          snprintf(v, sizeof(v), "%d%%", val);
+          textRight(g, bx + bw, y + 22, v, TEXT);
         }
+        hBar(g, bx, y + 34, bw, 7, val, pctColor(val));
       }
     }
   }

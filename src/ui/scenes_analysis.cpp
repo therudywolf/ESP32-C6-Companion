@@ -133,7 +133,9 @@ void drawAnalysis(UiCtx &ui) {
   LGFX_Sprite &g = ui.g;
   const AppState &st = ui.st;
   const analysis::Windows &w = st.zbWin;
-  char v[48], a[24], b[24];
+  /* 96, а не 48: строка «давление выше 98% всех показаний за все время» —
+   * это семьдесят девять байт в UTF-8, и она обрывалась на «всех пока». */
+  char v[96], a[24], b[24];
 
   const bool have = st.zb.count > 0;
   const ZbSensor &z = have ? st.zb.list[0] : st.zb.list[0];
@@ -207,11 +209,15 @@ void drawAnalysis(UiCtx &ui) {
          * appears when the model puts at least 15 % on it, so its presence
          * is itself the news. */
         textAt(g, c.x, c.y + 38, rc.risk.c_str(), WARN);
-      } else if (st.zbPressPct >= 0) {
-        snprintf(v, sizeof(v), "давление выше %d%% всех показаний за все время",
-                 st.zbPressPct);
-        textAt(g, c.x, c.y + 38, v, DIM);
       }
+      /* Перцентиль по архиву сюда не помещается и здесь не нужен.
+       *
+       * Карточке остаётся сорок пять рядов: ярлык уже съел свои, два
+       * горизонта с полосами разброса — по девятнадцать, и на третью строку
+       * места нет ни при каком раскладе. Строка вероятности выше — та, ради
+       * которой полосу вообще считают, — важнее справки о том, как высоко
+       * стоит давление относительно всей истории; она есть в веб-панели и на
+       * этом же экране, когда прогноза нет. */
     } else {
       /* No forecast is a fact with a reason, and the reason is the useful
        * part: it says what is missing and therefore when to look again. */
