@@ -4,6 +4,9 @@
 #include <esp_system.h>
 
 #include "core/config.h"
+#include <string.h>
+
+#include "ui/Carousel.h"
 #include "ui/SceneIds.h"
 
 namespace settings {
@@ -48,6 +51,26 @@ void load(Settings &s) {
    * scnBits records how wide the ring was when the mask was written; anything
    * added since defaults to on, the same as a fresh install gets. */
   s.sceneMask = p.getUInt("scnMask", 0xFFFFFFFFu) | 1u; /* DEN always on */
+  /* Carousel shape. The frequency table is stored as one blob rather than
+   * twenty keys because an NVS write is the slow part, and it is re-seeded
+   * from the preset whenever it is missing or the wrong size — which is what
+   * a first boot, and a firmware that gained a scene, both look like. */
+  s.carPreset = p.getInt("carPre", 1);
+  if (s.carPreset < 0 || s.carPreset >= carousel::PRESET_N) s.carPreset = 1;
+  size_t got = p.getBytes("carFreq", s.carFreq, sizeof(s.carFreq));
+  bool sane = got == sizeof(s.carFreq);
+  if (sane) {
+    /* A table of nothing but zeroes is a table that shows nothing, which
+     * would read as the carousel being broken rather than as being empty. */
+    bool any = false;
+    for (int i = 0; i < SCENE_COUNT; i++) {
+      if (s.carFreq[i] >= carousel::FQ_COUNT) sane = false;
+      if (s.carFreq[i] != carousel::FQ_OFF) any = true;
+    }
+    if (!any) sane = false;
+  }
+  if (!sane)
+    memcpy(s.carFreq, carousel::PRESETS[s.carPreset].freq, sizeof(s.carFreq));
   int savedBits = p.getInt("scnBits", 16); /* 16 = the ring before ДОМ */
   if (savedBits < SCENE_FORZA) {
     for (int i = savedBits; i < SCENE_FORZA; i++) s.sceneMask |= (1u << i);
@@ -78,6 +101,8 @@ void save(const Settings &s) {
   p.begin("nocturne", false);
   p.putBool("led", s.ledEnabled);
   p.putBool("carousel", s.carouselEnabled);
+  p.putInt("carPre", s.carPreset);
+  p.putBytes("carFreq", s.carFreq, sizeof(s.carFreq));
   p.putInt("carouselSec", s.carouselIntervalSec);
   p.putInt("bright", s.brightness > NOCT_BRIGHT_MAX ? NOCT_BRIGHT_MAX
                                                     : s.brightness);

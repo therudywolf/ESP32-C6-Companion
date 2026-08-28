@@ -192,9 +192,12 @@ void drawMedia(UiCtx &ui) {
                       : m.isIdle         ? "IDLE"
                                          : "PAUSED";
   uint16_t stc = playing ? GOOD : WARN;
-  if (playing && ((ui.now / 500) & 1)) g.fillCircle(44, 36, 3, stc);
+  /* In the card's LABEL band, above the cassette, not on its corner. The
+   * ink used to end on row 40 and the cassette's own outline starts there —
+   * "Паузед налазит на кассету", exactly one row of it. */
+  if (playing && ((ui.now / 500) & 1)) g.fillCircle(44, 33, 3, stc);
   g.setFont(&F_TEXT);
-  textAt(g, 52, 32, stTxt, stc);
+  textAt(g, 52, 29, stTxt, stc);
 
   /* track (seamless scrolling marquee) + artist */
   g.setFont(&F_MED);
@@ -257,43 +260,37 @@ void drawWeather(UiCtx &ui) {
   }
   char v[32];
 
-  /* header in FIXED columns so nothing drifts with the temperature's width:
-   *   left: animated icon | big temperature + superscript degree
-   *   right (fixed x): wrapped description
-   * Temp is ink-anchored like the CPU/GPU hero tiles (inkH 64 -> ink y30..94). */
-  weatherIcon(g, 28, 54, 18, w.wmoCode, ui.now);
-  g.setFont(&F_HUGE);
-  g.setTextSize(2);
-  snprintf(v, sizeof(v), "%+d", w.temp);
-  /* just the signed number (no degree symbol). Ink top ~y26: below the status
-   * bar (y19) and above the forecast (y92). */
-  textAt(g, 50, 26 - (g.fontHeight() - 64) / 2, v, TEXT);
-  g.setTextSize(1);
-  /* precipitation probability in the free top-right corner */
-  g.setFont(&F_TEXT);
-  snprintf(v, sizeof(v), "осадки %d%%", w.precip);
-  textRight(g, NOCT_W - 6, 26, v, w.precip >= 50 ? INFO : DIM);
-  /* Description below the precip, in the right column. The column START has
-   * to clear the hero number: at "+12" in F_HUGE x2 the glyphs reach past the
-   * old fixed x=168 and the two collided. Measure instead of assuming — a
-   * two-digit sub-zero reading is wider still. */
+  /* The hero gets a CARD, like every other screen's hero.
+   *
+   * It used to float on the background while the day tiles below it were
+   * cards — one screen in two idioms, which is what "всё в целом как-то не
+   * верно скомпоновано" is describing. The card also fixes the padding the
+   * owner could not place: the tiles now run to the last usable row instead
+   * of stopping eight pixels short of it for no reason. */
   {
-    int heroEnd;
-    {
-      g.setFont(&F_HUGE);
-      g.setTextSize(2);
-      char t[8];
-      snprintf(t, sizeof(t), "%+d", w.temp);
-      heroEnd = 50 + g.textWidth(t) + 10;
-      g.setTextSize(1);
-    }
-    const int dx = heroEnd > 168 ? heroEnd : 168;
-    const int bw = NOCT_W - dx - 6;
+    Rect c = panelM(g, 4, 26, 312, 78, "за окном");
+    weatherIcon(g, c.x + 22, c.y + 32, 17, w.wmoCode, ui.now);
+    g.setFont(&F_HUGE);
+    g.setTextSize(2);
+    snprintf(v, sizeof(v), "%+d", w.temp);
+    /* Ink-anchored: F_HUGE at double size writes a 94 px line for 64 px of
+     * digits, so a cursor placed by eye puts a third of the glyph outside
+     * whatever it was aimed at. */
+    const int ty = inkY(INK_HUGE, c.y, c.h, 2);
+    textAt(g, c.x + 44, ty, v, TEXT);
+    const int heroEnd = c.x + 44 + g.textWidth(v) + 10;
+    g.setTextSize(1);
+
+    /* The right column starts where the hero ENDS, measured: a two-digit
+     * sub-zero reading is wider than "+5", and a fixed column collided. */
+    const int dx = heroEnd > 176 ? heroEnd : 176;
+    const int bw = c.x + c.w - dx;
+    g.setFont(&F_TEXT);
+    snprintf(v, sizeof(v), "осадки %d%%", w.precip);
+    textAt(g, dx, c.y + 2, v, w.precip >= 50 ? INFO : DIM);
     g.setFont(&F_MED);
     String d = wmoRu(w.wmoCode);
-    bool oneLine = g.textWidth(d.c_str()) <= bw;
-    int y0 = oneLine ? 58 : 48;
-    textWrap(g, d.c_str(), dx, y0, bw, 20, 2, ORANGE);
+    textWrap(g, d.c_str(), dx, c.y + 20, bw, 19, 2, ORANGE);
   }
 
   /* Forecast, CENTRED so it isn't lopsided when fewer than 5 days arrive.
@@ -311,14 +308,14 @@ void drawWeather(UiCtx &ui) {
     int x0 = (NOCT_W - totalW) / 2;
     for (int i = 0; i < nd; i++) {
       int x = x0 + i * 62;
-      panel(g, x, 92, 56, 72, dayNames[i]); /* day name in the panel tab */
-      weatherIcon(g, x + 28, 116, 12, w.wfCode[i], ui.now);
+      panel(g, x, 108, 56, 62, dayNames[i]);
+      weatherIcon(g, x + 28, 132, 11, w.wfCode[i], ui.now);
       g.setFont(&F_MED);
       snprintf(v, sizeof(v), "%d", w.wfMax[i]);
-      textCenter(g, x + 28, 132, v, WARN); /* hi */
+      textCenter(g, x + 28, 144, v, WARN); /* hi */
       g.setFont(&F_TEXT);
       snprintf(v, sizeof(v), "%d", w.wfMin[i]);
-      textCenter(g, x + 28, 152, v, INFO); /* lo, inside y164 */
+      textCenter(g, x + 28, 160, v, INFO); /* lo, чернила 162..168 */
     }
 
     if (indoor) {
@@ -332,25 +329,25 @@ void drawWeather(UiCtx &ui) {
       /* The tile is 56 px wide; measure the label in the font it will actually
        * be drawn in, or "ForestHome" silently becomes "ForestHom" — which
        * reads as a typo rather than as a truncation. */
-      g.setFont(&F_SMALL);
-      clipW(g, z.name[0] ? z.name : "дома", tab, sizeof(tab), 52);
-      panel(g, x, 92, 56, 72, tab, stale ? DIM : ORANGE_DIM,
+      g.setFont(&F_TEXT);
+      clipW(g, z.name[0] ? z.name : "дома", tab, sizeof(tab), 48);
+      panel(g, x, 108, 56, 62, tab, stale ? DIM : ORANGE_DIM,
             stale ? DIM : ORANGE);
       g.setFont(&F_MED);
       if (z.temp10 != -32768) {
         snprintf(v, sizeof(v), "%d", (z.temp10 + (z.temp10 < 0 ? -5 : 5)) / 10);
-        textCenter(g, x + 28, 108, v, stale ? DIM : WARN);
+        textCenter(g, x + 28, 122, v, stale ? DIM : WARN);
       } else {
-        textCenter(g, x + 28, 112, "--", DIM);
+        textCenter(g, x + 28, 122, "--", DIM);
       }
       g.setFont(&F_TEXT);
       if (z.humidity >= 0) {
         snprintf(v, sizeof(v), "%d%%", z.humidity);
-        textCenter(g, x + 28, 132, v, stale ? DIM : INFO);
+        textCenter(g, x + 28, 142, v, stale ? DIM : INFO);
       }
       /* battery as a tiny bar: the number matters far less than "is it dying" */
       if (z.battery >= 0) {
-        int bw2 = 34, bx = x + 11, by = 148;
+        int bw2 = 34, bx = x + 11, by = 158;
         g.drawRect(bx, by, bw2, 7, stale ? DIM : ORANGE_DIM);
         g.fillRect(bx + bw2, by + 2, 2, 3, stale ? DIM : ORANGE_DIM);
         int fill = (bw2 - 2) * z.battery / 100;
@@ -358,7 +355,7 @@ void drawWeather(UiCtx &ui) {
           g.fillRect(bx + 1, by + 1, fill, 5,
                      z.battery < 20 ? CRIT : (stale ? DIM : GOOD));
       } else if (stale) {
-        textCenter(g, x + 28, 150, "молчит", DIM);
+        textCenter(g, x + 28, 156, "молчит", DIM);
       }
     }
   }
@@ -408,6 +405,9 @@ void drawClaude(UiCtx &ui) {
 
   /* right column: plan + today numbers */
   panel(g, 212, 28, 104, 136, "сегодня");
+  /* Content starts BELOW the label band. The plan badge is a filled rounded
+   * rect, so drawing it at the card's top did not merely overlap the word
+   * "сегодня" — it erased it. */
   g.setFont(&F_MED);
   g.setTextSize(1);
   if (c.plan.length()) {
@@ -419,23 +419,31 @@ void drawClaude(UiCtx &ui) {
      * multiplier's x back down where it reads as a multiplier. */
     for (unsigned int i = 1; i < p.length(); i++)
       if (p[i] == 'X' && p[i - 1] >= '0' && p[i - 1] <= '9') p.setCharAt(i, 'x');
-    g.fillRoundRect(220, 36, g.textWidth(p.c_str()) + 12, 20, 3, ORANGE);
-    textAt(g, 226, 38, p.c_str(), BG);
+    g.fillRoundRect(220, 42, g.textWidth(p.c_str()) + 12, 20, 3, ORANGE);
+    textAt(g, 226, 44, p.c_str(), BG);
   }
   if (c.todayTokens >= 1000000)
     snprintf(v, sizeof(v), "%.1fM", c.todayTokens / 1e6);
   else
     snprintf(v, sizeof(v), "%ldK", c.todayTokens / 1000);
-  textAt(g, 222, 60, v, TEXT);
+  textAt(g, 222, 66, v, TEXT);
   g.setFont(&F_TEXT);
-  textAt(g, 222, 82, "токенов", DIM);
+  textAt(g, 222, 86, "токенов", DIM);
   g.setFont(&F_MED);
   snprintf(v, sizeof(v), "%d", c.todayMsgs);
-  textAt(g, 222, 96, v, TEXT);
+  textAt(g, 222, 98, v, TEXT);
   g.setFont(&F_TEXT);
   textAt(g, 222, 118, "сообщений", DIM);
+  /* The third of today's three numbers. The card had thirty empty rows under
+   * the second one — "снизу пусто, некрасиво" — and the tool count was
+   * already in the payload, arriving and going nowhere. */
+  g.setFont(&F_MED);
+  snprintf(v, sizeof(v), "%d", c.todayTools);
+  textAt(g, 222, 130, v, TEXT);
+  g.setFont(&F_TEXT);
+  textAt(g, 222, 150, "вызовов", DIM);
   /* Same grammar as the status bar: a pip, not a word. */
-  if (c.stale) g.fillCircle(226, 130, 3, WARN);
+  if (c.stale) g.fillCircle(308, 34, 3, WARN);
 }
 
 /* ── FOREST ──────────────────────────────────────────────────────────── */
@@ -454,9 +462,13 @@ void drawForest(UiCtx &ui) {
   int cols = shown > 3 ? 2 : 1;
   int rows = (shown + cols - 1) / cols;
   int cw = cols == 1 ? 312 : 154;
-  /* fill the band y26..170 (144 px) across `rows`, capped for legibility */
+  /* Fill the band 26..170 across `rows`, and no cap.
+   *
+   * The cap at 122 was written when this screen showed two nodes: with three
+   * it left each card 48 px and the band 22 px short. It also meant a single
+   * OFFLINE node drew a 122 px card with one word in it — the owner's "снизу
+   * пусто" on a screen where the emptiness was structural. */
   int chh = (144 - (rows - 1) * 4) / rows;
-  if (chh > 122) chh = 122;
   for (int i = 0; i < shown; i++) {
     ForestNode &n = f.nodes[i];
     int x = 4 + (i % cols) * (cw + 4);
@@ -533,17 +545,18 @@ void drawServices(UiCtx &ui) {
     textCenter(g, NOCT_W / 2, 80, "нет данных о сервисах", DIM);
     return;
   }
-  /* service list spread over the full height (rows of 23px, up to 6) */
-  int shown = s.count > 6 ? 6 : s.count;
-  int pitch = shown > 0 ? (142 / (shown < 6 ? 6 : shown)) : 23;
-  if (pitch > 24) pitch = 24;
+  /* The container card is gone — "Докер... тут не нужен" — and the list
+   * takes the 100 px it was using. Seven services fit at a legible pitch
+   * where six were crowded into two thirds of the width. */
+  Rect lc = panelM(g, 4, 26, 312, 144, "сервисы");
+  int shown = s.count > 7 ? 7 : s.count;
+  int pitch = 19;
   for (int i = 0; i < shown; i++) {
     ServiceEntry &e = s.list[i];
-    int y = 28 + i * pitch;
+    int y = lc.y + 2 + i * pitch;
     uint16_t c = stColor(e.status);
-    g.fillCircle(13, y + 8, 5, c);
-    /* latency in a slim font, right-aligned — frees width for the name */
-    int nameRight = 206;
+    g.fillCircle(lc.x + 5, y + 8, 5, c);
+    int nameRight = lc.x + lc.w - 8;
     if (e.ms >= 0) {
       /* F_VALUE: the latency is the only NUMBER on this screen, and it was
        * set two steps smaller than the service name beside it — the name is
@@ -553,38 +566,23 @@ void drawServices(UiCtx &ui) {
       g.setTextSize(1);
       snprintf(v, sizeof(v), "%dms", e.ms);
       int mw = g.textWidth(v);
-      textAt(g, 206 - mw, inkY(INK_VALUE, y, 18), v,
+      textAt(g, lc.x + lc.w - 8 - mw, inkY(INK_VALUE, y, 18), v,
              e.ms > 500 ? WARN : TEXT);
-      nameRight = 206 - mw - 8;
+      nameRight = lc.x + lc.w - 16 - mw;
     }
     /* name clipped by display width so multi-byte Cyrillic never cuts mid-glyph
      * (was "%.11s" → "Игровой сервер" became broken "Игров") */
     char nm[40];
     g.setFont(&F_MED);
     g.setTextSize(1);
-    clipW(g, e.name, nm, sizeof(nm), nameRight - 26);
-    textAt(g, 26, y, nm, TEXT);
-    g.drawFastHLine(8, y + pitch - 2, 200, lerp565(BG, ORANGE_DIM, 120));
+    clipW(g, e.name, nm, sizeof(nm), nameRight - lc.x - 20);
+    textAt(g, lc.x + 16, y, nm, TEXT);
   }
-
-  /* docker + totals on the right, grown to fill the height */
-  panel(g, 216, 28, 100, 66, "docker");
-  g.setFont(&F_BIG);
-  if (s.dockUp >= 0) {
-    snprintf(v, sizeof(v), "%d/%d", s.dockUp, s.dockTotal);
-    textCenter(g, 266, 44, v, s.dockUp == s.dockTotal ? GOOD : WARN);
-  } else {
-    textCenter(g, 266, 44, "n/a", DIM);
-  }
+  /* The tally where the label is, so it costs no row of its own. */
   g.setFont(&F_TEXT);
-  textCenter(g, 266, 80, "контейнеры", DIM);
-
-  panel(g, 216, 100, 100, 64, "сервисы");
-  g.setFont(&F_BIG);
-  snprintf(v, sizeof(v), "%d/%d", s.up, s.count);
-  textCenter(g, 266, 118, v, s.up == s.count ? GOOD : CRIT);
-  g.setFont(&F_TEXT);
-  textCenter(g, 266, 152, "онлайн", DIM);
+  g.setTextSize(1);
+  snprintf(v, sizeof(v), "%d из %d на связи", s.up, s.count);
+  textRight(g, lc.x + lc.w, 28, v, s.up == s.count ? GOOD : WARN);
 }
 
 /* ── EVENTS ──────────────────────────────────────────────────────────── */
@@ -595,39 +593,74 @@ void drawEvents(UiCtx &ui) {
   char v[32];
 
   if (e.count == 0) {
+    /* Quiet is a state, not an absence. The screen used to answer it with two
+     * centred lines and two thirds of nothing — "пустовато тут" — so it now
+     * says what quiet is being claimed ON: which watcher is reporting, and
+     * whether the link that carries it is up. A green screen from a dead feed
+     * looks exactly like a green screen from a healthy one, and this is the
+     * difference. */
+    Rect c = panelM(g, 4, 26, 312, 60, "алерты");
+    g.setFont(&F_BIG);
+    g.setTextSize(1);
+    textAt(g, c.x, inkY(INK_BIG, c.y, c.h), "тихо в лесу", GOOD);
+
+    Rect d = panelM(g, 4, 90, 312, 80, "кто смотрит");
     g.setFont(&F_MED);
     g.setTextSize(1);
-    textCenter(g, NOCT_W / 2, 70, "ТИШИНА В ЛЕСУ", GOOD);
-    g.setTextSize(1);
-    textCenter(g, NOCT_W / 2, 100, "активных алертов нет", DIM);
+    textAt(g, d.x, d.y + 2, "Alertmanager", TEXT);
+    textRight(g, d.x + d.w, d.y + 2,
+              ui.st.link.tcpConnected ? "на связи" : "нет связи",
+              ui.st.link.tcpConnected ? GOOD : CRIT);
+    g.setFont(&F_TEXT);
+    textAt(g, d.x, d.y + 24,
+           "активных срабатываний нет — ни warning, ни critical", DIM);
+    if (ui.st.claude.available && ui.st.claude.weeklyPct >= 0) {
+      char q[40];
+      snprintf(q, sizeof(q), "лимит Claude: %d%% за неделю",
+               ui.st.claude.weeklyPct);
+      textAt(g, d.x, d.y + 40, q, DIM);
+    }
     return;
   }
 
   bool warnSev = strcmp(e.severity, "warning") == 0;
   uint16_t sc = warnSev ? WARN : CRIT;
-  /* banner */
-  g.fillRect(4, 26, 312, 34, PANEL);
-  g.drawRect(4, 26, 312, 34, sc);
-  if ((ui.now / 400) & 1) g.fillTriangle(16, 52, 28, 52, 22, 32, sc);
-  g.setFont(&F_MED);
-  g.setTextSize(1);
-  textAt(g, 38, 32, e.top, sc);
-  snprintf(v, sizeof(v), "%s  x%d", e.severity, e.count);
-  textAt(g, 8, 64, v, DIM);
 
-  /* human text — robust word+char wrap (long CVE ids etc.), up to 2 lines */
-  g.setFont(&F_MED);
-  textWrap(g, e.text, 8, 86, NOCT_W - 16, 21, 2, TEXT);
-
-  /* other firing alerts fill the freed bottom band (up to 3 more lines) */
-  if (uiOn(UI_STRIPS)) {
+  /* The alert itself, in its own card, with the severity and the count on the
+   * same line as the title rather than on a line of their own. */
+  {
+    Rect c = panelM(g, 4, 26, 312, 56, "срабатывание");
+    if ((ui.now / 400) & 1)
+      g.fillTriangle(c.x, c.y + 18, c.x + 12, c.y + 18, c.x + 6, c.y + 2, sc);
+    g.setFont(&F_MED);
+    g.setTextSize(1);
+    char nm[40];
+    clipW(g, e.top, nm, sizeof(nm), c.w - 90);
+    textAt(g, c.x + 18, c.y + 2, nm, sc);
     g.setFont(&F_TEXT);
+    snprintf(v, sizeof(v), "%s x%d", e.severity, e.count);
+    textRight(g, c.x + c.w, c.y + 6, v, DIM);
+    /* The human sentence, at F_MED. It was the whole point of the screen and
+     * it was set in the same face as the timestamps beside it. */
+    g.setFont(&F_MED);
+    textWrap(g, e.text, c.x, c.y + 22, c.w, 18, 1, TEXT);
+  }
+
+  /* Everything else that is firing. */
+  {
+    Rect c2 = panelM(g, 4, 86, 312, 84,
+                     e.count > 1 ? "ещё горит" : "подробности");
+    g.setFont(&F_MED);
+    g.setTextSize(1);
+    textWrap(g, e.text, c2.x, c2.y + 2, c2.w, 18, 2, DIM);
     int shown = 0;
+    g.setFont(&F_TEXT);
     for (int i = 1; i < e.count && i < EventsData::kMaxList; i++) {
       if (!e.list[i][0]) continue;
       snprintf(v, sizeof(v), "+ %s", e.list[i]);
-      textAt(g, 8, 134 + shown * 12, v, DIM);
+      textAt(g, c2.x, c2.y + 40 + shown * 14, v, DIM);
       shown++;
+      if (shown >= 2) break;
     }
   }
 }

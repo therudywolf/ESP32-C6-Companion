@@ -9,6 +9,7 @@
 #include <Arduino.h>
 
 #include "core/ClimateAnalysis.h"
+#include "ui/SceneIds.h"
 
 #define NOCT_HDD_COUNT 4
 #define NOCT_FAN_COUNT 4
@@ -46,6 +47,26 @@ struct WeatherData {
   int wfMin[kMaxDays] = {0};
   int wfMax[kMaxDays] = {0};
   int wfCode[kMaxDays] = {0};
+};
+
+/* What the room will read later, and how sure of it the model is.
+ *
+ * Fitted on the PC from the climate archive against the outdoor log — see
+ * roomcast.py — and sent as an answer, never as inputs to re-derive here.
+ * `why` carries the refusal when there is none, because "мало данных: 41 пар
+ * из 60" is a useful thing to read and an empty card is not. */
+struct RoomForecast {
+  static const int kH = 2;
+  bool ok = false;
+  int hours[kH] = {3, 12};
+  int temp10[kH] = {0, 0};   /* прогноз, десятые градуса */
+  int sd10[kH] = {0, 0};     /* полоса (одна сигма), десятые */
+  int rh[kH] = {-1, -1};     /* влажность, % ; -1 = не считалась */
+  int street10[kH] = {0, 0}; /* улица на тот же час, десятые */
+  bool haveStreet = false;
+  String why = "";           /* почему ответа нет */
+  String risk = "";          /* одна вероятностная строка */
+  bool received = false;
 };
 
 struct ProcessData {
@@ -203,6 +224,16 @@ struct Settings {
   /* Which scenes appear in the nav ring / carousel (bit i = SceneId i). DEN
    * (bit 0) is forced on. Default: everything visible. */
   uint32_t sceneMask = 0xFFFFFFFFu; /* "scnMask" */
+  /* Carousel shape from the panel. Held in AppState rather than applied
+   * straight to Settings so main() can compare before writing: a value
+   * re-sent at 1 Hz that writes NVS every time would burn the flash and
+   * hitch the frame. -1 means "not in this command". */
+  /* Carousel shape: which mode, and how often each scene takes a turn.
+   * See ui/Carousel.h — the frequency table is what a "mode" actually is,
+   * and a preset is just a table somebody already filled in. Stored as a
+   * blob rather than twenty keys: NVS writes are the slow part. */
+  int carPreset = 1;                /* "carPre" index into carousel::PRESETS */
+  uint8_t carFreq[SCENE_COUNT] = {0}; /* "carFreq" filled from the preset */
   /* Quiet hours: between nightFrom:00 and nightTo:00 the panel drops to
    * NOCT_NIGHT_BRIGHT and the mood LED goes dark. Needs the NTP clock; a
    * button press suspends it briefly. Alerts always override. */
@@ -256,6 +287,7 @@ struct BootInfo {
 struct AppState {
   HardwareData hw;
   WeatherData weather;
+  RoomForecast roomcast;
   MediaData media;
   NotifData notif;
   ProcessData process;
@@ -378,6 +410,10 @@ struct AppState {
   int rcBlMins = 15;
   /* Greyscale + no backdrop, for comparing screenshots. -1 = no change. */
   int rcMono = -1;
+  int rcReview = -1;
+  int rcCarMode = -1;
+  uint8_t rcCarFreq[SCENE_COUNT] = {0};
+  int rcCarFreqN = 0;
   /* Per-panel tone: channel gains in percent (0 = no change) and the black
    * point (-1 = no change). NOT one-shot on the server, so the values are
    * re-sent after a board reboot and the correction survives it. */

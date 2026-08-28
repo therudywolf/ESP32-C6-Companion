@@ -124,16 +124,29 @@ void drawBoard(UiCtx &ui) {
      * fits — which makes it a reading, not a footnote, and it was set in the
      * smallest face on the device. F_VALUE puts it back above the threshold
      * an eye resolves from a metre. */
-    g.setFont(&F_TEXT);
-    textAt(g, x1 + 8, below + 4, "мин", DIM);
-    g.setFont(&F_VALUE);
-    snprintf(v, sizeof(v), "%d", st.heapMinKb);
-    textAt(g, x1 + 32, below, v, st.heapMinKb < 45 ? WARN : TEXT);
-    g.setFont(&F_TEXT);
-    textAt(g, x1 + 66, below + 4, "блок", DIM);
-    g.setFont(&F_VALUE);
-    snprintf(v, sizeof(v), "%d", st.heapLargestKb);
-    textAt(g, x1 + 96, below, v, DIM);
+    /* Two label-and-number pairs, laid out by MEASURING each piece instead
+     * of by four hand-counted x offsets. "мин 15  блок 16" drifted because
+     * the offsets assumed two-digit readings and the largest free block is
+     * regularly three — the owner's "мин 15 блок 16 — тоже как-то криво". */
+    {
+      const int fy = below + 2;
+      int fx = x1 + 8;
+      struct {
+        const char *label;
+        int kb;
+        bool warn;
+      } pair[2] = {{"мин", st.heapMinKb, st.heapMinKb < 45},
+                   {"блок", st.heapLargestKb, false}};
+      for (int k = 0; k < 2; k++) {
+        g.setFont(&F_TEXT);
+        textAt(g, fx, fy + 4, pair[k].label, DIM);
+        fx += g.textWidth(pair[k].label) + 4;
+        g.setFont(&F_VALUE);
+        snprintf(v, sizeof(v), "%d", pair[k].kb);
+        textAt(g, fx, fy, v, pair[k].warn ? WARN : (k ? DIM : TEXT));
+        fx += g.textWidth(v) + 10;
+      }
+    }
   }
 
   /* ── loop duty cycle ─────────────────────────────────────────────────── */
@@ -197,14 +210,17 @@ void drawBoard(UiCtx &ui) {
     g.setFont(&F_TEXT);
     const BootInfo &b = st.boot;
     /* A self-heal on a device nobody is watching is invisible without this. */
+    /* Both rows measured against the card, not against the hero's font
+     * height. The second one ran to y1+47 and its ink reached the card's
+     * bottom rim at y1+59 — "пусков-сбоев налазят на рамку". */
+    char clipped[40];
     snprintf(v, sizeof(v), "рестарт: %s", b.reasonText);
-    textAt(g, x1 + 8, y1 + 38, v, b.lastWasFault ? WARN : DIM);
-    /* The file's own header says this screen exists so a silent self-heal
-     * becomes a number. A number nobody can read from where the board sits
-     * does not do that. */
+    clipW(g, v, clipped, sizeof(clipped), cw - 16);
+    textAt(g, x1 + 8, y1 + 34, clipped, b.lastWasFault ? WARN : DIM);
     snprintf(v, sizeof(v), "пусков %lu, сбоев %lu", (unsigned long)b.bootCount,
              (unsigned long)b.faultCount);
-    textAt(g, x1 + 8, y1 + 47, v, b.faultCount > 0 ? WARN : DIM);
+    clipW(g, v, clipped, sizeof(clipped), cw - 16);
+    textAt(g, x1 + 8, y1 + 46, clipped, b.faultCount > 0 ? WARN : DIM);
   }
 
   /* ── footer: the rest of the identity, one line ──────────────────────── */
