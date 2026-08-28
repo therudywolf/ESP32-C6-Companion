@@ -1210,18 +1210,6 @@ void loop() {
       sceneMgr.toast(asked ? "опрашиваю датчик" : "некого опрашивать");
       state.rcZbPoll = -1;
     }
-    if (state.rcToneR > 0 || state.rcToneG > 0 || state.rcToneB > 0 ||
-        state.rcToneK >= 0) {
-      theme::setTone(state.rcToneR, state.rcToneG, state.rcToneB,
-                     state.rcToneK);
-      state.rcToneR = state.rcToneG = state.rcToneB = 0;
-      state.rcToneK = -1;
-    }
-    if (state.rcMono >= 0) {
-      theme::setMono(state.rcMono != 0);
-      sceneMgr.toast(state.rcMono ? "ч/б режим" : "цвет вернулся");
-      state.rcMono = -1;
-    }
     if (state.rcBlMax > 0) {
       /* Same override the console's blmax drives, and the same automatic
        * revert. Refused below the standing cap: raising the ceiling to
@@ -1426,6 +1414,14 @@ void loop() {
                   state.boot.reasonText, state.blNow, state.blCap,
                   state.blThermal, state.blForceLeft);
   }
+
+  /* Panel calibration, applied every tick rather than on a command edge.
+   *
+   * It is not a command: it describes the glass, the board keeps it only in
+   * RAM, and a restart must not silently undo it. Both setters compare before
+   * they act, so the steady-state cost is four integer comparisons. */
+  theme::setTone(state.rcToneR, state.rcToneG, state.rcToneB, state.rcToneK);
+  if (state.rcMono >= 0) theme::setMono(state.rcMono != 0);
 
   /* Hub state upstream, so the panel's "check connection" shows the board's
    * answer rather than the server's guess. */

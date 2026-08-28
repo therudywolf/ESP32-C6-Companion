@@ -508,6 +508,19 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
   /* Remote control: act once per seq change (companion app). */
   if (doc["rc"].is<JsonObject>()) {
     JsonObject rc = doc["rc"];
+    /* Calibration is read on EVERY payload, not once per seq change.
+     *
+     * These describe the panel, not an action, and the board holds them only
+     * in RAM. Gated behind the seq counter they were applied once and then
+     * lost at the next restart, because the counter had not moved — the
+     * owner saw a corrected slider in the web panel and an uncorrected screen
+     * in front of him. setTone/setMono do nothing when the value already
+     * matches, so re-reading them at 1 Hz costs a comparison. */
+    state.rcToneR = rc["toner"] | 0;
+    state.rcToneG = rc["toneg"] | 0;
+    state.rcToneB = rc["toneb"] | 0;
+    state.rcToneK = rc["tonek"] | -1;
+    state.rcMono = rc["mono"] | -1;
     long seq = rc["seq"] | -1L;
     if (seq >= 0 && seq != state.rcSeq) {
       state.rcSeq = seq;
@@ -517,11 +530,6 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcTheme = rc["theme"] | -1;
       state.rcBright = rc["bright"] | -1;
       state.rcBlMax = rc["blmax"] | -1;
-      state.rcMono = rc["mono"] | -1;
-      state.rcToneR = rc["toner"] | 0;
-      state.rcToneG = rc["toneg"] | 0;
-      state.rcToneB = rc["toneb"] | 0;
-      state.rcToneK = rc["tonek"] | -1;
       state.rcBlMins = rc["blmins"] | 15;
       state.rcAction = (const char *)(rc["action"] | "");
       state.rcLed = rc["led"] | -1;
