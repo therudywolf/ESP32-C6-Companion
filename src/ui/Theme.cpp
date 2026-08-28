@@ -337,6 +337,7 @@ void applyMono() {
 }
 
 void setMono(bool on) {
+  if (on == monoMode) return; /* called every tick now — see setTone */
   /* One switch, because the two halves are useless apart: hue hides a pixel
    * of drift, and an animated backdrop makes two captures uncomparable even
    * in grey. The previous background style is remembered so turning the mode
@@ -411,10 +412,18 @@ static void paletteChanged() {
 static int clampGain(int v) { return v < 30 ? 30 : (v > 300 ? 300 : v); }
 
 void setTone(int gainR, int gainG, int gainB, int black) {
-  if (gainR > 0) toneR = clampGain(gainR);
-  if (gainG > 0) toneG = clampGain(gainG);
-  if (gainB > 0) toneB = clampGain(gainB);
-  if (black >= 0) toneBlack = black > 96 ? 96 : black;
+  /* Compare first: this is now called on every payload, and re-deriving the
+   * whole palette at 1 Hz for values that did not move would be a frame of
+   * work per second spent on nothing. */
+  int nr = gainR > 0 ? clampGain(gainR) : toneR;
+  int ng = gainG > 0 ? clampGain(gainG) : toneG;
+  int nb = gainB > 0 ? clampGain(gainB) : toneB;
+  int nk = black >= 0 ? (black > 96 ? 96 : black) : toneBlack;
+  if (nr == toneR && ng == toneG && nb == toneB && nk == toneBlack) return;
+  toneR = nr;
+  toneG = ng;
+  toneB = nb;
+  toneBlack = nk;
   applyPreset(currentPreset);
 }
 
