@@ -515,7 +515,19 @@ void drawForest(UiCtx &ui) {
     g.setFont(&F_MED);
     g.setTextSize(1);
     char nm[24];
-    clipW(g, n.name, nm, sizeof(nm), cw - 28);
+    /* Имя уступает место короткой строке о том, чем нода занята: «27 LAN
+     * 3 VPN» на роутере, «57 docker» на сервере. Поле приходило в посылке с
+     * самого начала и никуда не рисовалось. */
+    int nameW = cw - 28;
+    if (n.extra[0]) {
+      g.setFont(&F_TEXT);
+      g.setTextSize(1);
+      int ew = g.textWidth(n.extra);
+      textRight(g, x + cw - 8, y + 8, n.extra, DIM);
+      nameW -= ew + 8;
+      g.setFont(&F_MED);
+    }
+    clipW(g, n.name, nm, sizeof(nm), nameW);
     textAt(g, x + 22, y + 4, nm, TEXT);
     if (down) {
       /* «Нет метрик» и «хост лежит» — разные вещи, и на этой плате разница
