@@ -74,9 +74,12 @@ static void quantity(LGFX_Sprite &g, int x, int y, int w, int h,
     textAt(g, c.x + nw + 3, base - INK_TEXT.top - INK_TEXT.height, unit, DIM);
   }
   g.setFont(&F_TEXT);
-  int wy = c.y + INK_BIG.height + 6;
+  /* +9, а не +6: значение в F_BIG стоит от c.y и кончается чернилами на
+   * INK_BIG.height, так что шесть рядов сверху — это ноль просвета после
+   * выносных элементов вроде запятой в «23,2». */
+  int wy = c.y + INK_BIG.height + 9;
   if (w3) textAt(g, c.x, wy, w3, DIM);
-  if (w24) textAt(g, c.x, wy + INK_TEXT.box + 1, w24, DIM);
+  if (w24) textAt(g, c.x, wy + INK_TEXT.box + 2, w24, DIM);
 }
 
 /* One horizon of the forecast: "через 3 ч", the value with its band, and the
@@ -136,9 +139,10 @@ void drawAnalysis(UiCtx &ui) {
   const ZbSensor &z = have ? st.zb.list[0] : st.zb.list[0];
 
   /* ── три карточки: то, что датчик действительно меряет ───────────────── */
-  /* 72, не 70: вторая строка окна ложилась чернилами на нижнюю кромку
-   * карточки — на всех трёх сразу, потому что все три считались одинаково. */
-  const int CW = 101, CH = 72;
+  /* 76 рядов: ярлык 12, значение 24 чернил, два окна по 11 и просветы по
+   * три между всеми — семьдесят два не вмещали просветы, и окна вставали
+   * вплотную к значению и к кромке. */
+  const int CW = 101, CH = 76;
 
   /* влажность */
   if (have && z.humidity >= 0) {
@@ -187,14 +191,14 @@ void drawAnalysis(UiCtx &ui) {
     /* Ярлык несёт СОСТОЯНИЕ. «прогноз по датчику» над строкой «прогноза пока
      * нет» — это заголовок, который спорит со своим содержимым, и он же
      * съедал ряд, которого потом не хватало причине отказа. */
-    Rect c = panelM(g, 4, 102, 312, 68,
+    Rect c = panelM(g, 4, 105, 312, 66,
                     st.roomcast.ok ? "прогноз по датчику" : "прогноза пока нет");
     const RoomForecast &rc = st.roomcast;
 
     if (rc.ok) {
-      horizon(g, c.x, c.y + 2, c.w, rc.hours[0], rc.temp10[0], rc.sd10[0],
+      horizon(g, c.x, c.y, c.w, rc.hours[0], rc.temp10[0], rc.sd10[0],
               rc.rh[0], rc.haveStreet, rc.street10[0]);
-      horizon(g, c.x, c.y + 22, c.w, rc.hours[1], rc.temp10[1], rc.sd10[1],
+      horizon(g, c.x, c.y + 19, c.w, rc.hours[1], rc.temp10[1], rc.sd10[1],
               rc.rh[1], rc.haveStreet, rc.street10[1]);
       g.setFont(&F_TEXT);
       g.setTextSize(1);
@@ -202,11 +206,11 @@ void drawAnalysis(UiCtx &ui) {
         /* The one line that is a PROBABILITY rather than a value. It only
          * appears when the model puts at least 15 % on it, so its presence
          * is itself the news. */
-        textAt(g, c.x, c.y + 46, rc.risk.c_str(), WARN);
+        textAt(g, c.x, c.y + 38, rc.risk.c_str(), WARN);
       } else if (st.zbPressPct >= 0) {
         snprintf(v, sizeof(v), "давление выше %d%% всех показаний за все время",
                  st.zbPressPct);
-        textAt(g, c.x, c.y + 46, v, DIM);
+        textAt(g, c.x, c.y + 38, v, DIM);
       }
     } else {
       /* No forecast is a fact with a reason, and the reason is the useful
@@ -217,7 +221,7 @@ void drawAnalysis(UiCtx &ui) {
                             ? rc.why.c_str()
                             : (rc.received ? "сервер не прислал причину"
                                            : "нет связи с сервером");
-      textWrap(g, why, c.x, c.y + 2, c.w, 14, 2, DIM);
+      textWrap(g, why, c.x, c.y + 2, c.w, 15, 2, DIM);
       if (st.zbFindCount > 0) {
         /* Something to say while the model warms up: the strongest pattern
          * the on-board analysis found, which needs no history but today's.
@@ -227,7 +231,7 @@ void drawAnalysis(UiCtx &ui) {
         uint16_t fc = f.severity >= 2 ? CRIT : (f.severity == 1 ? WARN : GOOD);
         char ft[48];
         clipW(g, f.title, ft, sizeof(ft), c.w);
-        textAt(g, c.x, c.y + 30, ft, fc);
+        textAt(g, c.x, c.y + 34, ft, fc);
       }
     }
   }

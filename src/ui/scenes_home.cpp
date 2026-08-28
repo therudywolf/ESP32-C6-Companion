@@ -304,7 +304,7 @@ void drawHome(UiCtx &ui) {
      * introduces itself, and the row it cost is the row the evidence needs.
      * The trend window moves to the right of the claim, where it is still
      * feedback for the long press but is not spending a line of its own. */
-    Rect c = panelM(g, 4, 134, 312, 36);
+    Rect c = panelM(g, 4, 132, 312, 38);
     const char *line = nullptr;
     uint16_t lc = TEXT;
     int ax = c.x;
@@ -341,7 +341,10 @@ void drawHome(UiCtx &ui) {
     g.setFont(&F_TEXT);
     char age[40];
     fmtAge(z, age, sizeof(age));
-    int y2 = c.y + c.h - 10;
+    /* -8, а не -10: чернила строки прогноза в F_MED кончаются на
+     * пятнадцатом ряду от её верха, и подпись датчика начиналась ровно
+     * следующим — ноль рядов просвета. */
+    int y2 = c.y + c.h - 8;
     textAt(g, c.x, y2, z.name[0] ? z.name : NOCT_ZB_NET_NAME,
            stale ? DIM : ORANGE);
     if (ui.st.zbTrendOk) {
