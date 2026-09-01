@@ -29,9 +29,11 @@ Nocturne C6 (ESP32-C6, экран 320×172), которая показывает
 | `vpn` | `awg_peers, awg_peers_active` | справочно |
 
 Проверить: `curl -s https://forestserver.ru/stats.json | jq '.nb, .router'`.
-Сейчас `nb` — все поля пустые строки. **Вопрос 1:** это потому что ноутбук
-выключен, или потому что его экспортёр не настроен? Если второе — что нужно
-поднять, чтобы `nb` наполнился.
+`nb` — все поля пустые строки, когда ноутбук выключен. **Вопрос 1 (закрыт
+01.09.2026):** экспортёр на ноутбуке есть и работал — Prometheus помнит три
+сеанса `NB-RUDYWOLF` в августе, последний `up=1` 18.08 19:06. `stats.sh`
+подставляет пустую строку, когда серии нет, ровно по контракту. Поднимать
+нечего: включится ноутбук — наполнится сам.
 
 ### 2. Prometheus через прокси Grafana
 `https://forestserver.ru/monitoring/api/datasources/proxy/uid/prometheus/api/v1/query`
@@ -71,14 +73,20 @@ max(proton_interface_up)           # «на связи» при > 0  → «Proto
 
 ### 5. Alertmanager → плата и → Telegram
 ПК опрашивает `https://forestserver.ru/monitoring/alertmanager/api/v2/alerts`
-и показывает активные алерты на экране **СОБЫТИЯ**. Telegram при этом
-получает их напрямую от Alertmanager (integration `telegram`) — ПК в этом не
-участвует.
+и показывает активные алерты на экране **СОБЫТИЯ**. В Telegram ПК не пишет
+вообще. Маршрут на forestserver двойной: **critical** идут напрямую через
+integration `telegram`, **warning** — только через бота (`monitoring-tgbot`
+принимает вебхуки Alertmanager и отправляет сам).
 
-**Вопрос 2 (главный):** за последние 7 дней
-`alertmanager_notifications_failed_total{integration="telegram"}` вырос на 3,
-и сработал алерт `AlertDeliveryFailing{integration="telegram",severity="critical"}`.
-Владелец говорит, что алерты в Telegram перестали приходить. Выясни причину:
+**Вопрос 2 (закрыт 01.09.2026, оставлен как пример).** Прирост
+`alertmanager_notifications_failed_total{integration="telegram"}` на 3 был
+историческим: все три отказа легли в час 28.08 11:06–12:06 — контейнер
+Alertmanager работал под `nobody` и не мог прочитать секрет `tg_bot_token`
+(0600, uid 1000). Исправлено в тот же день (`user: root` в docker-compose,
+коммит 81d9108); с перезапуска отказов 0, `AlertDeliveryFailing` не горит,
+бот за неделю отправил 66 вебхуков без ошибок. Гипотеза про Proton-шлюз
+опровергнута: маршрут контейнера идёт через обычный аплинк. Если это
+повторится — вот с чего начинать:
 
 ```
 docker logs monitoring-alertmanager --since 168h 2>&1 | grep -i -E 'telegram|notify|level=error' | tail -50
