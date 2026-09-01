@@ -123,7 +123,9 @@ void drawCpu(UiCtx &ui) {
     if (!ui.st.process.cpuNames[i].length()) continue;
     snprintf(v, sizeof(v), "%.13s %d%%", ui.st.process.cpuNames[i].c_str(),
              ui.st.process.cpuPercent[i]);
-    textAt(g, 12, 130 + i * 20, v, i == 0 ? TEXT : DIM);
+    /* 132: чернила ярлыка «топ процессы / такт» кончаются на 131-м ряду, и
+     * на 130 между ним и первой строкой оставался один ряд. */
+    textAt(g, 12, 132 + i * 19, v, i == 0 ? TEXT : DIM);
   }
   snprintf(v, sizeof(v), "%.1f", hw.cc / 1000.0f);
   bigVal(g, 306, 130, 26, v, "GHz", INFO, true);

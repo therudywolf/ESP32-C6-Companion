@@ -13,6 +13,52 @@
 #include <Arduino.h>
 #include <string.h>
 
+/* Что из этого кодпоинта попадёт на экран.
+ *
+ * Один источник правды для обоих фильтров ниже: они уже разъезжались, и
+ * длинное тире стояло в списке «пропустить» у обоих, хотя нет его ни в одном
+ * шрифте платы. Шрифты покрывают ASCII 0x20..0x7E и кириллицу 0x410..0x44F,
+ * и всё; проверено разбором таблиц глифов, а не по памяти
+ * (tools/check_glyphs.py).
+ *
+ * Возвращает строку-замену, либо пустую строку, когда символ надо выбросить,
+ * либо nullptr, когда символ можно пропустить как есть.
+ *
+ * Замена, а не выбрасывание, там где символ несёт смысл: «85±2» без
+ * плюс-минуса — это другое число, а «A→B» без стрелки — не то же самое, что
+ * «A B». */
+inline const char *glyphSubstitute(uint32_t cp) {
+  /* Есть в шрифтах — пропускаем как есть. */
+  if (cp >= 0x20 && cp <= 0x7E) return nullptr;
+  if (cp >= 0x0410 && cp <= 0x044F) return nullptr;
+
+  switch (cp) {
+  /* Ё и ё есть в F_SMALL и F_MED, но НЕ в F_TEXT. Серверный текст сегодня
+   * рисуется не в нём, а завтра может — и квадрат вернётся молча. */
+  case 0x0401: return "Е";
+  case 0x0451: return "е";
+  /* Тире всех сортов и типографский минус. */
+  case 0x2010: case 0x2011: case 0x2012: case 0x2013: case 0x2014:
+  case 0x2015: case 0x2212: return "-";
+  case 0x2022: case 0x00B7: return "-";
+  case 0x2026: return "...";
+  /* Пробелы, которых нет в шрифте, но которые всё-таки пробелы. */
+  case 0x00A0: case 0x2007: case 0x2009: case 0x202F: return " ";
+  case 0x00B1: return "+-";
+  case 0x00D7: return "x";
+  case 0x2192: return "->";
+  case 0x2190: return "<-";
+  case 0x2191: return "^";
+  case 0x2193: return "v";
+  case 0x2116: return "N";
+  case 0x2264: return "<=";
+  case 0x2265: return ">=";
+  case 0x201C: case 0x201D: case 0x201E: return "\"";
+  case 0x2018: case 0x2019: return "'";
+  default: return ""; /* градус, кавычки-ёлочки, эмодзи, акценты — выбросить */
+  }
+}
+
 inline String stripGlyphs(const String &in) {
   String out;
   out.reserve(in.length());
@@ -36,17 +82,12 @@ inline String stripGlyphs(const String &in) {
       cp = ((c & 0x07) << 18) | (((uint8_t)in[i + 1] & 0x3F) << 12) |
            (((uint8_t)in[i + 2] & 0x3F) << 6) | ((uint8_t)in[i + 3] & 0x3F);
 
-    if ((cp >= 0x0400 && cp <= 0x04FF) || cp == 0x2014) {
-      for (int k = 0; k < len; k++) out += in[i + k]; /* Cyrillic / em-dash */
-    } else if (cp == 0x2026) {
-      out += "..."; /* ellipsis */
-    } else if (cp == 0x2013 || cp == 0x2022 || cp == 0x00B7) {
-      out += '-'; /* en-dash / bullet / middle dot */
-    } else if (cp == 0x00AB || cp == 0x00BB || cp == 0x201C || cp == 0x201D ||
-               cp == 0x201E || cp == 0x2018 || cp == 0x2019) {
-      /* guillemets «» and curly quotes — drop entirely */
+    const char *sub = glyphSubstitute(cp);
+    if (sub == nullptr) {
+      for (int k = 0; k < len; k++) out += in[i + k];
+    } else {
+      out += sub; /* "" выбрасывает, всё прочее подставляет ASCII */
     }
-    /* everything else (emoji, accented Latin, symbols) dropped */
     i += len;
   }
   return out;
@@ -123,14 +164,18 @@ inline String stripGlyphsEmoji(const String &in) {
       cp = ((c & 0x07) << 18) | (((uint8_t)in[i + 1] & 0x3F) << 12) |
            (((uint8_t)in[i + 2] & 0x3F) << 6) | ((uint8_t)in[i + 3] & 0x3F);
 
-    if ((cp >= 0x0400 && cp <= 0x04FF) || cp == 0x2014 || isEmojiCp(cp)) {
-      for (int k = 0; k < len; k++) out += in[i + k]; /* Cyrillic / em-dash / emoji */
-    } else if (cp == 0x2026) {
-      out += "...";
-    } else if (cp == 0x2013 || cp == 0x2022 || cp == 0x00B7) {
-      out += '-';
+    /* Эмодзи здесь ЖИВУТ: уведомления рисуются со своим атласом
+     * (ui/emoji_atlas.h), а не шрифтом, поэтому для них правило другое. */
+    if (isEmojiCp(cp)) {
+      for (int k = 0; k < len; k++) out += in[i + k];
+    } else {
+      const char *sub = glyphSubstitute(cp);
+      if (sub == nullptr) {
+        for (int k = 0; k < len; k++) out += in[i + k];
+      } else {
+        out += sub;
+      }
     }
-    /* guillemets / curly quotes / accented latin dropped */
     i += len;
   }
   return out;

@@ -944,42 +944,63 @@ static void lintGlyphReport(const char *why, const char *s, int x, int y,
                 lcScene, why, s, x, y, fh);
 }
 
-/* The letters haxrcorp4089_t_cyrillic does NOT have.
+/* Что этот шрифт умеет нарисовать.
  *
- * Its name says cyrillic and it draws 61 of the 66 Russian letters, so the
- * gap is invisible until a string happens to use one of the five it lacks —
- * which is how "что это значит" reached the pressure screen reading
- * "что [] то значит". The list comes from parsing the font's own glyph
- * table, not from reading a photograph: lowercase э, Ё and ё are absent,
- * uppercase Э is present.
+ * Выведено разбором таблиц глифов U8g2, а не по названию шрифта:
  *
- * Written as UTF-8 byte pairs because that is the form they arrive in. */
-static bool textFontLacks(const unsigned char *p) {
-  if (p[0] == 0xD1 && (p[1] == 0x8D || p[1] == 0x91)) return true; /* э ё */
-  if (p[0] == 0xD0 && p[1] == 0x81) return true;                   /* Ё */
+ *   латинские (F_VALUE, F_BIG, F_HUGE)  ASCII 0x20..0x7E и всё
+ *   F_TEXT (haxrcorp4089_t_cyrillic)    + 0x410..0x44F, КРОМЕ строчной э,
+ *                                         и без Ё/ё — при том, что
+ *                                         «cyrillic» стоит в его имени
+ *   F_SMALL, F_MED                      + 0x410..0x44F, Ё, ё
+ *
+ * Правило проверяет КОДПОИНТ, а не список известных букв. Прошлая версия
+ * знала ровно про э, Ё и ё, потому что я вписал туда то, что уже нашёл
+ * глазами; строки от сервера — имена алертов из Alertmanager — в исходниках
+ * не лежат и могут содержать что угодно. Длинное тире в одном из них и
+ * рисовалось квадратом. */
+static bool fontHasCp(const Ink *k, uint32_t cp) {
+  if (cp >= 0x20 && cp <= 0x7E) return true;
+  if (k->latin) return false;
+  if (cp >= 0x0410 && cp <= 0x044F) return !(k == &INK_TEXT && cp == 0x044D);
+  if (cp == 0x0401 || cp == 0x0451) return k != &INK_TEXT;
   return false;
+}
+
+/* Первый кодпоинт UTF-8 и длина его последовательности. */
+static uint32_t nextCp(const unsigned char *p, int *len) {
+  unsigned char c = p[0];
+  if (c < 0x80) { *len = 1; return c; }
+  if (c < 0xE0) { *len = 2; return p[1] ? ((c & 0x1Fu) << 6) | (p[1] & 0x3Fu) : 0; }
+  if (c < 0xF0) {
+    *len = 3;
+    if (!p[1] || !p[2]) return 0;
+    return ((c & 0x0Fu) << 12) | ((p[1] & 0x3Fu) << 6) | (p[2] & 0x3Fu);
+  }
+  *len = 4;
+  if (!p[1] || !p[2] || !p[3]) return 0;
+  return ((c & 0x07u) << 18) | ((p[1] & 0x3Fu) << 12) | ((p[2] & 0x3Fu) << 6) |
+         (p[3] & 0x3Fu);
 }
 
 static void lintCyrillic(LGFX_Sprite &g, int x, int y, const char *s) {
   int sz = 1;
   const Ink *k = inkFor(g.fontHeight(), &sz);
   if (!k) return;
-  if (!k->latin) {
-    if (k == &INK_TEXT)
-      for (const unsigned char *p = (const unsigned char *)s; p[0] && p[1]; p++)
-        if (p[0] >= 0x80 && textFontLacks(p)) {
-          lintGlyphReport("В ЭТОМ ШРИФТЕ НЕТ БУКВЫ э/Ё/ё - будет квадрат",
-                          s, x, y, g.fontHeight());
-          return;
-        }
-    return;
-  }
-  for (const unsigned char *p = (const unsigned char *)s; *p; p++)
-    if (*p >= 0x80) {
-      lintGlyphReport("КИРИЛЛИЦА В ЛАТИНСКОМ ШРИФТЕ - будут квадраты",
-                      s, x, y, g.fontHeight());
+  for (const unsigned char *p = (const unsigned char *)s; *p;) {
+    int len = 1;
+    uint32_t cp = nextCp(p, &len);
+    if (!cp) break;
+    if (!fontHasCp(k, cp)) {
+      char why[72];
+      snprintf(why, sizeof(why),
+               "НЕТ ГЛИФА U+%04X В ЭТОМ ШРИФТЕ - будет квадрат",
+               (unsigned)cp);
+      lintGlyphReport(why, s, x, y, g.fontHeight());
       return;
     }
+    p += len;
+  }
 }
 
 /* Does this string reach below the baseline?
