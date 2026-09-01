@@ -155,12 +155,15 @@ def main():
         cover = g if cover is None else (cover & g)
 
     ui = os.path.join(ROOT, 'src', 'ui')
+    # src/pet: only the phrase table is ever drawn; PetBrain's literals are
+    # LLM prompts and may use any punctuation they like.
+    pet = os.path.join(ROOT, 'src', 'pet')
     bad = 0
     warn = 0
-    for fn in sorted(os.listdir(ui)):
+    for d, fn in sorted([(ui, f) for f in os.listdir(ui)] + [(pet, 'PhraseCache.cpp')]):
         if not fn.endswith(('.cpp', '.h')):
             continue
-        for line, text in literals(os.path.join(ui, fn)):
+        for line, text in literals(os.path.join(d, fn)):
             seen = set()
             for ch in text:
                 cp = ord(ch)

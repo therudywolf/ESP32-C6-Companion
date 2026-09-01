@@ -159,14 +159,104 @@ String PetBrain::buildContext(const char *eventRu, AppState &st) {
   return c;
 }
 
+int PetBrain::clockHour() {
+  time_t t = time(nullptr);
+  struct tm tmv;
+  if (t >= 1700000000L && localtime_r(&t, &tmv)) return tmv.tm_hour;
+  return -1;
+}
+
+static bool sysProcess(const String &app) {
+  return app == "System Idle Process" || app == "Idle" ||
+         app.startsWith("System") || app.startsWith("pythonw") ||
+         app == "dwm.exe" || app == "Registry"; /* pythonw = monitor.py */
+}
+
+PhraseCtx PetBrain::makeCtx(AppState &st) {
+  PhraseCtx c;
+  c.ageDays = (int)pet_->ageDays();
+  c.stage = pet_->stage();
+  c.mood = pet_->mood();
+  c.hour = clockHour();
+  c.scene = viewSceneName_ ? viewSceneName_ : "";
+  bool pc = st.link.tcpConnected && !st.link.signalLost;
+  if (pc) {
+    c.gpu = st.hw.gl;
+    c.cpu = st.hw.cl;
+    c.gt = st.hw.gt;
+    c.ct = st.hw.ct;
+    if (st.media.isPlaying && st.media.track.length()) {
+      c.track = st.media.track.c_str();
+      c.artist = st.media.artist.c_str();
+    }
+    const String &app = st.process.cpuNames[0];
+    if (app.length() && !sysProcess(app)) {
+      /* "Code.exe" reads as a file name, "Code" as a program */
+      strncpy(appBuf_, app.c_str(), sizeof(appBuf_) - 1);
+      appBuf_[sizeof(appBuf_) - 1] = 0;
+      size_t n = strlen(appBuf_);
+      if (n > 4 && !strcasecmp(appBuf_ + n - 4, ".exe")) appBuf_[n - 4] = 0;
+      c.app = appBuf_;
+    }
+    if (st.claude.weeklyPct >= 0) c.claudeWk = st.claude.weeklyPct;
+  }
+  if (st.weatherReceived) c.temp = st.weather.temp;
+  if (st.zb.count > 0) {
+    c.roomT10 = st.zb.list[0].temp10;
+    c.roomRh = st.zb.list[0].humidity;
+  }
+  return c;
+}
+
+String PetBrain::idleBucket(AppState &st, const PhraseCtx &c) {
+  /* Ordered by how much the remark would reveal that the wolf is actually
+   * looking: the screen the owner opened beats the weather. A coin flip at
+   * each step keeps one loud fact (a track on repeat all evening) from owning
+   * every idle line. */
+  if (c.scene[0] && random(2) == 0) return String("idle.scene.") + c.scene;
+  if (c.track[0] && random(2) == 0) return "idle.media";
+  if (c.gpu >= 50) return "idle.gpu";
+  if (c.app[0] && random(2) == 0) return "idle.app";
+  if (c.roomT10 != -32768 && random(2) == 0) {
+    if (c.roomT10 >= 270) return "idle.room.warm";
+    if (c.roomT10 <= 180) return "idle.room.cold";
+    if (c.roomRh >= 65) return "idle.room.humid";
+    if (c.roomRh >= 0 && c.roomRh <= 30) return "idle.room.dry";
+  }
+  if (c.temp != -999 && random(2) == 0) {
+    int w = st.weather.wmoCode;
+    if ((w >= 71 && w <= 77) || w == 85 || w == 86) return "idle.weather.snow";
+    if ((w >= 51 && w <= 67) || (w >= 80 && w <= 82)) return "idle.weather.rain";
+    if (c.temp <= -5) return "idle.weather.cold";
+    if (c.temp >= 28) return "idle.weather.hot";
+    if (w <= 1) return "idle.weather.clear";
+  }
+  if (c.mood == 0 && random(2) == 0) return "idle.mood.sad";
+  if (c.mood == 2 && random(3) == 0) return "idle.mood.happy";
+  if (c.hour >= 0 && random(2) == 0) {
+    if (c.hour < 6) return "idle.night";
+    if (c.hour < 11) return "idle.morning";
+    if (c.hour < 18) return "idle.day";
+    return "idle.evening";
+  }
+  return "idle";
+}
+
+/* Tone is decided by the ROOT of the bucket path: "hunger.night" is as low
+ * as "hunger", "idle.mood.sad" is still idle. */
+static bool rootIs(const char *b, const char *root) {
+  size_t n = strlen(root);
+  return !strncmp(b, root, n) && (b[n] == 0 || b[n] == '.');
+}
+
 int PetBrain::toneForBucket(const char *b) {
   if (!b) return TONE_NEUTRAL;
-  if (!strcmp(b, "alert") || !strcmp(b, "faint") || !strcmp(b, "event"))
+  if (rootIs(b, "alert") || rootIs(b, "faint") || rootIs(b, "event"))
     return TONE_TENSE;
-  if (!strcmp(b, "fed") || !strcmp(b, "played") || !strcmp(b, "pet") ||
-      !strcmp(b, "wake") || !strcmp(b, "revive"))
+  if (rootIs(b, "fed") || rootIs(b, "played") || rootIs(b, "pet") ||
+      rootIs(b, "wake") || rootIs(b, "revive"))
     return TONE_HAPPY;
-  if (!strcmp(b, "hunger") || !strcmp(b, "bored") || !strcmp(b, "sleepy"))
+  if (rootIs(b, "hunger") || rootIs(b, "bored") || rootIs(b, "sleepy"))
     return TONE_LOW;
   return TONE_NEUTRAL;
 }
@@ -208,7 +298,14 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
     lastSpeech_ = now;
     st.link.llmBusy = true;
   } else {
-    show(cache_->pick(bucket), now, toneForBucket(bucket));
+    /* A plain bucket gets the hour appended ("hunger.night", "back.morning");
+     * the cache walks back to "hunger" when the table has no such flavour. */
+    PhraseCtx c = makeCtx(st);
+    char b[40];
+    const char *tod = c.hour < 0 ? "" : c.hour < 6 ? ".night"
+                    : c.hour < 11 ? ".morning" : "";
+    snprintf(b, sizeof(b), "%s%s", bucket, strchr(bucket, '.') ? "" : tod);
+    show(cache_->pick(b, c), now, toneForBucket(bucket));
   }
 }
 
@@ -267,13 +364,14 @@ void PetBrain::tick(unsigned long now, AppState &st) {
           show(reply, now, tone);
         } else {
           if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
-          show(cache_->pick(pendingBucket_), now, tone);
+          show(cache_->pick(pendingBucket_, makeCtx(st)), now, tone);
         }
       }
     } else if (thinking_ && now - speechStart_ > NOCT_LLM_TIMEOUT_MS + 4000UL) {
       if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
       thinking_ = false; /* belt & braces: task wedged — fall back */
-      show(cache_->pick(pendingBucket_), now, toneForBucket(pendingBucket_));
+      show(cache_->pick(pendingBucket_, makeCtx(st)), now,
+           toneForBucket(pendingBucket_));
     }
   }
 
@@ -486,9 +584,7 @@ void PetBrain::tick(unsigned long now, AppState &st) {
    * idle/system noise; debounce so a brief spike doesn't chatter. */
   if (seenFirstPayload_ && st.process.cpuNames[0].length()) {
     String app = st.process.cpuNames[0];
-    bool sys = app == "System Idle Process" || app == "Idle" ||
-               app.startsWith("System") || app == "pythonw3.13.exe" ||
-               app == "dwm.exe" || app == "Registry";
+    bool sys = sysProcess(app);
     if (!sys && app != lastApp_ && now - lastAppAt_ > 20000) {
       String ev = "хозяин запустил программу " + app + ", прокомментируй";
       /* games get a livelier angle */
@@ -555,7 +651,10 @@ void PetBrain::tick(unsigned long now, AppState &st) {
         };
         angle = fb[random(2)];
       }
-      trigger("idle", angle.c_str(), now, st, false);
+      /* The LLM gets the angle as prose; the cache gets it as a bucket path
+       * and answers at whatever depth the table has lines for. */
+      String b = idleBucket(st, makeCtx(st));
+      trigger(b.c_str(), angle.c_str(), now, st, false);
     }
   }
 }
