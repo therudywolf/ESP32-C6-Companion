@@ -198,25 +198,25 @@ void drawAnalysis(UiCtx &ui) {
     const RoomForecast &rc = st.roomcast;
 
     if (rc.ok) {
-      horizon(g, c.x, c.y, c.w, rc.hours[0], rc.temp10[0], rc.sd10[0],
-              rc.rh[0], rc.haveStreet, rc.street10[0]);
-      horizon(g, c.x, c.y + 19, c.w, rc.hours[1], rc.temp10[1], rc.sd10[1],
-              rc.rh[1], rc.haveStreet, rc.street10[1]);
-      g.setFont(&F_TEXT);
-      g.setTextSize(1);
+      /* Строка вероятности — на РЯДУ ЯРЛЫКА, справа. Третьей строки под
+       * двумя горизонтами в этой карточке нет: она упиралась в кромку и в
+       * запятую строки выше. А ярлык занимает слева сто пикселей и оставляет
+       * двести пустых — ровно на «30% - жарче 25 через 12ч». Это к тому же
+       * первое, куда падает глаз, а вероятность — та строка, ради которой
+       * полосу разброса вообще считают. */
       if (rc.risk.length()) {
-        /* The one line that is a PROBABILITY rather than a value. It only
-         * appears when the model puts at least 15 % on it, so its presence
-         * is itself the news. */
-        textAt(g, c.x, c.y + 38, rc.risk.c_str(), WARN);
+        g.setFont(&F_TEXT);
+        g.setTextSize(1);
+        char rk[64];
+        clipW(g, rc.risk.c_str(), rk, sizeof(rk), c.w - 118);
+        textRight(g, c.x + c.w, 106, rk, WARN);
       }
-      /* Перцентиль по архиву сюда не помещается и здесь не нужен.
-       *
-       * Карточке остаётся сорок пять рядов: ярлык уже съел свои, два
-       * горизонта с полосами разброса — по девятнадцать, и на третью строку
-       * места нет ни при каком раскладе. Строка вероятности выше — та, ради
-       * которой полосу вообще считают, — важнее справки о том, как высоко
-       * стоит давление относительно всей истории; она есть в веб-панели и на
+      horizon(g, c.x, c.y + 2, c.w, rc.hours[0], rc.temp10[0], rc.sd10[0],
+              rc.rh[0], rc.haveStreet, rc.street10[0]);
+      horizon(g, c.x, c.y + 23, c.w, rc.hours[1], rc.temp10[1], rc.sd10[1],
+              rc.rh[1], rc.haveStreet, rc.street10[1]);
+      /* Перцентиль по архиву на плату не идёт: строка вероятности заняла
+       * единственное свободное место, а перцентиль есть в веб-панели и на
        * этом же экране, когда прогноза нет. */
     } else {
       /* No forecast is a fact with a reason, and the reason is the useful

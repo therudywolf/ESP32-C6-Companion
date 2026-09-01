@@ -33,6 +33,8 @@ void load(Settings &s) {
   s.flipped = p.getBool("flip", false);
   s.themePreset = p.getInt("theme", 0);
   s.bgStyle = p.getInt("bgStyle", 1);
+  s.dotStyle = p.getInt("dots", 0);
+  if (s.dotStyle < 0 || s.dotStyle > 2) s.dotStyle = 0;
   s.bgLight = p.getBool("bgLight", false);
   s.customActive = p.getBool("customOn", false);
   p.getBytes("custom", s.custom, sizeof(s.custom));
@@ -118,6 +120,7 @@ void save(const Settings &s) {
   p.putBool("flip", s.flipped);
   p.putInt("theme", s.themePreset);
   p.putInt("bgStyle", s.bgStyle);
+  p.putInt("dots", s.dotStyle);
   p.putBool("bgLight", s.bgLight);
   p.putBool("customOn", s.customActive);
   p.putBytes("custom", s.custom, sizeof(s.custom));

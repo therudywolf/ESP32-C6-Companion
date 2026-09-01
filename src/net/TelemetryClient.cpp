@@ -112,6 +112,15 @@ void TelemetryClient::sendWolf(int hunger, int joy, int energy, int mood,
   sendLine(b);
 }
 
+/* Таблица частот карусели одной строкой цифр: "2122233..." */
+static const char *carFreqStr(const Settings &s) {
+  static char buf[SCENE_COUNT + 1];
+  for (int i = 0; i < SCENE_COUNT; i++)
+    buf[i] = (char)('0' + (s.carFreq[i] < 10 ? s.carFreq[i] : 0));
+  buf[SCENE_COUNT] = 0;
+  return buf;
+}
+
 void TelemetryClient::sendCfg(const Settings &s) {
   if (!tcpConnected_) return;
   /* one CSV the panel reads back so its controls show the board's live state.
@@ -122,10 +131,10 @@ void TelemetryClient::sendCfg(const Settings &s) {
    * and ignores the tail keeps working unchanged. Never reorder — only
    * append, and add the name to the panel's key list in the same commit or the
    * field is parsed off the wire and silently dropped. */
-  char b[240];
+  char b[280];
   snprintf(b, sizeof(b),
            "cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d,"
-           "%d,%d,%d,%d,%d,%d\n",
+           "%d,%d,%d,%d,%d,%d,%d,%s,%d\n",
            s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone, s.ledEnabled ? 1 : 0,
            s.flipped ? 1 : 0, s.bgLight ? 1 : 0, s.brightness,
            s.carouselEnabled ? s.carouselIntervalSec : -1, s.displayTimeoutSec,
@@ -134,7 +143,12 @@ void TelemetryClient::sendCfg(const Settings &s) {
            s.notifShow ? 1 : 0, s.ledMode, s.pinnedScene, s.activeSlot,
            s.nightMode ? 1 : 0, s.nightFrom, s.nightTo,
            s.zbAlert ? 1 : 0, s.zbTempMin, s.zbTempMax, s.zbHumMin,
-           s.zbHumMax, s.zbBattMin);
+           s.zbHumMax, s.zbBattMin,
+           /* 27.. добавлены: carmode, carfreq (двадцать цифр без
+            * разделителей — одна цифра на сцену в порядке SceneId), dots.
+            * Панель показывала таблицу частот из СВОЕЙ памяти, а не с платы,
+            * и на свежей странице все двадцать стояли на «выкл». */
+           s.carPreset, carFreqStr(s), s.dotStyle);
   sendLine(b);
 }
 
@@ -537,6 +551,7 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     state.rcToneB = rc["toneb"] | 0;
     state.rcToneK = rc["tonek"] | -1;
     state.rcMono = rc["mono"] | -1;
+    state.rcDots = rc["dots"] | -1;
     /* Same reasoning as the tone above: these describe how the CAROUSEL is
      * shaped, not an action to perform once, so they are read on every
      * payload and applied only when they differ from what the board holds.
