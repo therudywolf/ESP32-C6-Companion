@@ -23,6 +23,10 @@ public:
   void tick(unsigned long now, AppState &st);
   /* remote: make the wolf say a literal line right now (companion app). */
   void sayNow(const String &text) { show(text, millis()); }
+  /* console: one draw from a bucket with the live context, not spoken */
+  String samplePhrase(const char *bucket, AppState &st) {
+    return cache_->pick(bucket, makeCtx(st));
+  }
   /* Something the board worked out on its own (a baseline drift from the SD
    * archive). Queued rather than spoken directly, so the wolf phrases it in
    * character instead of reciting a number. */
@@ -75,6 +79,13 @@ private:
   void show(const String &p, unsigned long now, int tone = TONE_NEUTRAL);
   static int toneForBucket(const char *bucket);
   String buildContext(const char *eventRu, AppState &st);
+  /* What the wolf can see, for the cache path. The LLM path gets the same
+   * facts as prose in buildContext(); this is the structured twin. */
+  PhraseCtx makeCtx(AppState &st);
+  /* The most specific idle bucket the moment supports ("idle.scene.CPU",
+   * "idle.weather.rain", "idle.night"…). The cache falls back up the path. */
+  String idleBucket(AppState &st, const PhraseCtx &c);
+  static int clockHour();
   void diary(const char *ev);
 
   WolfPet *pet_ = nullptr;
@@ -86,7 +97,8 @@ private:
   unsigned long speechStart_ = 0;
   unsigned long speechHold_ = 0;
   bool thinking_ = false;
-  char pendingBucket_[16] = {0};
+  char pendingBucket_[32] = {0}; /* "idle.scene.СЕРВИСЫ" is 25 bytes */
+  char appBuf_[32] = {0};        /* top process, ".exe" stripped, for {app} */
   unsigned long lastSpeech_ = 0;
   unsigned long nextIdleChatter_ = 0;
   int actionPending_ = -1;

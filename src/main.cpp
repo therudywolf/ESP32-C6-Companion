@@ -453,6 +453,16 @@ static void consoleExec(String line) {
     settings::save(state.settings);
     Serial.printf("theme %d (%s)\n", state.settings.themePreset,
                   theme::presetName(state.settings.themePreset));
+  } else if (cmd == "phrase") {
+    /* Five draws from a bucket path with the live context, so the table can
+     * be checked on the board: fallback depth, placeholders, no repeats. The
+     * lines go through the same glyph check as any drawn text when spoken;
+     * here they are printed, so pipe them to tools/check_glyphs.py instead. */
+    const char *b = arg.length() ? arg.c_str() : "idle";
+    Serial.printf("bucket %s: %d lines in flash\n", b,
+                  PhraseCache::flashCount(b));
+    for (int i = 0; i < 5; i++)
+      Serial.printf("  %s\n", brain.samplePhrase(b, state).c_str());
   } else if (cmd == "say") {
     if (arg.length()) brain.sayNow(arg);
   } else if (cmd == "eat" || cmd == "play" || cmd == "pet" || cmd == "talk") {
