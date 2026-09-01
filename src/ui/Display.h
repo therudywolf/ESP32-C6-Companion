@@ -98,6 +98,33 @@ public:
   }
 
   void push() { fb.pushSprite(0, 0); }
+
+  /* Точечно-диодное табло: погасить сетку между «диодами».
+   *
+   * Проход по буферу кадра прямо перед выводом. Каждый `pitch`-й столбец и
+   * ряд закрашивается цветом фона, так что остаются лит-ячейки (pitch-1)²,
+   * разделённые тёмными зазорами — то, как выглядит матрица вблизи. Цвет
+   * диодов остаётся от темы, поэтому сквозь эту сетку полноцветная тема даёт
+   * RGB-матрицу, а одноцветная — табло своего цвета.
+   *
+   * Сравнение идёт с буфером как есть, в порядке байтов спрайта: цвет зазора
+   * заранее переставлен под тот же порядок, иначе на панели с swapBytes
+   * фон был бы не фоном. */
+  void applyDots(int pitch, uint16_t gap) {
+    if (pitch < 2) return;
+    uint16_t *buf = (uint16_t *)fb.getBuffer();
+    if (!buf) return;
+    if (fb.getSwapBytes()) gap = (uint16_t)((gap >> 8) | (gap << 8));
+    const int w = fb.width(), h = fb.height();
+    for (int y = 0; y < h; y++) {
+      uint16_t *row = buf + (size_t)y * w;
+      if (y % pitch == pitch - 1) {
+        for (int x = 0; x < w; x++) row[x] = gap;
+        continue;
+      }
+      for (int x = pitch - 1; x < w; x += pitch) row[x] = gap;
+    }
+  }
   /* The framebuffer push is a DMA transfer: pushSprite() returns while the bus
    * is still shifting out 110 KB. The SD card shares SPI2, and the Arduino SD
    * driver knows nothing about LovyanGFX's transaction — so asserting the

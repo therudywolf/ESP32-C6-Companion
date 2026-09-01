@@ -216,6 +216,7 @@ struct Settings {
   bool flipped = false;          /* "flip"     rotate display 180 */
   int themePreset = 0;           /* "theme"    palette preset index */
   int bgStyle = 1;               /* "bgStyle"  0 solid/1 anim/2 grid */
+  int dotStyle = 0;              /* "dots"     0 off / 1 точки (шаг 3) / 2 редкие (шаг 4) */
   bool bgLight = false;          /* "bgLight"  light/white background */
   uint16_t custom[10] = {0};     /* "custom"   live hand-tuned palette (RGB565) */
   bool customActive = false;     /* "customOn" use custom palette, not preset */
@@ -413,6 +414,7 @@ struct AppState {
   int rcBlMins = 15;
   /* Greyscale + no backdrop, for comparing screenshots. -1 = no change. */
   int rcMono = -1;
+  int rcDots = -1;
   int rcReview = -1;
   int rcCarMode = -1;
   uint8_t rcCarFreq[SCENE_COUNT] = {0};

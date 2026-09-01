@@ -36,7 +36,7 @@ extern uint16_t ACCENT;     /* secondary accent */
 
 /* Theme control. 12 presets (see kPresets in Theme.cpp). setChrome/setAccent
  * override individual hues on top of the active preset. */
-static const int THEME_PRESETS = 24;
+static const int THEME_PRESETS = 27;
 /* Themes are also FILES: 1.thm .. 8.thm under /themes on the card append to
  * the built-in
  * presets, so a palette can be shared, edited on a laptop and dropped in

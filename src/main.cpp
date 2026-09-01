@@ -685,6 +685,14 @@ static void consoleExec(String line) {
     theme::getTone(&r, &g, &b, &k);
     Serial.printf("tone R%d G%d B%d чёрный %d (усиление 30..300, чёрный 0..96)\n",
                   r, g, b, k);
+  } else if (cmd == "dots") {
+    /* 0 выкл, 1 точки (шаг 3), 2 редкие (шаг 4). Цвет — от текущей темы. */
+    int d = arg.toInt();
+    if (arg.length() && d >= 0 && d <= 2) {
+      state.settings.dotStyle = d;
+      settings::save(state.settings);
+    }
+    Serial.printf("точки: %d\n", state.settings.dotStyle);
   } else if (cmd == "mono") {
     /* Screenshot review mode: the palette goes greyscale and the animated
      * backdrop stops. Asked for because colour and motion between two
@@ -1503,6 +1511,12 @@ void loop() {
    * they act, so the steady-state cost is four integer comparisons. */
   theme::setTone(state.rcToneR, state.rcToneG, state.rcToneB, state.rcToneK);
   if (state.rcMono >= 0) theme::setMono(state.rcMono != 0);
+  /* Точечная сетка с панели — идемпотентно: пишется в NVS только при смене. */
+  if (state.rcDots >= 0 && state.rcDots <= 2 &&
+      state.rcDots != state.settings.dotStyle) {
+    state.settings.dotStyle = state.rcDots;
+    settings::save(state.settings);
+  }
   /* Review mode from the panel, idempotently. setReview clears the toast
    * queue, so calling it every tick with the same value would keep clearing
    * a queue that should be filling — hence the comparison. */
@@ -1958,6 +1972,8 @@ void loop() {
     }
     ui.review = sceneMgr.reviewOn();
     sceneMgr.draw(ui);
+    if (state.settings.dotStyle > 0)
+      display.applyDots(state.settings.dotStyle == 1 ? 3 : 4, theme::BG);
     display.push();
     frameBusyUs += micros() - frameT0;
     frameCount++;

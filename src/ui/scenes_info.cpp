@@ -693,9 +693,12 @@ void drawEvents(UiCtx &ui) {
      * looks exactly like a green screen from a healthy one, and this is the
      * difference. */
     Rect c = panelM(g, 4, 26, 312, 60, "алерты");
-    g.setFont(&F_BIG);
+    /* F_MED, не F_BIG: F_BIG — латинский набор, и «тихо в лесу» в нём это
+     * одиннадцать пустых квадратов. Поймано проверкой на плате, а не глазами:
+     * исходный сканер не знает, каким шрифтом рисуют, и молчал. */
+    g.setFont(&F_MED);
     g.setTextSize(1);
-    textAt(g, c.x, inkY(INK_BIG, c.y, c.h), "тихо в лесу", GOOD);
+    textAt(g, c.x, inkY(INK_MED, c.y, c.h), "тихо в лесу", GOOD);
 
     Rect d = panelM(g, 4, 90, 312, 80, "кто смотрит");
     g.setFont(&F_MED);
