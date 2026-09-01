@@ -353,8 +353,12 @@ void drawDash(UiCtx &ui) {
   struct Tile {
     int x, y, w, h;
   };
+  /* Нижний ряд на три пикселя выше: плитка «net» держит ДВА значения, а не
+   * одно, как остальные три, и в шестидесяти рядах ярлык плюс два по
+   * двадцать четыре чернил сходились в один ряд просвета. Подвальная линейка
+   * на 153-м, так что три ряда там есть. */
   const Tile t[4] = {{4, 26, 154, 60}, {162, 26, 154, 60},
-                     {4, 90, 154, 60}, {162, 90, 154, 60}};
+                     {4, 90, 154, 63}, {162, 90, 154, 63}};
 
   /* CPU / GPU: hero temp + load% + bar */
   for (int k = 0; k < 2; k++) {
@@ -409,23 +413,32 @@ void drawDash(UiCtx &ui) {
    * Placed by cursor offset before, which put the lower one's digits a pixel
    * through the tile's own frame — F_BIG writes 35 rows for 24 of ink, and
    * the offsets were chosen against the 24. */
-  /* +7, не +3: заливка вкладки ярлыка кончается на y+5, и первое значение
-   * начиналось под ней. */
-  const int nb = (t[3].h - 10) / 2;         /* half the interior */
-  const int ny1 = t[3].y + 7, ny2 = ny1 + nb;
-  g.setFont(&F_BIG);
-  int ty1 = inkY(INK_BIG, ny1, nb), ty2 = inkY(INK_BIG, ny2, nb);
+  /* F_VALUE в двойном размере, а не F_BIG.
+   *
+   * Двадцать два ряда чернил против двадцати четырёх — разница, которой не
+   * видно, а помещается она там, где F_BIG не помещался: ярлык (7) плюс два
+   * значения плюс три просвета по три — это ровно шестьдесят три ряда
+   * плитки. С F_BIG выходило шестьдесят четыре, и просвет между входящим и
+   * исходящим схлопывался в один пиксель.
+   *
+   * Это к тому же тот самый кегль, которым на соседних плитках набрана
+   * нагрузка, так что плитка перестала быть единственной с двумя героями. */
+  const int ny1 = t[3].y + 13, ny2 = t[3].y + 38;
+  g.setFont(&F_VALUE);
+  g.setTextSize(2);
+  int ty1 = inkY(INK_VALUE, ny1, INK_VALUE.height * 2, 2);
+  int ty2 = inkY(INK_VALUE, ny2, INK_VALUE.height * 2, 2);
   /* Arrows level with the ink they belong to, not with a fixed offset. */
-  int mid1 = ty1 + INK_BIG.top + INK_BIG.height / 2;
-  int mid2 = ty2 + INK_BIG.top + INK_BIG.height / 2;
+  int mid1 = ty1 + (INK_VALUE.top + INK_VALUE.height / 2) * 2;
+  int mid2 = ty2 + (INK_VALUE.top + INK_VALUE.height / 2) * 2;
   g.fillTriangle(t[3].x + 10, mid1 - 4, t[3].x + 20, mid1 - 4, t[3].x + 15,
                  mid1 + 4, INFO); /* down */
   textAt(g, t[3].x + 26, ty1, r1, INFO);
   g.fillTriangle(t[3].x + 10, mid2 + 4, t[3].x + 20, mid2 + 4, t[3].x + 15,
                  mid2 - 4, GOOD); /* up */
   textAt(g, t[3].x + 26, ty2, r2, GOOD);
-  g.setFont(&F_MED);
   g.setTextSize(1);
+  g.setFont(&F_MED);
   snprintf(v, sizeof(v), "%dms", hw.pg);
   textRight(g, t[3].x + t[3].w - 8, t[3].y + 8, v, DIM);
   g.setTextSize(1);
