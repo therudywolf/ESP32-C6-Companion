@@ -2,6 +2,7 @@
 
 #include <Preferences.h>
 
+#include "pet/PetKind.h"
 #include "pet/wolf_sprites.h"
 
 using namespace theme;
@@ -16,10 +17,15 @@ using namespace widgets;
  * (Button.h EV_REPEAT, enabled only here). */
 namespace {
 
+/* Five categories, regrouped in v1.43 so that "how it looks" and "how it
+ * behaves" stop sharing a list: Оформление is the look (style, palette,
+ * background, dots, colours), Экран is the panel itself (brightness, sleep,
+ * carousel, composition), Питомец is the whole animal, Сигналы the LED and
+ * notifications, Система the rest. */
 enum MenuCat {
-  CAT_SCREEN = 0, /* panel, colours, sleep */
-  CAT_WOLF,       /* the pet's voice */
-  CAT_LAYOUT,     /* which screens / widgets exist */
+  CAT_LOOK = 0,   /* style, theme, background, colours */
+  CAT_SCREEN,     /* brightness, sleep, carousel, composition */
+  CAT_PET,        /* the animal: on/off, kind, voice, games */
   CAT_SIGNALS,    /* LED + notifications */
   CAT_SYSTEM,
   CAT_COUNT
@@ -33,6 +39,9 @@ enum MenuId {
   MI_CAROUSEL, MI_SCENES, MI_ELEMS, MI_FORZA,
   MI_LED, MI_LEDMODE, MI_NOTIF,
   MI_WIFI, MI_SYSINFO, MI_SHOT, MI_ZBJOIN, MI_RESET,
+  /* v1.43 */
+  MI_LOOK, MI_STYLE, MI_DOTS, MI_PET, MI_KIND, MI_FURRY, MI_GAME2,
+  MI_LEDBRIGHT, MI_WEB,
   MI_COUNT
 };
 
@@ -43,32 +52,41 @@ struct MenuItem {
 };
 
 const MenuItem kMenu[] = {
+    {CAT_LOOK, MI_LOOK, "Оформление"},
+    {CAT_LOOK, MI_STYLE, "Стиль"},
+    {CAT_LOOK, MI_THEME, "Палитра"},
+    {CAT_LOOK, MI_BG, "Фон"},
+    {CAT_LOOK, MI_DOTS, "Матрица"},
+    {CAT_LOOK, MI_BGLIGHT, "Светлый фон"},
+    {CAT_LOOK, MI_SLOT, "Слот палитры"},
+    {CAT_LOOK, MI_COLORS, "Цвета вручную"},
+
     {CAT_SCREEN, MI_BRIGHT, "Яркость"},
-    {CAT_SCREEN, MI_THEME, "Тема"},
-    {CAT_SCREEN, MI_BG, "Фон"},
-    {CAT_SCREEN, MI_BGLIGHT, "Светлый фон"},
-    {CAT_SCREEN, MI_SLOT, "Слот темы"},
-    {CAT_SCREEN, MI_COLORS, "Цвета вручную"},
-    {CAT_SCREEN, MI_FLIP, "Переворот"},
     {CAT_SCREEN, MI_DIM, "Гашение экрана"},
     {CAT_SCREEN, MI_NIGHT, "Ночной режим"},
+    {CAT_SCREEN, MI_CAROUSEL, "Карусель"},
+    {CAT_SCREEN, MI_SCENES, "Экраны"},
+    {CAT_SCREEN, MI_ELEMS, "Элементы"},
+    {CAT_SCREEN, MI_FLIP, "Переворот"},
+    {CAT_SCREEN, MI_FORZA, "Forza HUD"},
 
-    {CAT_WOLF, MI_PETLLM, "Волк LLM"},
-    {CAT_WOLF, MI_CHATTER, "Болтливость"},
-    {CAT_WOLF, MI_TONE, "Характер"},
-    {CAT_WOLF, MI_ACH, "Достижения"},
-    {CAT_WOLF, MI_GAME, "Игра"},
-
-    {CAT_LAYOUT, MI_CAROUSEL, "Карусель"},
-    {CAT_LAYOUT, MI_SCENES, "Экраны"},
-    {CAT_LAYOUT, MI_ELEMS, "Элементы"},
-    {CAT_LAYOUT, MI_FORZA, "Forza HUD"},
+    {CAT_PET, MI_PET, "Питомец"},
+    {CAT_PET, MI_KIND, "Вид"},
+    {CAT_PET, MI_FURRY, "Фурревость"},
+    {CAT_PET, MI_PETLLM, "Голос LLM"},
+    {CAT_PET, MI_CHATTER, "Болтливость"},
+    {CAT_PET, MI_TONE, "Характер"},
+    {CAT_PET, MI_ACH, "Достижения"},
+    {CAT_PET, MI_GAME, "Игра: бег"},
+    {CAT_PET, MI_GAME2, "Игра: реакция"},
 
     {CAT_SIGNALS, MI_LED, "LED"},
     {CAT_SIGNALS, MI_LEDMODE, "Подсветка"},
+    {CAT_SIGNALS, MI_LEDBRIGHT, "Яркость LED"},
     {CAT_SIGNALS, MI_NOTIF, "Уведомления"},
 
     {CAT_SYSTEM, MI_WIFI, "WiFi"},
+    {CAT_SYSTEM, MI_WEB, "Веб-панель платы"},
     {CAT_SYSTEM, MI_SYSINFO, "Инфо системы"},
     {CAT_SYSTEM, MI_SHOT, "Снимок экрана"},
     {CAT_SYSTEM, MI_ZBJOIN, "Подключить датчик"},
@@ -76,8 +94,16 @@ const MenuItem kMenu[] = {
 };
 const int kMenuCount = (int)(sizeof(kMenu) / sizeof(kMenu[0]));
 
-const char *kCatName[CAT_COUNT] = {"Экран", "Волк", "Состав", "Сигналы",
-                                   "Система"};
+const char *kCatName[CAT_COUNT] = {"Оформление", "Экран", "Питомец",
+                                   "Сигналы", "Система"};
+
+/* With the pet off, its category shrinks to the one row that turns it back
+ * on: eight rows of settings for an animal that does not exist would be the
+ * menu lying about what the device is. */
+bool rowHidden(const MenuItem &m, const Settings &s) {
+  if (m.cat != CAT_PET || s.petEnabled) return false;
+  return m.id != MI_PET && m.id != MI_KIND;
+}
 
 /* Backlight steps the menu cycles through. NOCT_BRIGHT_MAX is "100%" for the
  * UI — the panel blooms above it. Stepping through a TABLE (rather than
@@ -92,10 +118,14 @@ int nextBrightness(int cur) {
   return kBrightSteps[0];
 }
 
+const Settings *gMenuSettings = nullptr; /* set by draw()/handleInput() */
+
 int rowsInCat(int cat) {
   int n = 0;
   for (int i = 0; i < kMenuCount; i++)
-    if (kMenu[i].cat == cat) n++;
+    if (kMenu[i].cat == cat &&
+        !(gMenuSettings && rowHidden(kMenu[i], *gMenuSettings)))
+      n++;
   return n;
 }
 
@@ -104,6 +134,7 @@ int itemIndex(int cat, int row) {
   int n = 0;
   for (int i = 0; i < kMenuCount; i++) {
     if (kMenu[i].cat != cat) continue;
+    if (gMenuSettings && rowHidden(kMenu[i], *gMenuSettings)) continue;
     if (n == row) return i;
     n++;
   }
@@ -172,6 +203,7 @@ int SceneManager::denActionSel(UiCtx &ui) const {
 
 void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   if (ev == EV_NONE) return;
+  gMenuSettings = &ui.st.settings;
   lastInput_ = ui.now;
   if (dimmed_) { /* first press only wakes the screen */
     dimmed_ = false; /* main() re-applies the backlight from screenDimmed() */
@@ -328,6 +360,34 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     return;
   }
 
+  if (gameMode_ && gameKind_ == 2) {
+    switch (ev) {
+    case EV_SHORT:
+    case EV_LONG:
+      if (rxOver_) {
+        reactionReset();
+      } else if (rxLast_ < 0) {
+        /* stop the marker: the score is how near the middle it was */
+        unsigned long period = 1400UL - (unsigned long)rxRound_ * 200UL;
+        unsigned long t = (ui.now - rxStart_) % (period * 2);
+        int pos = (int)(t < period ? t * 100 / period
+                                   : (period * 2 - t) * 100 / period);
+        int d = pos > 50 ? pos - 50 : 50 - pos;
+        rxLast_ = d <= 4 ? 100 : (d >= 50 ? 0 : 100 - d * 2);
+        rxScore_ += rxLast_;
+        rxShownAt_ = ui.now;
+      }
+      break;
+    case EV_DOUBLE:
+    case EV_TRIPLE:
+      gameMode_ = false;
+      break;
+    default:
+      break;
+    }
+    return;
+  }
+
   if (gameMode_) {
     switch (ev) {
     case EV_SHORT:
@@ -384,10 +444,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
       ui.pet.doAction(denSel_);
       ui.brain.onAction(denSel_);
       d_.led->setMode(StatusLed::BLIP_OK);
-      toast(denSel_ == 0   ? "ням-ням!"
-            : denSel_ == 1 ? "поиграли!"
-            : denSel_ == 2 ? "мур-р-р..."
-                           : "...");
+      toast(petkind::actionToast(denSel_, ui.st.settings.furry));
       denActionMode_ = false;
       break;
     }
@@ -421,7 +478,9 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     break;
   }
   case EV_LONG: {
-    if (scene_ == SCENE_DEN) {
+    if (scene_ == SCENE_DEN && !ui.st.settings.petEnabled) {
+      /* no animal here: the home screen has no submenu */
+    } else if (scene_ == SCENE_DEN) {
       denActionMode_ = true; /* enter the wolf's submenu */
       denSel_ = denActionSel(ui);
       denModeAt_ = ui.now;
@@ -489,7 +548,32 @@ void SceneManager::menuRowValue(int row, const Settings &s, char *out,
   static const char *chatterN[] = {"выкл", "редко", "норма", "часто"};
   static const char *toneN[] = {"обычный", "добрый", "ворчун", "дерзкий"};
   static const char *ledN[] = {"настроение", "выкл", "радуга", "свеча"};
+  static const char *dotsN[] = {"выкл", "точки", "редкие"};
   switch (kMenu[idx].id) {
+  case MI_LOOK:
+    snprintf(out, cap, ">");
+    break;
+  case MI_STYLE:
+    snprintf(out, cap, "%s", theme::styleName(s.uiStyle));
+    break;
+  case MI_DOTS:
+    snprintf(out, cap, "%s", dotsN[s.dotStyle > 2 ? 0 : s.dotStyle]);
+    break;
+  case MI_PET:
+    snprintf(out, cap, "%s", s.petEnabled ? "вкл" : "выкл");
+    break;
+  case MI_KIND:
+    snprintf(out, cap, "%s", petkind::speciesLabel(s.petKind));
+    break;
+  case MI_FURRY:
+    snprintf(out, cap, "%s", s.furry ? "вкл" : "выкл");
+    break;
+  case MI_LEDBRIGHT:
+    snprintf(out, cap, "%d%%", s.ledBright);
+    break;
+  case MI_WEB:
+    snprintf(out, cap, "%s", s.webPanel ? "вкл" : "выкл");
+    break;
   case MI_BRIGHT:
     /* NOCT_BRIGHT_MAX is the ceiling this panel tolerates, so it IS 100% here.
      * Dividing by 255 made a fully bright screen report "82%". */
@@ -587,6 +671,62 @@ void SceneManager::menuActivateRow(UiCtx &ui, int row) {
 void SceneManager::menuAction(UiCtx &ui, int itemId) {
   Settings &s = ui.st.settings;
   switch (itemId) {
+  case MI_LOOK: {
+    /* cycle the five looks; each one writes style, palette, background and
+     * dots together and the individual rows stay editable after */
+    static int cur = -1;
+    cur = (cur + 1) % theme::LOOKS;
+    const theme::Look &lk = theme::look(cur);
+    s.uiStyle = lk.style;
+    s.themePreset = lk.preset;
+    s.customActive = false;
+    s.bgStyle = lk.bg;
+    s.dotStyle = lk.dots;
+    theme::setBgStyle(s.bgStyle);
+    theme::applyPreset(s.themePreset);
+    theme::setBgLight(s.bgLight);
+    theme::setStyle(s.uiStyle);
+    toast(lk.name);
+    break;
+  }
+  case MI_STYLE:
+    s.uiStyle = (s.uiStyle + 1) % theme::STYLE_COUNT;
+    theme::setStyle(s.uiStyle);
+    toast(theme::styleName(s.uiStyle));
+    break;
+  case MI_DOTS:
+    s.dotStyle = (s.dotStyle + 1) % 3;
+    break;
+  case MI_PET:
+    s.petEnabled = !s.petEnabled;
+    toast(s.petEnabled ? "питомец включен" : "питомец выключен");
+    menuSel_ = 0; /* the category just changed length */
+    break;
+  case MI_KIND:
+    s.petKind = (s.petKind + 1) % petkind::PK_COUNT;
+    petkind::set(s.petKind);
+    toast(petkind::speciesLabel(s.petKind));
+    break;
+  case MI_FURRY:
+    s.furry = !s.furry;
+    toast(s.furry ? "фурревость: вкл" : "фурревость: выкл");
+    break;
+  case MI_LEDBRIGHT:
+    s.ledBright = s.ledBright >= 100 ? 10 : s.ledBright + 30;
+    if (s.ledBright > 100) s.ledBright = 100;
+    StatusLed::setBrightness(s.ledBright);
+    break;
+  case MI_WEB:
+    s.webPanel = !s.webPanel;
+    toast(s.webPanel ? "веб-панель: вкл" : "веб-панель: выкл");
+    break;
+  case MI_GAME2:
+    menuOpen_ = false;
+    menuCat_ = -1;
+    gameMode_ = true;
+    gameKind_ = 2;
+    reactionReset();
+    return;
   case MI_CAROUSEL:
     if (!s.carouselEnabled) {
       s.carouselEnabled = true;
@@ -675,6 +815,7 @@ void SceneManager::menuAction(UiCtx &ui, int itemId) {
     menuOpen_ = false;
     menuCat_ = -1;
     gameMode_ = true;
+    gameKind_ = 1;
     gameTick_ = ui.now;
     gameReset();
     return;
@@ -1155,6 +1296,98 @@ void SceneManager::drawGame(UiCtx &ui) {
   }
 }
 
+/* ── The reaction game ──────────────────────────────────────────────────
+ * The runner tests timing under pressure; this tests one clean press. A
+ * marker sweeps left and right across a bar, faster every round, and the
+ * score is how close to the centre you stopped it. Five rounds, best kept
+ * in NVS beside the runner's, and a finished game counts as play for the
+ * pet — a game with the animal is not a game without it. */
+void SceneManager::reactionReset() {
+  rxRound_ = 0;
+  rxScore_ = 0;
+  rxLast_ = -1;
+  rxOver_ = false;
+  rxStart_ = millis();
+  Preferences p;
+  p.begin("wolfstat", true);
+  rxBest_ = p.getInt("react", 0);
+  p.end();
+}
+
+void SceneManager::drawReaction(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  g.fillRect(0, NOCT_CONTENT_TOP, NOCT_W, NOCT_H - NOCT_CONTENT_TOP, BG);
+  char t[48];
+
+  /* a stopped marker shows its score for a moment, then the next round */
+  if (rxLast_ >= 0 && !rxOver_ && ui.now - rxShownAt_ > 900) {
+    rxLast_ = -1;
+    rxRound_++;
+    rxStart_ = ui.now;
+    if (rxRound_ >= 5) {
+      rxOver_ = true;
+      if (rxScore_ > rxBest_) {
+        rxBest_ = rxScore_;
+        Preferences p;
+        p.begin("wolfstat", false);
+        p.putInt("react", rxBest_);
+        p.end();
+      }
+      if (ui.st.settings.petEnabled) {
+        ui.pet.doAction(WolfPet::ACT_PLAY);
+        ui.brain.onAction(WolfPet::ACT_PLAY);
+      }
+    }
+  }
+
+  g.setFont(&F_TEXT);
+  snprintf(t, sizeof(t), "раунд %d/5", rxOver_ ? 5 : rxRound_ + 1);
+  textAt(g, 10, 26, t, DIM);
+  snprintf(t, sizeof(t), "очки %d   рекорд %d", rxScore_, rxBest_);
+  textRight(g, NOCT_W - 10, 26, t, DIM);
+
+  /* the bar and its target zone */
+  const int bx = 20, by = 78, bw = NOCT_W - 40, bh = 18;
+  g.fillRect(bx, by, bw, bh, PANEL);
+  g.fillRect(bx + bw / 2 - bw / 25, by, bw * 2 / 25, bh, lerp565(BG, GOOD, 140));
+  g.drawRect(bx, by, bw, bh, ORANGE_DIM);
+  g.drawFastVLine(bx + bw / 2, by - 4, bh + 8, GOOD);
+
+  if (!rxOver_) {
+    unsigned long period = 1400UL - (unsigned long)rxRound_ * 200UL;
+    unsigned long tt = (ui.now - rxStart_) % (period * 2);
+    int pos = (int)(tt < period ? tt * 100 / period
+                                : (period * 2 - tt) * 100 / period);
+    if (rxLast_ >= 0) { /* frozen where it was stopped */
+      unsigned long ts = (rxShownAt_ - rxStart_) % (period * 2);
+      pos = (int)(ts < period ? ts * 100 / period
+                              : (period * 2 - ts) * 100 / period);
+    }
+    int mx = bx + (bw - 6) * pos / 100;
+    uint16_t mc = rxLast_ < 0 ? ORANGE : (rxLast_ >= 80 ? GOOD : rxLast_ >= 40 ? WARN : CRIT);
+    g.fillRect(mx, by - 6, 6, bh + 12, mc);
+    g.setFont(&F_MED);
+    if (rxLast_ >= 0) {
+      snprintf(t, sizeof(t), "+%d", rxLast_);
+      textCenter(g, NOCT_W / 2, 108, t, mc);
+    } else {
+      textCenter(g, NOCT_W / 2, 108, "жми в центре", TEXT);
+    }
+    g.setFont(&F_TEXT);
+    textCenter(g, NOCT_W / 2, NOCT_H - 14, "нажми - стоп / 2x выход", DIM);
+  } else {
+    const int cw = 220, ch = 56, cx = (NOCT_W - cw) / 2, cy = 100;
+    g.fillRoundRect(cx, cy, cw, ch, cardRadius() ? 8 : 0, PANEL);
+    g.drawRoundRect(cx, cy, cw, ch, cardRadius() ? 8 : 0, ORANGE);
+    g.setFont(&F_MED);
+    snprintf(t, sizeof(t), "%d из 500%s", rxScore_,
+             rxScore_ >= rxBest_ && rxScore_ > 0 ? " - рекорд!" : "");
+    textCenter(g, NOCT_W / 2, cy + 8, t, ORANGE);
+    g.setFont(&F_TEXT);
+    textCenter(g, NOCT_W / 2, cy + 32, "1x снова / 2x выход", DIM);
+  }
+}
+
 /* Scenes with nothing to show. Passed to the round builder so Carousel.h
  * never has to know what a dark PC is. */
 static bool carSkip(int scene, void *ctx) {
@@ -1332,9 +1565,11 @@ void SceneManager::drawScreensaver(UiCtx &ui) {
     widgets::pawPrint(g, pwx + 32, 150 + (k & 1) * 6,
                       lerp565(BG, ORANGE_DIM, 150 - k * 30));
   }
-  const unsigned char *frame = ((now / 200) & 3) == 0 ? wolfFrame(WOLF_BLINK) : wolfFrame(WOLF_IDLE);
-  if (!ui.st.link.tcpConnected) frame = wolfFrame(WOLF_IDLE);
-  widgets::xbmScaled(g, wx, wy, frame, 32, 32, 2, ORANGE);
+  if (ui.st.settings.petEnabled && ui.st.settings.furry) {
+    const unsigned char *frame = ((now / 200) & 3) == 0 ? wolfFrame(WOLF_BLINK) : wolfFrame(WOLF_IDLE);
+    if (!ui.st.link.tcpConnected) frame = wolfFrame(WOLF_IDLE);
+    widgets::xbmScaled(g, wx, wy, frame, 32, 32, 2, ORANGE);
+  }
 
   /* tiny ambient PC line + hint */
   g.setFont(&theme::F_TEXT);
@@ -1431,8 +1666,26 @@ void SceneManager::draw(UiCtx &ui) {
   theme::reactLevel = ui.st.hw.cl > ui.st.hw.gl ? ui.st.hw.cl : ui.st.hw.gl;
   theme::reactAlert = alertActive(ui);
   theme::uiElements = ui.st.settings.uiElements; /* per-element composition */
+  theme::furry = ui.st.settings.furry;
   theme::weatherCode = ui.st.weatherReceived ? ui.st.weather.wmoCode : 0;
+  gMenuSettings = &s;
+  ui.st.uiScene = scene_;
   g.fillSprite(BG);
+
+  /* a game asked for from the panel */
+  if (pendingGame_ > 0) {
+    int which = pendingGame_;
+    pendingGame_ = -1;
+    menuOpen_ = false;
+    menuCat_ = -1;
+    gameMode_ = true;
+    gameKind_ = which == 2 ? 2 : 1;
+    if (gameKind_ == 2) reactionReset();
+    else {
+      gameTick_ = ui.now;
+      gameReset();
+    }
+  }
 
   /* remote scene jump (companion app) */
   if (pendingScene_ >= 0 && pendingScene_ < SCENE_COUNT) {
@@ -1592,8 +1845,10 @@ void SceneManager::draw(UiCtx &ui) {
   /* content */
   switch (effScene) {
   case SCENE_DEN:
-    scenes::drawDen(ui, denActionMode_ ? denSel_ : denActionSel(ui),
-                    denActionMode_);
+    if (!s.petEnabled) scenes::drawHomePlain(ui);
+    else
+      scenes::drawDen(ui, denActionMode_ ? denSel_ : denActionSel(ui),
+                      denActionMode_);
     break;
   case SCENE_DASH: scenes::drawDash(ui); break;
   case SCENE_CPU: scenes::drawCpu(ui); break;
@@ -1630,7 +1885,11 @@ void SceneManager::draw(UiCtx &ui) {
   /* chrome — the Forza HUD owns the whole screen, no bars. Footer hint line
    * removed (wasted space); scene position lives in the status bar now. */
   if (effScene != SCENE_FORZA)
-    widgets::statusBar(ui, scenes::title(effScene), effScene, SCENE_FORZA);
+    widgets::statusBar(ui,
+                       (effScene == SCENE_DEN && !s.petEnabled)
+                           ? "ГЛАВНЫЙ"
+                           : scenes::title(effScene),
+                       effScene, SCENE_FORZA);
 
 #if NOCT_LAYOUT_LINT
   /* Last, when everything is on the sprite — scene AND chrome. Running it
@@ -1671,9 +1930,10 @@ void SceneManager::draw(UiCtx &ui) {
   /* wolf speech overlay — the wolf "lives in the background": its comment
    * SLIDES UP from the bottom over ANY scene, sits, then slides away. DEN
    * shows speech inline so it's skipped there. */
-  if (ui.brain.bubbleVisible(ui.now) && effScene != SCENE_DEN && !menuOpen_ &&
-      !sysInfo_ && !editMode_ && !scenePickMode_ && !elemPickMode_ &&
-      !ui.brain.thinking() && theme::uiOn(theme::UI_WOLFOVL)) {
+  if (s.petEnabled && ui.brain.bubbleVisible(ui.now) && effScene != SCENE_DEN &&
+      !menuOpen_ && !sysInfo_ && !editMode_ && !scenePickMode_ &&
+      !elemPickMode_ && !ui.brain.thinking() &&
+      theme::uiOn(theme::UI_WOLFOVL)) {
     const String &p = ui.brain.phrase();
     if (p.length()) {
       /* taller card resting in the lower-CENTRE (was jammed at the bottom
@@ -1685,21 +1945,26 @@ void SceneManager::draw(UiCtx &ui) {
         float e = 1.0f - powf(1.0f - env, 3.0f);
         int oy = NOCT_H - (int)(e * (oh + restGap));
         /* drop shadow + body */
-        g.fillRoundRect(mx + 2, oy + 2, NOCT_W - 2 * mx, oh, 8, BG);
-        g.fillRoundRect(mx, oy, NOCT_W - 2 * mx, oh, 8, PANEL);
-        g.drawRoundRect(mx, oy, NOCT_W - 2 * mx, oh, 8, ORANGE);
-        g.drawRoundRect(mx + 1, oy + 1, NOCT_W - 2 * mx - 2, oh - 2, 7,
-                        lerp565(PANEL, ORANGE, 90));
-        /* speaking wolf, framed and vertically centred in the taller card */
-        g.fillRoundRect(mx + 4, oy + 4, 42, oh - 8, 6, BG);
-        const unsigned char *fr = ((ui.now / 150) & 1) ? wolfFrame(WOLF_FUNNY) : wolfFrame(WOLF_IDLE);
-        xbmScaled(g, mx + 9, oy + (oh - 32) / 2, fr, 32, 32, 1, ORANGE);
+        const int cr = cardRadius() ? 8 : 0;
+        g.fillRoundRect(mx + 2, oy + 2, NOCT_W - 2 * mx, oh, cr, BG);
+        g.fillRoundRect(mx, oy, NOCT_W - 2 * mx, oh, cr, PANEL);
+        g.drawRoundRect(mx, oy, NOCT_W - 2 * mx, oh, cr, ORANGE);
+        g.drawRoundRect(mx + 1, oy + 1, NOCT_W - 2 * mx - 2, oh - 2,
+                        cr ? cr - 1 : 0, lerp565(PANEL, ORANGE, 90));
+        /* the speaking animal, framed - unless the chrome is kept plain */
+        int tx = mx + 12;
+        if (s.furry) {
+          g.fillRoundRect(mx + 4, oy + 4, 42, oh - 8, cr ? 6 : 0, BG);
+          const unsigned char *fr = ((ui.now / 150) & 1) ? wolfFrame(WOLF_FUNNY) : wolfFrame(WOLF_IDLE);
+          xbmScaled(g, mx + 9, oy + (oh - 32) / 2, fr, 32, 32, 1, ORANGE);
+          tx = mx + 52;
+        }
         /* name tag + text */
         g.setFont(&theme::F_TEXT);
-        textAt(g, mx + 52, oy + 6, "НОКТЮРН", ACCENT);
+        textAt(g, tx, oy + 6, petkind::name(), ACCENT);
         g.setFont(&theme::F_MED);
-        widgets::textWrap(g, p.c_str(), mx + 52, oy + 20,
-                          NOCT_W - 2 * mx - 58, 18, 2, TEXT);
+        widgets::textWrap(g, p.c_str(), tx, oy + 20,
+                          NOCT_W - mx - tx - 6, 18, 2, TEXT);
       }
     }
   }
@@ -1718,8 +1983,9 @@ void SceneManager::draw(UiCtx &ui) {
 
   /* the runner owns the content band outright */
   if (gameMode_) {
-    drawGame(ui);
-    widgets::statusBar(ui, "ИГРА", -1, 0);
+    if (gameKind_ == 2) drawReaction(ui);
+    else drawGame(ui);
+    widgets::statusBar(ui, gameKind_ == 2 ? "РЕАКЦИЯ" : "ИГРА", -1, 0);
     return;
   }
 
@@ -1900,18 +2166,26 @@ void SceneManager::bootAnimation(UiCtx &ui) {
   }
   delay(250);
 
-  /* 3. wolf logo reveal (3x = 96x96), clipped from top */
-  for (int reveal = 8; reveal <= 96; reveal += 8) {
+  /* 3. the animal's reveal (3x = 96x96), clipped from top - or, with the
+   * chrome kept plain, the name alone on an empty ground */
+  const bool showPet = ui.st.settings.petEnabled && ui.st.settings.furry;
+  if (showPet) {
+    for (int reveal = 8; reveal <= 96; reveal += 8) {
+      g.fillSprite(BG);
+      g.setClipRect(0, 0, NOCT_W, 30 + reveal);
+      xbmScaled(g, (NOCT_W - 96) / 2, 30, wolfFrame(WOLF_IDLE), 32, 32, 3,
+                ORANGE);
+      g.clearClipRect();
+      d_.disp->push();
+      delay(30);
+    }
+  } else {
     g.fillSprite(BG);
-    g.setClipRect(0, 0, NOCT_W, 30 + reveal);
-    xbmScaled(g, (NOCT_W - 96) / 2, 30, wolfFrame(WOLF_IDLE), 32, 32, 3, ORANGE);
-    g.clearClipRect();
-    d_.disp->push();
-    delay(30);
+    g.drawRect(0, 0, NOCT_W, NOCT_H, ORANGE_DIM);
   }
   g.setFont(&F_MED);
   g.setTextSize(1);
-  textCenter(g, NOCT_W / 2, 134, "N O C T U R N E", TEXT);
+  textCenter(g, NOCT_W / 2, showPet ? 134 : 70, "N O C T U R N E", TEXT);
   g.setTextSize(1);
   widgets::pawPrint(g, 58, 140, ORANGE_DIM); /* flanking paws */
   widgets::pawPrint(g, NOCT_W - 58, 140, ORANGE_DIM);

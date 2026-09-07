@@ -58,7 +58,7 @@ int baroArrow(LGFX_Sprite &g, int x, int y, int dir, bool sharp, uint16_t c) {
 }
 
 void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color) {
-  if (!uiOn(UI_PAWS)) return; /* element composition */
+  if (!uiOn(UI_PAWS) || !theme::furry) return; /* element composition */
   g.fillCircle(cx, cy + 2, 3, color);     /* main pad */
   g.fillCircle(cx - 3, cy - 1, 1, color); /* four toe beans */
   g.fillCircle(cx - 1, cy - 3, 1, color);

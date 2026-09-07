@@ -12,13 +12,11 @@ uint8_t skinData[WOLF_FRAME_COUNT * (WOLF_SPR_W * WOLF_SPR_H / 8)];
 bool skinLoaded = false;
 char skinName[24] = {0};
 
+const unsigned char *builtinTable[WOLF_FRAME_COUNT] = {
+    wolf_idle, wolf_blink, wolf_aggressive, wolf_funny};
+
 const unsigned char *builtin(int id) {
-  switch (id) {
-  case WOLF_BLINK: return wolf_blink;
-  case WOLF_AGGRO: return wolf_aggressive;
-  case WOLF_FUNNY: return wolf_funny;
-  default: return wolf_idle;
-  }
+  return builtinTable[(id < 0 || id >= WOLF_FRAME_COUNT) ? WOLF_IDLE : id];
 }
 } // namespace
 
@@ -48,3 +46,11 @@ bool wolfLoadSkin(SdStore *sd, const char *name) {
 }
 
 const char *wolfSkinName() { return skinName; }
+
+void wolfSetBuiltin(const unsigned char *idle, const unsigned char *blink,
+                    const unsigned char *aggro, const unsigned char *funny) {
+  builtinTable[WOLF_IDLE] = idle;
+  builtinTable[WOLF_BLINK] = blink;
+  builtinTable[WOLF_AGGRO] = aggro;
+  builtinTable[WOLF_FUNNY] = funny;
+}

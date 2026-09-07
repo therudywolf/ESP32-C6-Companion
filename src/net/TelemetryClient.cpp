@@ -131,10 +131,10 @@ void TelemetryClient::sendCfg(const Settings &s) {
    * and ignores the tail keeps working unchanged. Never reorder — only
    * append, and add the name to the panel's key list in the same commit or the
    * field is parsed off the wire and silently dropped. */
-  char b[280];
+  char b[320];
   snprintf(b, sizeof(b),
            "cfg:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%lu,%d,%d,%d,%d,%d,%d,%d,"
-           "%d,%d,%d,%d,%d,%d,%d,%s,%d\n",
+           "%d,%d,%d,%d,%d,%d,%d,%s,%d,%d,%d,%d,%d,%d,%d\n",
            s.petLlm ? 1 : 0, s.wolfChatter, s.wolfTone, s.ledEnabled ? 1 : 0,
            s.flipped ? 1 : 0, s.bgLight ? 1 : 0, s.brightness,
            s.carouselEnabled ? s.carouselIntervalSec : -1, s.displayTimeoutSec,
@@ -148,7 +148,10 @@ void TelemetryClient::sendCfg(const Settings &s) {
             * разделителей — одна цифра на сцену в порядке SceneId), dots.
             * Панель показывала таблицу частот из СВОЕЙ памяти, а не с платы,
             * и на свежей странице все двадцать стояли на «выкл». */
-           s.carPreset, carFreqStr(s), s.dotStyle);
+           s.carPreset, carFreqStr(s), s.dotStyle,
+           /* 30.. v1.43: pet, kind, furry, style, ledbright, web */
+           s.petEnabled ? 1 : 0, s.petKind, s.furry ? 1 : 0, s.uiStyle,
+           s.ledBright, s.webPanel ? 1 : 0);
   sendLine(b);
 }
 
@@ -608,6 +611,14 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
       state.rcNight = rc["night"] | -1;
       state.rcNightFrom = rc["nightfrom"] | -1;
       state.rcNightTo = rc["nightto"] | -1;
+      state.rcPet = rc["pet"] | -1;
+      state.rcPetKind = rc["kind"] | -1;
+      state.rcFurry = rc["furry"] | -1;
+      state.rcStyle = rc["style"] | -1;
+      state.rcLook = rc["look"] | -1;
+      state.rcLedBright = rc["ledbright"] | -1;
+      state.rcWeb = rc["web"] | -1;
+      state.rcGame = rc["game"] | -1;
       state.rcColorRole = -1;
       if (rc["color"].is<JsonArray>() && rc["color"].size() == 4) {
         state.rcColorRole = rc["color"][0] | -1;

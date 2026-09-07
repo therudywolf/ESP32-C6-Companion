@@ -40,6 +40,8 @@ public:
   int currentScene() const { return scene_; }
   /* remote-control: jump to a scene on the next draw (companion app). */
   void requestScene(int s) { pendingScene_ = s; }
+  /* Open a game from outside: 1 = the runner, 2 = the reaction game. */
+  void requestGame(int which) { pendingGame_ = which; }
 
   /* ── ОСМОТР ───────────────────────────────────────────────────────────
    * One switch that makes the screen hold still long enough to be measured.
@@ -156,6 +158,8 @@ private:
   void drawNotifCard(UiCtx &ui); /* the notification flyover */
   void drawGame(UiCtx &ui);      /* the one-button runner */
   void gameReset();
+  void drawReaction(UiCtx &ui);  /* the second game: stop the marker */
+  void reactionReset();
   /* next ring scene after `from` that is enabled in the mask (DEN always ok). */
   int carouselStep(UiCtx &ui);
   int nextVisibleScene(int from, uint32_t mask, bool allowDen,
@@ -185,6 +189,14 @@ private:
    * The wolf runs, fences come at it, the score is distance. High score goes
    * to NVS so it means something. */
   bool gameMode_ = false;
+  int gameKind_ = 1;               /* 1 runner, 2 reaction */
+  int pendingGame_ = -1;
+  /* ── the reaction game ─────────────────────────────────────────────────
+   * A marker sweeps a bar; press when it is in the middle. Five rounds,
+   * each faster than the last; the score is how close you stopped it. */
+  int rxRound_ = 0, rxScore_ = 0, rxBest_ = 0, rxLast_ = -1;
+  unsigned long rxStart_ = 0, rxShownAt_ = 0;
+  bool rxOver_ = false;
   float gameY_ = 0, gameVy_ = 0;   /* wolf offset above the ground, px */
   int gameScore_ = 0, gameBest_ = 0;
   int gameSpeed_ = 0;

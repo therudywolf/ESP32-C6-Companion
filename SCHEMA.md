@@ -135,6 +135,14 @@ as RGB565.
 device's notification card. **Capped** at app≤24 / title≤48 / body≤160 chars:
 an uncapped body pushed the frame past `NOCT_TCP_LINE_MAX`.
 
+### room forecast (top level, beside the weather keys)
+Fitted on the PC (`roomcast.py`) and sent as an answer, never as inputs:
+`rcok` (0/1 — a model exists), `rct3` / `rct12` (room temperature in 3 h / 12 h,
+tenths °C), `rcs3` / `rcs12` (one sigma, tenths), `rch3` / `rch12` (humidity %,
+-1 = not fitted), `rco3` / `rco12` (the street at the same hour, tenths;
+presence of `rco3` = `haveStreet`), `rcw` (why there is no answer), `rcr` (one
+probabilistic risk line).
+
 ### `rc` — remote control (the device acts once per `seq` change)
 Every field is optional; the sentinel means "no change this time".
 
@@ -183,6 +191,15 @@ Every field is optional; the sentinel means "no change this time".
 | `toneg` | % | 0 | same for green |
 | `toneb` | % | 0 | same for blue |
 | `tonek` | level | -1 | black point, 8-bit (0..96, -1 = leave) |
+| `review` | 0/1 | -1 | hold the screen still for screenshots: no carousel, toasts, transitions; grey palette (sticky, like `tone*`) |
+| `pet` | 0/1 | -1 | the tamagotchi as a whole; off = plain home screen, stats frozen, voice silent |
+| `kind` | 0..3 | -1 | species: wolf / dog / cat / fox — same stats, different coat and voice |
+| `furry` | 0/1 | -1 | animal flavour in the chrome: paws, sprite in boot/screensaver, animal toasts |
+| `style` | 0..4 | -1 | visual grammar: cyberpunk / material / windows / led / nixie |
+| `look` | 0..4 | -1 | **one-shot**: apply a whole look (style + palette + background + dots) |
+| `ledbright` | % | -1 | WS2812 ceiling, 10..100 |
+| `web` | 0/1 | -1 | the board's own web panel on port 80 |
+| `game` | 1/2 | -1 | **one-shot**: open the runner (1) or the reaction game (2) |
 
 > The four `tone*` keys are deliberately **not** one-shot. The board holds the
 > correction in RAM only, so the panel's replay is what restores it after a
@@ -386,7 +403,10 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   `petllm, wchat, wtone, led, flip, bglight, bright, carousel, timeout,
   bgstyle, theme, uielem, scenemask, notifshow, ledmode, pin, slot, night,
   nightfrom, nightto, zbalert, zbtmin, zbtmax, zbhmin, zbhmax, zbbat,
-  zbjoin, zbpoll, zbint`
+  carmode, carfreq, dots, pet, kind, furry, style, ledbright, web`
+
+  (`carfreq` is a string of twenty digits, one per scene in SceneId order.
+  Fields 30-35 were appended in v1.43.0.)
 
   `carousel` is -1 when off; `theme` is -1 when a custom palette is active.
   Fields 16-20 were **appended** in v1.9.0 — a panel that splits by index and

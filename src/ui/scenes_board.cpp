@@ -19,6 +19,8 @@
  *    the only figure that can be measured rather than invented, and it is
  *    labelled as what it is: цикл, not CPU.
  */
+#include <WiFi.h>
+
 #include "core/config.h"
 #include "ui/Scenes.h"
 #include "ui/Theme.h"
@@ -240,7 +242,10 @@ void drawBoard(UiCtx &ui) {
   g.setFont(&F_SMALL);
   lintRect(LK_FRAME, 8, 155, NOCT_W - 16, 1, "линейка");
   g.drawFastHLine(8, 155, NOCT_W - 16, ORANGE_DIM);
-  snprintf(v, sizeof(v), "v%s   %d МГц   wifi %d dBm", NOCT_VERSION, st.cpuMhz,
+  /* The address IS the board panel's URL - the one line that tells the owner
+   * where to point a phone when the PC is off. */
+  snprintf(v, sizeof(v), "v%s   %s   wifi %d dBm", NOCT_VERSION,
+           st.link.wifiConnected ? WiFi.localIP().toString().c_str() : "-",
            st.link.rssi);
   textAt(g, 8, 160, v, DIM);
   snprintf(v, sizeof(v), "SD %s   zigbee %s", st.link.sdOk ? "есть" : "нет",

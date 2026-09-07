@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "core/TextUtil.h"
+#include "pet/PetKind.h"
 
 /* Natural-language persona — verified on the live model to produce coherent,
  * in-character one-liners (the old cryptic "состояние=N" context made the
@@ -12,8 +13,10 @@
  * reasoning_content (separateReasoningContentInAPI), content arrives clean;
  * budget ~800 tokens covers the thinking. NOTE: gemma-4-12b was tested and
  * REJECTED — it reasons 6000+ chars and takes 40-54s for one line. */
-static const char *kSystemPrompt =
-    "Ты — Ноктюрн, домашний волк-компаньон. Ты живёшь в маленьком экране на "
+/* The first sentence — who the model is playing — comes from PetKind at
+ * request time; the rest is the same for every species. */
+static const char *kSystemPromptTail =
+    " Ты живёшь в маленьком экране на "
     "столе хозяина и приглядываешь за его компьютером и его жизнью. Характер: "
     "умный, с лёгкой иронией, преданный, иногда ворчливый — как старый друг. "
     "Говоришь живым разговорным русским от первого лица. ВСЕГДА называй "
@@ -150,7 +153,7 @@ bool LlmClient::callOnce(const char *base, const String &context,
   JsonArray msgs = req["messages"].to<JsonArray>();
   JsonObject sys = msgs.add<JsonObject>();
   sys["role"] = "system";
-  sys["content"] = kSystemPrompt;
+  sys["content"] = String(petkind::llmIdentity()) + kSystemPromptTail;
   JsonObject usr = msgs.add<JsonObject>();
   usr["role"] = "user";
   usr["content"] = context;

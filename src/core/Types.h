@@ -257,6 +257,24 @@ struct Settings {
   /* Silence after a battery warning fires, hours. The reading only moves a
    * few percent a week, so without this it would re-fire every report. */
   int zbBattMin = 15;            /* "zbBat" 0 = never warn */
+  /* ── v1.43: the pet as a whole, and how much of it shows ────────────────
+   * petEnabled: the tamagotchi exists. Off, ЛОГОВО becomes a plain home
+   * screen, the stats stop decaying (a disabled pet must not starve), the
+   * voice is silent and the LED stops reading its mood.
+   * petKind: wolf / dog / cat / fox (PetKind). Same stats, different coat.
+   * furry: "фурревость" — paws on the chrome, the sprite in the boot
+   * animation and screensaver, the animal toasts. Off = a plain instrument. */
+  bool petEnabled = true;        /* "pet" */
+  int petKind = 0;               /* "kind" petkind::Kind */
+  bool furry = true;             /* "furry" */
+  /* The visual grammar, independent of the palette: 0 cyberpunk outlines,
+   * 1 material surfaces, 2 windows flat tiles, 3 LED matrix, 4 nixie glow.
+   * See theme::setStyle. */
+  int uiStyle = 1;               /* "style" */
+  int ledBright = 100;           /* "ledBr" WS2812 ceiling, 10..100 % */
+  /* The board's own web panel (BoardPanel): a page on port 80 that works
+   * with the PC off. */
+  bool webPanel = true;          /* "web" */
 };
 
 /** Connectivity/UI status shown in the status bar (not from the server). */
@@ -397,6 +415,7 @@ struct AppState {
   int alertMetric = -1; /* 0=ct 1=gt 2=cl 3=gl 4=gv 5=ram; -1=none */
   int pcIdleSec = -1;
   char pcClock[6] = {0}; /* "HH:MM" from server */
+  int uiScene = 0;       /* what the glass shows, for the board panel */
 
   /* Remote control (server "rc" block — companion web app). Acted on once
    * per seq change; rcNew is set by the parser, cleared by the consumer. */
@@ -457,6 +476,35 @@ struct AppState {
   int rcZbBattMin = -1000;
   int rcNight = -1;             /* quiet hours 0/1, -1 = none */
   int rcNightFrom = -1, rcNightTo = -1; /* quiet-hour bounds, -1 = none */
+  int rcPet = -1;               /* tamagotchi on/off, -1 = none */
+  int rcPetKind = -1;           /* species 0..3, -1 = none */
+  int rcFurry = -1;             /* 0/1, -1 = none */
+  int rcStyle = -1;             /* visual grammar 0..4, -1 = none */
+  int rcLook = -1;              /* a whole look (style+palette+bg+dots) */
+  int rcLedBright = -1;         /* LED ceiling %, -1 = none */
+  int rcWeb = -1;               /* board web panel 0/1, -1 = none */
+  int rcGame = -1;              /* 1 runner / 2 reaction: open a game, one-shot */
+
+  /* Forget every command field. The board's own web panel fills a few and
+   * raises rcNew; with the PC off no payload ever overwrites the rest, so
+   * without this a theme picked an hour ago would be re-applied alongside
+   * the next brightness change. */
+  void rcClear() {
+    rcScreen = -1; rcSay = ""; rcTheme = -1;
+    rcChromeR = rcChromeG = rcChromeB = -1;
+    rcAccentR = rcAccentG = rcAccentB = -1;
+    rcBright = -1; rcBlMax = -1; rcBlMins = 15;
+    rcAction = ""; rcLed = -1; rcCarousel = -2; rcPetLlm = -1; rcFlip = -1;
+    rcTimeout = -1; rcBgStyle = -1; rcBgLight = -1; rcSceneMask = -1;
+    rcWolfChatter = -1; rcWolfTone = -1; rcNotif = -1; rcLedMode = -1;
+    rcUiElem = -1; rcColorRole = -1; rcHasPalette = false; rcPresetReset = -1;
+    rcPin = -2; rcSlot = -1; rcZbJoin = -1; rcZbPoll = -1; rcZbInt = -1;
+    rcZbDump = -1; rcZbAlert = -1;
+    rcZbTempMin = rcZbTempMax = rcZbHumMin = rcZbHumMax = rcZbBattMin = -1000;
+    rcNight = -1; rcNightFrom = rcNightTo = -1;
+    rcPet = rcPetKind = rcFurry = rcStyle = rcLook = rcLedBright = rcWeb = -1;
+    rcGame = -1;
+  }
 };
 
 #endif

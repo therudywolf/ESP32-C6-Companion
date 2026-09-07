@@ -29,6 +29,10 @@ public:
     ACH_TRACK,    /* tracks heard */
     ACH_SHOT,     /* screenshots taken */
     ACH_JOURNAL,  /* nights it wrote its own diary entry */
+    /* Experience. Every act of care and every day survived adds to it; the
+     * level is the square root, so the first few come fast and the later
+     * ones are earned. Shown on ЛОГОВО beside the life stage. */
+    ACH_XP,
     ACH_COUNT
   };
 
@@ -45,6 +49,10 @@ public:
   static uint32_t nextTier(Id id, uint32_t have);
   /* How many milestones this counter has passed — the "level". */
   static int level(Id id, uint32_t have);
+  /* The pet's level from its XP: sqrt(xp / 25), 1-based. */
+  int petLevel() const;
+  /* XP still needed for the next level. */
+  uint32_t xpToNext() const;
 
 private:
   void save();

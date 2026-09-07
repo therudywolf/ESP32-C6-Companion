@@ -20,6 +20,8 @@ const lgfx::U8g2font F_HUGE(u8g2_font_logisoso32_tr);
 uint16_t BG, ORANGE, ORANGE_DIM, TEXT, DIM, PANEL, GOOD, WARN, CRIT, INFO,
     ACCENT;
 int currentPreset = 0;
+int uiStyle = STYLE_MATERIAL;
+bool furry = true;
 int bgStyle = 1;
 bool bgLight = false;
 uint16_t SURFACE = 0, SURFACE_DIM = 0;
@@ -248,7 +250,64 @@ static const Preset kPresets[THEME_PRESETS] = {
     {"Диод белый", rgb(4, 4, 4), rgb(235, 235, 235), rgb(255, 255, 255),
      rgb(150, 150, 150), rgb(22, 22, 22), rgb(120, 255, 140), rgb(255, 200, 70),
      rgb(255, 80, 80), rgb(150, 210, 255), rgb(200, 200, 200)},
+
+    /* 27 Metro — the Windows tile palette. Chrome is the system blue the
+     * tiles are made of (STYLE_WINDOWS tints the surface from it); text is
+     * plain white on near-black; the three alert roles are the exact green,
+     * amber and red Windows uses for its own status. */
+    {"Metro", rgb(16, 16, 16), rgb(60, 160, 245), rgb(255, 255, 255),
+     rgb(176, 176, 176), rgb(30, 30, 30), rgb(40, 210, 110), rgb(255, 205, 50),
+     rgb(255, 96, 104), rgb(40, 190, 255), rgb(0, 170, 205)},
+
+    /* 28 Никси — gas-discharge glass. Every warm role is the orange of a
+     * neon-filled tube on black; the two cold roles (good, info) are the
+     * blue-green of a VFD, which is the other tube a period instrument had.
+     * DIM was solved against the black glass: at rgb(160,90,30) it sat at
+     * 3.8 and the labels were the first thing to vanish. */
+    {"Никси", rgb(6, 3, 0), rgb(255, 120, 20), rgb(255, 176, 88),
+     rgb(190, 112, 40), rgb(26, 13, 4), rgb(120, 255, 190), rgb(255, 200, 60),
+     rgb(255, 60, 40), rgb(80, 230, 220), rgb(255, 150, 60)},
 };
+
+/* ── styles and looks ──────────────────────────────────────────────────── */
+static const char *const kStyleName[STYLE_COUNT] = {
+    "киберпанк", "материал", "windows", "леды", "никси"};
+
+const char *styleName(int s) {
+  return kStyleName[(s < 0 || s >= STYLE_COUNT) ? STYLE_MATERIAL : s];
+}
+
+void setStyle(int s) {
+  uiStyle = (s < 0 || s >= STYLE_COUNT) ? STYLE_MATERIAL : s;
+  applyPreset(currentPreset); /* the surface tint depends on the style */
+}
+
+int radius() {
+  switch (uiStyle) {
+  case STYLE_MATERIAL: return 4;
+  case STYLE_NIXIE: return 6;
+  default: return 0;
+  }
+}
+
+int cardRadius() {
+  switch (uiStyle) {
+  case STYLE_CYBER:
+  case STYLE_WINDOWS:
+  case STYLE_LED: return 0;
+  default: return 10;
+  }
+}
+
+static const Look kLooks[LOOKS] = {
+    {"Киберпанк", STYLE_CYBER, 0, 1, 0},
+    {"Материал", STYLE_MATERIAL, 8, 0, 0},   /* Nord */
+    {"Windows", STYLE_WINDOWS, 27, 0, 0},     /* Metro */
+    {"Леды", STYLE_LED, 23, 0, 1},            /* Диодное, dots on */
+    {"Никси", STYLE_NIXIE, 28, 0, 0},
+};
+
+const Look &look(int i) { return kLooks[(i < 0 || i >= LOOKS) ? 0 : i]; }
 
 /* Slightly darker chrome for inactive frames — and this is the colour EVERY
  * tile border on every screen is drawn in, so "slightly" has to be true.
@@ -697,10 +756,29 @@ void backdrop(LGFX_Sprite &g, int y0, int y1) {
 }
 
 void ditherRect(LGFX_Sprite &g, int x, int y, int w, int h, uint16_t color) {
-  for (int yy = y; yy < y + h; yy++) {
-    for (int xx = x + ((yy ^ x) & 1); xx < x + w; xx += 2) {
-      g.drawPixel(xx, yy, color);
-    }
+  /* Straight into the sprite buffer. drawPixel() is a bounds check, a
+   * colour conversion and a byte swap PER PIXEL, and a dithered fill is by
+   * definition thousands of them - the bars on ЛОГОВО alone were a fifth of
+   * the frame budget. The buffer is 16-bit RGB565 in the panel's byte order,
+   * so the colour is swapped once here and copied. */
+  uint16_t *buf = (uint16_t *)g.getBuffer();
+  const int W = g.width(), H = g.height();
+  if (!buf) {
+    for (int yy = y; yy < y + h; yy++)
+      for (int xx = x + ((yy ^ x) & 1); xx < x + w; xx += 2)
+        g.drawPixel(xx, yy, color);
+    return;
+  }
+  uint16_t c = g.getSwapBytes() ? (uint16_t)((color >> 8) | (color << 8))
+                                : color;
+  int x0 = x < 0 ? 0 : x, x1 = x + w > W ? W : x + w;
+  int y0 = y < 0 ? 0 : y, y1 = y + h > H ? H : y + h;
+  for (int yy = y0; yy < y1; yy++) {
+    uint16_t *row = buf + (size_t)yy * W;
+    /* keep the checkerboard phase of the ORIGINAL x, whatever the clip did */
+    int xx = x0;
+    if (((xx ^ yy) & 1) != ((x ^ yy) & 1)) xx++;
+    for (; xx < x1; xx += 2) row[xx] = c;
   }
 }
 
@@ -742,7 +820,41 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
    * tile it punched a hole in the border; on a filled one it simply sits on
    * the top edge, which is what a tab looks like anyway. Nothing else moves. */
   const int own = lintOwner(x, y);
-  g.fillRoundRect(x, y, w, h, 4, SURFACE);
+  uint16_t labelC = titleColor == DIM ? DIM : SURFACE_DIM;
+  /* One grammar per STYLE, same geometry for all of them: the tile sits
+   * exactly where it sat and the label rides its top edge, so no screen has
+   * to know which style is on. */
+  switch (uiStyle) {
+  case STYLE_CYBER: {
+    /* lines on emptiness, one corner cut - the Flipper contour */
+    const int cut = 5;
+    g.drawFastHLine(x + cut, y, w - cut, ORANGE_DIM);
+    g.drawFastVLine(x, y + cut, h - cut, ORANGE_DIM);
+    g.drawLine(x, y + cut, x + cut, y, ORANGE_DIM);
+    g.drawFastHLine(x, y + h - 1, w, ORANGE_DIM);
+    g.drawFastVLine(x + w - 1, y, h, ORANGE_DIM);
+    labelC = titleColor == DIM ? DIM : ORANGE;
+    break;
+  }
+  case STYLE_LED:
+    /* an LED sign has no boxes: the label and a dotted rule under it */
+    for (int xx = x + 2; xx < x + w - 2; xx += 3)
+      g.drawPixel(xx, y + PANEL_LABEL_H - 1, ORANGE_DIM);
+    labelC = titleColor == DIM ? DIM : ORANGE;
+    break;
+  case STYLE_NIXIE:
+    /* a glass tube: faint inner glow, dim outline */
+    g.fillRoundRect(x, y, w, h, radius(), SURFACE);
+    g.drawRoundRect(x, y, w, h, radius(), lerp565(BG, ORANGE, 90));
+    labelC = titleColor == DIM ? DIM : lerp565(DIM, ORANGE, 90);
+    break;
+  case STYLE_WINDOWS:
+    g.fillRect(x, y, w, h, SURFACE);
+    break;
+  default:
+    g.fillRoundRect(x, y, w, h, radius(), SURFACE);
+    break;
+  }
   lintClip(x, y, w, h);
   lintRectOwned(LK_FRAME, x, y, w, 1, "карточка+", own);
   lintRectOwned(LK_FRAME, x, y + h - 1, w, 1, "карточка-", own);
@@ -755,8 +867,7 @@ void panel(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
      * that still places something above that line is reported by the overlap
      * check rather than found by eye. */
     lintOwnNext(own);
-    textAt(g, x + MPADX, y + 1, title,
-           titleColor == DIM ? DIM : SURFACE_DIM);
+    textAt(g, x + MPADX, y + 1, title, labelC);
   }
 }
 
@@ -814,10 +925,16 @@ static void deriveSurface() {
    *
    * Solving for the ratio instead of picking a step removes the question. */
   uint16_t target = bgLight ? 0x0000 : 0xFFFF;
-  SURFACE = lerp565(BG, target, 96);
-  for (int lift = 12; lift <= 96; lift += 4) {
+  /* Metro tiles are made of the accent colour, not of a lifted background:
+   * the lift goes toward the chrome and has to travel further to read as a
+   * coloured block rather than as a tint. */
+  const bool metro = uiStyle == STYLE_WINDOWS;
+  if (metro) target = ORANGE;
+  const float want = metro ? 1.6f : 1.25f;
+  SURFACE = lerp565(BG, target, metro ? 140 : 96);
+  for (int lift = 12; lift <= (metro ? 200 : 96); lift += 4) {
     uint16_t cand = lerp565(BG, target, lift);
-    if (contrastOf(cand, BG) >= 1.25f) {
+    if (contrastOf(cand, BG) >= want) {
       SURFACE = cand;
       break;
     }
@@ -838,7 +955,34 @@ static void deriveSurface() {
 
 Rect panelM(LGFX_Sprite &g, int x, int y, int w, int h, const char *title,
             uint16_t titleColor) {
-  g.fillRoundRect(x, y, w, h, 4, SURFACE);
+  /* The same five grammars as panel() - one switch, kept next to it. */
+  switch (uiStyle) {
+  case STYLE_CYBER: {
+    const int cut = 5;
+    g.drawFastHLine(x + cut, y, w - cut, ORANGE_DIM);
+    g.drawFastVLine(x, y + cut, h - cut, ORANGE_DIM);
+    g.drawLine(x, y + cut, x + cut, y, ORANGE_DIM);
+    g.drawFastHLine(x, y + h - 1, w, ORANGE_DIM);
+    g.drawFastVLine(x + w - 1, y, h, ORANGE_DIM);
+    if (!titleColor) titleColor = ORANGE;
+    break;
+  }
+  case STYLE_LED:
+    for (int xx = x + 2; xx < x + w - 2; xx += 3)
+      g.drawPixel(xx, y + MPADY + INK_TEXT.box, ORANGE_DIM);
+    if (!titleColor) titleColor = ORANGE;
+    break;
+  case STYLE_NIXIE:
+    g.fillRoundRect(x, y, w, h, radius(), SURFACE);
+    g.drawRoundRect(x, y, w, h, radius(), lerp565(BG, ORANGE, 90));
+    break;
+  case STYLE_WINDOWS:
+    g.fillRect(x, y, w, h, SURFACE);
+    break;
+  default:
+    g.fillRoundRect(x, y, w, h, radius(), SURFACE);
+    break;
+  }
   /* The tile paints its own ground, so it is registered as ART rather than
    * FILL: everything inside it is meant to be there. Its EDGES still matter,
    * so the four one-pixel rims go in as frames. */
@@ -867,6 +1011,15 @@ void hBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
   lintRect(LK_ART, x, y, w, h, "полоса");
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
+  if (uiStyle == STYLE_MATERIAL || uiStyle == STYLE_WINDOWS ||
+      uiStyle == STYLE_NIXIE) {
+    /* a flat track and a solid fill: no frame, no shimmer */
+    int r = uiStyle == STYLE_WINDOWS ? 0 : h / 2;
+    g.fillRoundRect(x, y, w, h, r, lerp565(SURFACE, TEXT, 28));
+    int fill = w * pct / 100;
+    if (fill > 0) g.fillRoundRect(x, y, fill < h ? h : fill, h, r, color);
+    return;
+  }
   g.drawRect(x, y, w, h, ORANGE_DIM);
   int fill = (w - 4) * pct / 100;
   if (fill > 0) {
@@ -883,6 +1036,14 @@ void vBar(LGFX_Sprite &g, int x, int y, int w, int h, int pct, uint16_t color) {
   lintRect(LK_ART, x, y, w, h, "столбик");
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
+  if (uiStyle == STYLE_MATERIAL || uiStyle == STYLE_WINDOWS ||
+      uiStyle == STYLE_NIXIE) {
+    int r = uiStyle == STYLE_WINDOWS ? 0 : w / 2;
+    g.fillRoundRect(x, y, w, h, r, lerp565(SURFACE, TEXT, 28));
+    int fill = h * pct / 100;
+    if (fill > 0) g.fillRoundRect(x, y + h - fill, w, fill, r, color);
+    return;
+  }
   g.drawRect(x, y, w, h, ORANGE_DIM);
   int fill = (h - 4) * pct / 100;
   if (fill > 0) {
@@ -1274,6 +1435,19 @@ void textAt(LGFX_Sprite &g, int x, int y, const char *s, uint16_t color) {
     lintRect(LK_TEXT, x, y + top, g.textWidth(s), hh, s);
   }
 #endif
+  /* Nixie: a large digit bleeds into the glass around it. Four offset
+   * copies in a dim tint, then the digit itself - only for the big faces,
+   * where the halo reads as glow rather than as a smear. */
+  if (uiStyle == STYLE_NIXIE && g.fontHeight() >= INK_VALUE.box &&
+      color != BG && color != DIM) {
+    uint16_t halo = lerp565(BG, color, 70);
+    g.setTextColor(halo);
+    static const int8_t dx[4] = {-1, 1, 0, 0}, dy[4] = {0, 0, -1, 1};
+    for (int i = 0; i < 4; i++) {
+      g.setCursor(x + dx[i], y + dy[i]);
+      g.print(s);
+    }
+  }
   g.setTextColor(color);
   g.setCursor(x, y);
   g.print(s);

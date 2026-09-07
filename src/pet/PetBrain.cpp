@@ -396,8 +396,12 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     } else if (a == WolfPet::ACT_PLAY) {
       trigger("played", "хозяин только что поиграл с тобой", now, st, true);
     } else if (a == WolfPet::ACT_PET) {
-      trigger("pet", "хозяин ласково тебя гладит, ответь по-волчьи", now, st,
-              true);
+      {
+        char ev[96];
+        snprintf(ev, sizeof(ev), "хозяин ласково тебя гладит, ответь %s",
+                 petkind::inManner());
+        trigger("pet", ev, now, st, true);
+      }
     } else {
       /* explicit TALK: the owner asked the AI directly — force the LLM and
        * bypass the chatter-mute (this is the one way to make a muted wolf talk) */

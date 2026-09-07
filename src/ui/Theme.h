@@ -36,7 +36,7 @@ extern uint16_t ACCENT;     /* secondary accent */
 
 /* Theme control. 12 presets (see kPresets in Theme.cpp). setChrome/setAccent
  * override individual hues on top of the active preset. */
-static const int THEME_PRESETS = 27;
+static const int THEME_PRESETS = 29;
 /* Themes are also FILES: 1.thm .. 8.thm under /themes on the card append to
  * the built-in
  * presets, so a palette can be shared, edited on a laptop and dropped in
@@ -61,6 +61,55 @@ extern const char *roleName(int role);
 void setColorRole(int role, uint8_t r, uint8_t g, uint8_t b);
 void getPalette(uint16_t out[COLOR_ROLES]);
 void applyPalette(const uint16_t pal[COLOR_ROLES]);
+
+/* ── Visual grammar ─────────────────────────────────────────────────────
+ *
+ * A palette says which colours; a STYLE says what a tile, a bar and a number
+ * are made of. Five of them, picked by the owner ("Темы: Киберпанк / Материал
+ * / Windows / Леды / газоразрядные"):
+ *
+ *   STYLE_CYBER     lines on emptiness: thin outlined tiles with a cut
+ *                   corner, dithered bars with a sweeping shimmer, the
+ *                   scanline backdrop. The original Flipper look.
+ *   STYLE_MATERIAL  filled rounded surfaces, no outline, flat bars.
+ *   STYLE_WINDOWS   square flat tiles in a tint of the chrome colour: Metro.
+ *   STYLE_LED       no tiles at all - a label with a dotted rule under it,
+ *                   and the dot-matrix pass forced on, so the whole screen
+ *                   reads as one LED sign.
+ *   STYLE_NIXIE     dark glass tubes: rounded outline with a faint inner
+ *                   glow, and every large number drawn with a halo, the way
+ *                   a gas-discharge digit bleeds into its neighbours.
+ *
+ * Every screen goes through panel()/panelM()/hBar()/textAt(), so the style
+ * is applied in those four places and nowhere else. */
+enum {
+  STYLE_CYBER = 0,
+  STYLE_MATERIAL,
+  STYLE_WINDOWS,
+  STYLE_LED,
+  STYLE_NIXIE,
+  STYLE_COUNT
+};
+extern int uiStyle;
+void setStyle(int s);
+const char *styleName(int s);
+/* Corner radius of a card in the active style; of an overlay card (toast,
+ * notification, speech) - the same idea at a larger size. */
+int radius();
+int cardRadius();
+/* "Фурревость": whether the animal leaks into the chrome (paw prints, the
+ * sprite on overlays). Set once per frame from Settings. */
+extern bool furry;
+
+/* A LOOK is a whole appearance in one pick: style + palette + background +
+ * dots. The five the owner asked for by name. Applying one writes those four
+ * settings; each stays individually editable afterwards. */
+struct Look {
+  const char *name;
+  uint8_t style, preset, bg, dots;
+};
+static const int LOOKS = 5;
+const Look &look(int i);
 
 /* Background controls, independent of the colour preset.
  *  bgStyle: 0 = solid (clean), 1 = scanlines + sheen, 2 = dot grid.

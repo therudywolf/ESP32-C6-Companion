@@ -11,6 +11,8 @@
 
 #include <Arduino.h>
 
+#include "pet/PetKind.h"
+
 class WolfPet {
 public:
   enum Action { ACT_FEED = 0, ACT_PLAY, ACT_PET, ACT_TALK, ACT_COUNT };
@@ -26,6 +28,12 @@ public:
   bool isAlive() const { return alive_; }
   bool isSleeping() const { return sleeping_; }
   int mood() const; /* 0 = sad/fainted, 1 = ok, 2 = happy */
+  /* Quiet hours: the pet turns in at a much higher energy than the daytime
+   * threshold, so it sleeps when the owner does instead of at 3 a.m. by
+   * chance. The decay model itself is untouched; only the point at which
+   * "tired" becomes "asleep" moves. */
+  void setNightRest(bool on) { nightRest_ = on; }
+  bool nightRest() const { return nightRest_; }
   /* Life stage from age. A pet-day is a real hour, so a pup lasts a couple of
    * days of wall time and an elder is a month of living with the thing. The
    * wolf GROWS: that is the difference between a mascot and a companion, and
@@ -36,13 +44,9 @@ public:
     if (ageDays_ < 30) return STAGE_ADULT;
     return STAGE_ELDER;
   }
-  const char *stageName() const {
-    switch (stage()) {
-    case STAGE_PUP: return "щенок";
-    case STAGE_ELDER: return "седой";
-    default: return "волк";
-    }
-  }
+  /* "щенок / волк / седой" for a wolf, "котёнок / кот / старый кот" for a
+   * cat: the species owns the words (PetKind). */
+  const char *stageName() const { return petkind::stageName(stage()); }
   const char *statusText() const; /* deterministic — always true, RU */
 
 private:
@@ -56,6 +60,7 @@ private:
   unsigned long lastDecayMs_ = 0;
   unsigned long lastSaveMs_ = 0;
   uint32_t ageAccumMs_ = 0;
+  bool nightRest_ = false;
   bool dirty_ = false; /* unsaved stat change — skips the periodic NVS write
                           while nothing changed (e.g. the pet is fainted) */
 };

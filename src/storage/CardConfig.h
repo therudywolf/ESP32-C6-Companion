@@ -47,6 +47,8 @@ public:
   const char *llmModel() const { return llmModel_.c_str(); }
   const char *llmKey() const { return llmKey_.c_str(); }
   const char *skin() const { return skin_.c_str(); }
+  /* `[pet] name = ...` — what the companion is called, whatever its kind. */
+  const char *petName() const { return petName_.c_str(); }
   /* Minutes past midnight, or -1 when no alarm is set. The board has an NTP
    * clock, a light and something that talks — it may as well wake you up. */
   int alarmMinutes() const { return alarm_; }
@@ -78,7 +80,7 @@ private:
   String ssid_[NOCT_WIFI_MAX_NETS], pass_[NOCT_WIFI_MAX_NETS];
   WifiCred nets_[NOCT_WIFI_MAX_NETS] = {};
   int netCount_ = 0;
-  String host_, llm_, llmModel_, llmKey_, skin_;
+  String host_, llm_, llmModel_, llmKey_, skin_, petName_;
   uint16_t port_ = 0, panelPort_ = 0;
   int alarm_ = -1;
   String zbName_[5];

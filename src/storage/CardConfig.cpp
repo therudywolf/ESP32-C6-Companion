@@ -77,8 +77,9 @@ void CardConfig::apply(const String &section, const String &key,
     }
     return;
   }
-  if (section == "wolf") {
+  if (section == "wolf" || section == "pet") {
     if (key == "skin") { skin_ = val; applied_++; }
+    else if (key == "name") { petName_ = val; applied_++; }
     return;
   }
 }

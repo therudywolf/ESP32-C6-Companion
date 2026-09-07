@@ -28,6 +28,7 @@
 #include "core/config.h"
 #include "input/Button.h"
 #include "led/StatusLed.h"
+#include "net/BoardPanel.h"
 #include "net/ForzaManager.h"
 #include "net/LlmClient.h"
 #include "net/CoverClient.h"
@@ -38,6 +39,7 @@
 #include "net/WifiManager.h"
 #include "pet/Achievements.h"
 #include "pet/PetBrain.h"
+#include "pet/PetKind.h"
 #include "pet/PhraseCache.h"
 #include "pet/WolfPet.h"
 #include "pet/wolf_sprites.h"
@@ -80,6 +82,7 @@ static ClimateLog climateLog;
 static ClimateLog::Series climateSeries;
 static bool climateSeriesOk = false;
 static Achievements ach;
+static BoardPanel boardPanel;
 
 /* What the board actually uses, after /nocturne.ini has had its say. secrets.h
  * supplies the defaults; the card overrides key by key. */
@@ -695,6 +698,29 @@ static void consoleExec(String line) {
     theme::getTone(&r, &g, &b, &k);
     Serial.printf("tone R%d G%d B%d чёрный %d (усиление 30..300, чёрный 0..96)\n",
                   r, g, b, k);
+  } else if (cmd == "kind" || cmd == "style" || cmd == "look" ||
+             cmd == "pet" || cmd == "furry") {
+    /* The v1.43 knobs, so they can be tried without a phone in hand:
+     *   kind 0..3   style 0..4   look 0..4   pet 0/1   furry 0/1 */
+    Settings &cs = state.settings;
+    int v = arg.toInt();
+    if (arg.length()) {
+      if (cmd == "kind") { cs.petKind = v % petkind::PK_COUNT; petkind::set(cs.petKind); }
+      else if (cmd == "style") { cs.uiStyle = v % theme::STYLE_COUNT; theme::setStyle(cs.uiStyle); }
+      else if (cmd == "pet") cs.petEnabled = v != 0;
+      else if (cmd == "furry") cs.furry = v != 0;
+      else if (cmd == "look") {
+        const theme::Look &lk = theme::look(v % theme::LOOKS);
+        cs.uiStyle = lk.style; cs.themePreset = lk.preset; cs.customActive = false;
+        cs.bgStyle = lk.bg; cs.dotStyle = lk.dots;
+        theme::setBgStyle(cs.bgStyle); theme::applyPreset(cs.themePreset);
+        theme::setBgLight(cs.bgLight); theme::setStyle(cs.uiStyle);
+      }
+      settings::save(cs);
+    }
+    Serial.printf("pet %d kind %d (%s) furry %d style %d (%s)\n",
+                  cs.petEnabled, cs.petKind, petkind::speciesLabel(cs.petKind),
+                  cs.furry, cs.uiStyle, theme::styleName(cs.uiStyle));
   } else if (cmd == "dots") {
     /* 0 выкл, 1 точки (шаг 3), 2 редкие (шаг 4). Цвет — от текущей темы. */
     int d = arg.toInt();
@@ -979,8 +1005,11 @@ void setup() {
   settings::load(state.settings);
   theme::bgStyle = state.settings.bgStyle;
   theme::bgLight = state.settings.bgLight;
+  theme::uiStyle = state.settings.uiStyle;
   theme::applyPreset(state.settings.themePreset);
   if (state.settings.customActive) theme::applyPalette(state.settings.custom);
+  petkind::set(state.settings.petKind);
+  StatusLed::setBrightness(state.settings.ledBright);
   /* What state is this board actually in? A hand-tuned palette whose TEXT role
    * collapsed onto BG, an emptied scene mask or a cleared element mask all look
    * like "the screen shows nothing" while the telemetry underneath is perfectly
@@ -1022,6 +1051,7 @@ void setup() {
   archive.begin(&sd);
   climateLog.begin(&sd);
   if (cardCfg.skin()[0]) wolfLoadSkin(&sd, cardCfg.skin());
+  if (cardCfg.petName()[0]) petkind::setName(cardCfg.petName());
   /* Card themes must exist before the stored preset index is applied, or a
    * board set to a file theme would fall back to preset 0 on every boot. */
   theme::loadCardThemes(&sd);
@@ -1066,6 +1096,7 @@ void setup() {
 
   pet.begin();
   ach.begin();
+  boardPanel.begin(&state, &pet, &ach);
   histories.attach(&sd); /* graphs survive a reboot when the card is present */
   histories.setOnCommit(logTelemetryRow); /* ...and the card keeps the archive */
   phrases.begin(&sd);
@@ -1370,6 +1401,53 @@ void loop() {
       cfg.nightTo = state.rcNightTo;
       persist = true;
     }
+    /* ── v1.43 ── */
+    if (state.rcPet >= 0) {
+      cfg.petEnabled = state.rcPet != 0;
+      persist = true;
+    }
+    if (state.rcPetKind >= 0 && state.rcPetKind < petkind::PK_COUNT) {
+      cfg.petKind = state.rcPetKind;
+      petkind::set(cfg.petKind);
+      persist = true;
+    }
+    if (state.rcFurry >= 0) {
+      cfg.furry = state.rcFurry != 0;
+      persist = true;
+    }
+    if (state.rcLook >= 0 && state.rcLook < theme::LOOKS) {
+      /* a look writes four settings at once; the single-field commands
+       * below may still override any of them in the same command */
+      const theme::Look &lk = theme::look(state.rcLook);
+      cfg.uiStyle = lk.style;
+      cfg.themePreset = lk.preset;
+      cfg.customActive = false;
+      cfg.bgStyle = lk.bg;
+      cfg.dotStyle = lk.dots;
+      theme::setBgStyle(cfg.bgStyle);
+      theme::applyPreset(cfg.themePreset);
+      theme::setBgLight(cfg.bgLight);
+      theme::setStyle(cfg.uiStyle);
+      persist = true;
+    }
+    if (state.rcStyle >= 0 && state.rcStyle < theme::STYLE_COUNT) {
+      cfg.uiStyle = state.rcStyle;
+      theme::setStyle(cfg.uiStyle);
+      persist = true;
+    }
+    if (state.rcLedBright >= 10 && state.rcLedBright <= 100) {
+      cfg.ledBright = state.rcLedBright;
+      StatusLed::setBrightness(cfg.ledBright);
+      persist = true;
+    }
+    if (state.rcWeb >= 0) {
+      cfg.webPanel = state.rcWeb != 0;
+      persist = true;
+    }
+    if (state.rcGame > 0) {
+      sceneMgr.requestGame(state.rcGame);
+      state.rcGame = -1;
+    }
     if (state.rcTimeout >= 0) {
       cfg.displayTimeoutSec = state.rcTimeout;
       persist = true;
@@ -1625,17 +1703,32 @@ void loop() {
   }
   histories.tick(now);
 
-  pet.tick(now);
-  brain.tick(now, state);
+  /* A switched-off pet is paused, not abandoned: the stats do not decay and
+   * the voice is silent, so it comes back exactly as it was left. */
+  pet.setNightRest(state.link.nightActive);
+  if (state.settings.petEnabled) {
+    pet.tick(now);
+    brain.tick(now, state);
+  } else {
+    state.link.llmBusy = false;
+  }
 
   /* achievement counters: the events all pass through here anyway */
   {
     int act = brain.takeActionEvent();
-    if (act == WolfPet::ACT_FEED) ach.bump(Achievements::ACH_FEED);
-    else if (act == WolfPet::ACT_PLAY) ach.bump(Achievements::ACH_PLAY);
-    else if (act == WolfPet::ACT_PET) ach.bump(Achievements::ACH_PET);
-    else if (act == WolfPet::ACT_TALK) ach.bump(Achievements::ACH_TALK);
-    if (brain.takeJournalWritten()) ach.bump(Achievements::ACH_JOURNAL);
+    /* Every counter also feeds the XP that makes the level: care is worth
+     * more than talk, and a day survived more than either. */
+    if (act == WolfPet::ACT_FEED) { ach.bump(Achievements::ACH_FEED); ach.bump(Achievements::ACH_XP, 5); }
+    else if (act == WolfPet::ACT_PLAY) { ach.bump(Achievements::ACH_PLAY); ach.bump(Achievements::ACH_XP, 8); }
+    else if (act == WolfPet::ACT_PET) { ach.bump(Achievements::ACH_PET); ach.bump(Achievements::ACH_XP, 3); }
+    else if (act == WolfPet::ACT_TALK) { ach.bump(Achievements::ACH_TALK); ach.bump(Achievements::ACH_XP, 2); }
+    if (brain.takeJournalWritten()) { ach.bump(Achievements::ACH_JOURNAL); ach.bump(Achievements::ACH_XP, 15); }
+    static uint32_t lastAge = 0;
+    if (lastAge == 0) lastAge = pet.ageDays();
+    if (pet.ageDays() > lastAge) {
+      ach.bump(Achievements::ACH_XP, 20 * (pet.ageDays() - lastAge));
+      lastAge = pet.ageDays();
+    }
     static bool wasAlive = true;
     if (wasAlive && !pet.isAlive()) ach.bump(Achievements::ACH_FAINT);
     wasAlive = pet.isAlive();
@@ -1695,7 +1788,9 @@ void loop() {
       /* Music playing: the desk glows in the colour of the album art. The mood
        * colours below still apply the moment the music stops. */
       led.setMoodColor(cr, cg, cb);
-    } else if (!pet.isAlive())
+    } else if (!state.settings.petEnabled)
+      led.setMoodColor(20, 70, 130); /* no animal: a calm instrument blue */
+    else if (!pet.isAlive())
       led.setMoodColor(60, 60, 60); /* gray-out */
     else if (pet.isSleeping())
       led.setMoodColor(10, 10, 80); /* deep night blue */
@@ -1745,6 +1840,8 @@ void loop() {
   }
 
   serviceConsole();
+  /* The board's own web page - the panel that works with the PC off. */
+  boardPanel.tick(wifi.connected(), state.settings.webPanel);
   /* Bring the coordinator up only after WiFi has a link: with both stacks on
    * one radio, whichever starts first appears to keep it. */
   static bool zbStarted = false;
@@ -1953,6 +2050,14 @@ void loop() {
     }
   }
 
+  /* Frame pacing. 25 fps while there is something to animate; 10 fps on the
+   * screensaver and in quiet hours, where the only thing moving is a clock.
+   * Fewer frames is fewer 110 KB pushes over the shared bus and a cooler
+   * die - the backlight guard used to trip on a board that was busy drawing
+   * a dimmed screen nobody was looking at. */
+  frameTimer.intervalMs =
+      (sceneMgr.screenDimmed() || (night && !state.alertActive)) ? 100
+                                                                  : NOCT_FRAME_MS;
   /* frame */
   if (frameTimer.check(now)) {
     unsigned long frameT0 = micros();
@@ -1982,8 +2087,9 @@ void loop() {
     }
     ui.review = sceneMgr.reviewOn();
     sceneMgr.draw(ui);
-    if (state.settings.dotStyle > 0)
-      display.applyDots(state.settings.dotStyle == 1 ? 3 : 4, theme::BG);
+    int dots = state.settings.dotStyle;
+    if (theme::uiStyle == theme::STYLE_LED && dots == 0) dots = 1;
+    if (dots > 0) display.applyDots(dots == 1 ? 3 : 4, theme::BG);
     display.push();
     frameBusyUs += micros() - frameT0;
     frameCount++;
@@ -2039,5 +2145,15 @@ void loop() {
     }
   }
 
-  delay(1); /* yield to WiFi/lwIP/LLM tasks */
+  /* Sleep until the next frame is due, in short steps so the button, the
+   * UDP drain and the console still get their turn within a few
+   * milliseconds. A loop that spun at a kilohertz between frames was the
+   * single largest idle consumer on the die. */
+  {
+    unsigned long since = millis() - frameTimer.lastMs;
+    unsigned long left = since < frameTimer.intervalMs
+                             ? frameTimer.intervalMs - since
+                             : 0;
+    delay(left > 4 ? 4 : (left ? left : 1));
+  }
 }

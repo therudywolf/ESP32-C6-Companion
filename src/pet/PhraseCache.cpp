@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "core/config.h"
+#include "pet/PetKind.h"
 
 struct FallbackEntry {
   const char *bucket;
@@ -422,6 +423,8 @@ static bool ctxValue(const String &key, const PhraseCtx &c, String &out) {
   if (key == "ct") { out = String(c.ct); return c.ct > 0; }
   if (key == "hour") { out = String(c.hour); return c.hour >= 0; }
   if (key == "age") { out = String(c.ageDays); return true; }
+  if (key == "me") { out = petkind::species(); return true; }
+  if (key == "name") { out = petkind::nameTitle(); return true; }
   if (key == "wk") { out = String(c.claudeWk); return c.claudeWk >= 0; }
   if (key == "rh") { out = String(c.roomRh); return c.roomRh >= 0; }
   if (key == "temp") {
@@ -530,6 +533,8 @@ String PhraseCache::pickFromFlash(const char *bucket, const PhraseCtx &ctx) {
   for (int i = 0; i < (int)(sizeof(kFallback) / sizeof(kFallback[0])); i++) {
     if (strcmp(kFallback[i].bucket, bucket) != 0) continue;
     if (!eligible(kFallback[i].phrase, ctx)) continue;
+    /* a cat does not call itself a wolf */
+    if (!petkind::phraseFits(kFallback[i].phrase)) continue;
     if (n < kMaxPer) idx[n++] = (uint16_t)i;
   }
   if (n == 0) return "";

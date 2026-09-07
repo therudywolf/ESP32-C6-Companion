@@ -189,6 +189,33 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   schema can be developed against the board with no server in the middle. Most of a
   debugging session is asking the board questions it could simply answer.
 
+## What v1.43 changed
+
+- **Five looks, one press.** Меню → Оформление → Оформление cycles Киберпанк
+  (outlined tiles, scanlines), Материал (surfaces), Windows (flat Metro tiles
+  in the chrome colour), Леды (dot-matrix forced on) and Никси (glass tubes,
+  glowing digits). A look is a *style* + a palette + a background + the dot
+  pass, and every one of the four stays editable afterwards. The style lives in
+  four functions of `Theme.cpp`; no screen knows which is on.
+- **The pet is a setting.** Питомец → Питомец switches the tamagotchi off:
+  ЛОГОВО becomes ГЛАВНЫЙ (a clock, the room, the machine, the street), the
+  stats freeze, the voice goes quiet. Питомец → Вид picks a wolf, a dog, a cat
+  or a fox — same stats, different coat, name, stages, toasts and prompt.
+  Фурревость is the third switch: the paws, the sprite in the boot animation
+  and screensaver, the animal toasts — off, it is a plain instrument.
+- **More tamagotchi.** Experience and a level (√ of XP, from care and days
+  survived), a bedtime that follows quiet hours, and a second game: stop the
+  marker in the middle, five rounds, faster each time.
+- **A web panel on the board itself.** `http://<board-ip>/` (the address
+  is on ПЛАТА C6 and in the boot log) on port 80 — the everyday settings and the pet's actions, and it
+  works with the PC off. It writes the same `rc` fields the PC panel does.
+- **Cooler and calmer.** The loop sleeps until the next frame instead of
+  spinning, the frame rate drops to 10/s on the screensaver and at night,
+  and dithered fills write the buffer directly. The LED has a brightness
+  ceiling.
+- The full map of every setting — menu path, panel, `rc` key, NVS key,
+  `cfg:` index — is in [`docs/SETTINGS-MAP.md`](docs/SETTINGS-MAP.md).
+
 ## Companion web panel 🎛️
 
 Served by the Nocturne PC server (`http://<pc>:8899/`), it drives the device

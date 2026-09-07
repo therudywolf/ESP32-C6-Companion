@@ -88,6 +88,15 @@ void load(Settings &s) {
   s.nightMode = p.getBool("night", false);
   s.nightFrom = p.getInt("nightF", 23);
   s.nightTo = p.getInt("nightT", 8);
+  s.petEnabled = p.getBool("pet", true);
+  s.petKind = p.getInt("kind", 0);
+  if (s.petKind < 0 || s.petKind > 3) s.petKind = 0;
+  s.furry = p.getBool("furry", true);
+  s.uiStyle = p.getInt("style", 1);
+  if (s.uiStyle < 0 || s.uiStyle > 4) s.uiStyle = 1;
+  s.ledBright = p.getInt("ledBr", 100);
+  if (s.ledBright < 10 || s.ledBright > 100) s.ledBright = 100;
+  s.webPanel = p.getBool("web", true);
   p.end();
   if (s.nightFrom < 0 || s.nightFrom > 23) s.nightFrom = 23;
   if (s.nightTo < 0 || s.nightTo > 23) s.nightTo = 8;
@@ -142,6 +151,12 @@ void save(const Settings &s) {
   p.putBool("night", s.nightMode);
   p.putInt("nightF", s.nightFrom);
   p.putInt("nightT", s.nightTo);
+  p.putBool("pet", s.petEnabled);
+  p.putInt("kind", s.petKind);
+  p.putBool("furry", s.furry);
+  p.putInt("style", s.uiStyle);
+  p.putInt("ledBr", s.ledBright);
+  p.putBool("web", s.webPanel);
   p.end();
 }
 

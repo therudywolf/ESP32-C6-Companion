@@ -73,6 +73,10 @@ enum WolfFrameId { WOLF_IDLE = 0, WOLF_BLINK, WOLF_AGGRO, WOLF_FUNNY,
                    WOLF_FRAME_COUNT };
 
 const unsigned char *wolfFrame(int id);
+/* Point the built-in table at another species' four frames (PetKind). A
+ * card skin, when loaded, still wins over whatever is set here. */
+void wolfSetBuiltin(const unsigned char *idle, const unsigned char *blink,
+                    const unsigned char *aggro, const unsigned char *funny);
 /* Load /skins/<name>.wolf; false (and the built-in wolf) if it is missing or
  * not exactly 512 bytes. */
 bool wolfLoadSkin(class SdStore *sd, const char *name);

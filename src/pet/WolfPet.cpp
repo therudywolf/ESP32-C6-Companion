@@ -62,7 +62,9 @@ void WolfPet::tick(unsigned long now) {
       hunger_ -= 2;
       happy_ -= 1;
       energy_ -= 1;
-      if (energy_ <= 18) sleeping_ = true; /* falls asleep on its own */
+      /* 18 by day; 60 in quiet hours, so the animal goes to bed with the
+       * house rather than staying up until it drops. */
+      if (energy_ <= (nightRest_ ? 60 : 18)) sleeping_ = true;
     }
     clampAll();
     if (hunger_ == 0 && happy_ == 0 && energy_ == 0) {

@@ -43,6 +43,11 @@ public:
     enabled_ = en;
     if (!en) px(0, 0, 0);
   }
+  /* Ceiling in percent (10..100). Applied at the pixel, so an alert strobe
+   * and a mood breath both respect it: a bedside light at 100 % is a lamp. */
+  static void setBrightness(int pct) {
+    scale_ = pct < 10 ? 10 : (pct > 100 ? 100 : pct);
+  }
 
   void setMode(Mode m) {
     if (m == mode_) return;
@@ -152,8 +157,10 @@ private:
   /* This board's WS2812B-0807 is RGB-ordered; the core's rgbLedWrite targets
    * GRB parts. Swap R/G on the way out so colors mean what they say. */
   static void px(uint8_t r, uint8_t g, uint8_t b) {
-    rgbLedWrite(pin_, g, r, b);
+    rgbLedWrite(pin_, (uint8_t)(g * scale_ / 100), (uint8_t)(r * scale_ / 100),
+                (uint8_t)(b * scale_ / 100));
   }
+  static inline int scale_ = 100;
 
   /* h 0..359 -> RGB at saturation s and peak value vmax (both 0..255). */
   static void hsv(int h, uint8_t s, uint8_t vmax, uint8_t &r, uint8_t &g,

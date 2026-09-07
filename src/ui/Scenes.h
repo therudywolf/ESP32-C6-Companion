@@ -15,6 +15,9 @@ const char *title(int scene);
 const char *actionHint(int scene, UiCtx &ui);
 
 void drawDen(UiCtx &ui, int actionSel, bool actionMode);
+/* ГЛАВНЫЙ: what sits at home when the pet is switched off - the clock, the
+ * room, the machine in one line and the forecast. */
+void drawHomePlain(UiCtx &ui);
 void drawDash(UiCtx &ui);
 void drawCpu(UiCtx &ui);
 void drawGpu(UiCtx &ui);

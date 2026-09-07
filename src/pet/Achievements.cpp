@@ -5,10 +5,12 @@
 namespace {
 /* Short NVS keys: the namespace is small and these are written for years. */
 const char *kKey[Achievements::ACH_COUNT] = {"fd", "pl", "pt", "tk", "dy",
-                                             "fn", "lp", "tr", "sh", "jr"};
+                                             "fn", "lp", "tr", "sh", "jr",
+                                             "xp"};
 const char *kName[Achievements::ACH_COUNT] = {
     "Накормлен",   "Наигрался",  "Обласкан",  "Разговоры", "Прожито дней",
-    "Обмороков",   "Кругов",     "Треков",    "Снимков",   "Записей"};
+    "Обмороков",   "Кругов",     "Треков",    "Снимков",   "Записей",
+    "Опыт"};
 
 /* Milestones per counter, ascending, 0-terminated. Chosen so the first one
  * lands within a day or two of ordinary use and the last one is a genuine
@@ -24,6 +26,7 @@ const uint32_t kTiers[Achievements::ACH_COUNT][5] = {
     {25, 250, 1000, 5000, 0},/* tracks */
     {1, 10, 50, 200, 0},     /* shots */
     {1, 7, 30, 365, 0},      /* journal entries */
+    {100, 400, 900, 2500, 0}, /* xp: levels 2, 4, 6, 10 */
 };
 } // namespace
 
@@ -83,6 +86,19 @@ uint32_t Achievements::nextTier(Id id, uint32_t have) {
   for (int t = 0; t < 4 && kTiers[id][t]; t++)
     if (have < kTiers[id][t]) return kTiers[id][t];
   return 0; /* topped out */
+}
+
+int Achievements::petLevel() const {
+  uint32_t xp = v_[ACH_XP];
+  int l = 1;
+  while ((uint32_t)(l * l) * 25u <= xp && l < 99) l++;
+  return l;
+}
+
+uint32_t Achievements::xpToNext() const {
+  int l = petLevel();
+  uint32_t need = (uint32_t)(l * l) * 25u;
+  return need > v_[ACH_XP] ? need - v_[ACH_XP] : 0;
 }
 
 int Achievements::level(Id id, uint32_t have) {

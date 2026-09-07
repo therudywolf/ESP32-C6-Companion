@@ -230,8 +230,15 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
   g.setFont(&F_MED);
   textAt(g, sx, 94, ui.pet.statusText(), ORANGE);
   {
+    /* stage and level on one small line: "волк  ур.3" */
     g.setFont(&F_SMALL);
-    textAt(g, sx, 114, ui.pet.stageName(), DIM);
+    char sl[40];
+    if (ui.ach)
+      snprintf(sl, sizeof(sl), "%s  ур.%d", ui.pet.stageName(),
+               ui.ach->petLevel());
+    else
+      snprintf(sl, sizeof(sl), "%s", ui.pet.stageName());
+    textAt(g, sx, 114, sl, DIM);
     g.setFont(&F_MED);
   }
 
@@ -336,6 +343,86 @@ void drawDen(UiCtx &ui, int actionSel, bool actionMode) {
       snprintf(vb, sizeof(vb), "в сети %luч %02luм", upm / 60, upm % 60);
       textRight(g, NOCT_W - 10, by, vb, DIM);
     }
+  }
+}
+
+/* ── ГЛАВНЫЙ — home with the pet switched off ────────────────────────── */
+
+void drawHomePlain(UiCtx &ui) {
+  LGFX_Sprite &g = ui.g;
+  char v[64];
+
+  /* the clock, as large as the glass allows */
+  if (ui.st.pcClock[0]) {
+    g.setFont(&F_HUGE);
+    g.setTextSize(2);
+    int y = inkY(INK_HUGE, 24, 72, 2);
+    textCenter(g, NOCT_W / 2, y, ui.st.pcClock, ORANGE);
+    g.setTextSize(1);
+  } else {
+    g.setFont(&F_MED);
+    textCenter(g, NOCT_W / 2, 50, "часы еще не синхронизированы", DIM);
+  }
+
+  /* three tiles: the room, the machine, the street */
+  const int ty = 100, th = 46;
+  {
+    Rect c = panelM(g, 4, ty, 102, th, "комната");
+    if (ui.st.zb.count > 0 && ui.st.zb.list[0].temp10 != -32768) {
+      const ZbSensor &z = ui.st.zb.list[0];
+      g.setFont(&F_MED);
+      snprintf(v, sizeof(v), "%d,%d C", z.temp10 / 10, abs(z.temp10 % 10));
+      textAt(g, c.x, c.y, v, TEXT);
+      if (z.humidity >= 0) {
+        g.setFont(&F_TEXT);
+        snprintf(v, sizeof(v), "%d%%", z.humidity);
+        textRight(g, c.x + c.w, c.y + 4, v, INFO);
+      }
+    } else {
+      g.setFont(&F_TEXT);
+      textAt(g, c.x, c.y, "нет датчика", DIM);
+    }
+  }
+  {
+    Rect c = panelM(g, 110, ty, 102, th, "компьютер");
+    g.setFont(&F_MED);
+    if (ui.st.link.tcpConnected && !ui.st.link.signalLost) {
+      snprintf(v, sizeof(v), "%dC %dC", ui.st.hw.ct, ui.st.hw.gt);
+      textAt(g, c.x, c.y, v, tempColor(ui.st.hw.ct > ui.st.hw.gt ? ui.st.hw.ct : ui.st.hw.gt, 75, 85));
+    } else {
+      g.setFont(&F_TEXT);
+      textAt(g, c.x, c.y, "выключен", DIM);
+    }
+  }
+  {
+    Rect c = panelM(g, 216, ty, 100, th, "улица");
+    if (ui.st.weatherReceived) {
+      g.setFont(&F_MED);
+      snprintf(v, sizeof(v), "%d C", ui.st.weather.temp);
+      textAt(g, c.x, c.y, v, TEXT);
+      weatherIcon(g, c.x + c.w - 12, c.y + 8, 8, ui.st.weather.wmoCode, ui.now);
+    } else {
+      g.setFont(&F_TEXT);
+      textAt(g, c.x, c.y, "нет прогноза", DIM);
+    }
+  }
+
+  /* the forecast line, same place ЛОГОВО keeps it */
+  if (uiOn(UI_STRIPS)) {
+    g.setFont(&F_TEXT);
+    const int by = 156;
+    if (ui.st.zbTrendOk) {
+      auto t = barometer::classify(ui.st.zbPress10Delta3h, 3);
+      uint16_t c = barometer::headacheWatch(t) ? WARN : DIM;
+      int aw = baroArrow(g, 10, by + 2, barometer::direction(t),
+                         barometer::isSharp(t), c);
+      char clipped[48];
+      clipW(g, barometer::forecast(t), clipped, sizeof(clipped), 200);
+      textAt(g, 10 + aw, by, clipped, c);
+    }
+    unsigned long upm = ui.now / 60000UL;
+    snprintf(v, sizeof(v), "в сети %luч %02luм", upm / 60, upm % 60);
+    textRight(g, NOCT_W - 10, by, v, DIM);
   }
 }
 
