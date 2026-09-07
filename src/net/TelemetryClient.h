@@ -105,6 +105,12 @@ private:
   uint16_t port_ = 0;
   bool tcpConnected_ = false;
   bool firstData_ = false;
+  /* The hub sends `pc:0` when its PC agent has gone quiet - the payload keeps
+   * flowing (weather, forest, the room) but nothing in it is about the PC.
+   * Tracked separately from the payload age: with a hub that never sleeps,
+   * "last payload 0 s ago" would be true and useless. */
+  bool pcAgentDown_ = false;
+  unsigned long lastPcUpdate_ = 0;
   unsigned long lastAttempt_ = 0;
   unsigned int failCount_ = 0; /* consecutive failed connects -> exponential backoff */
   unsigned long connectTime_ = 0;

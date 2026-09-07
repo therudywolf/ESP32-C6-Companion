@@ -267,12 +267,15 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
   state.link.signalLost = signalLost(now);
   /* scenes keep showing the last data through reconnects; only a long
    * silence blanks them */
+  /* A hub that reports `pc:0` is a live link carrying no PC: the PC scenes
+   * go dark exactly as they would on silence, and the age shown is the age
+   * of the last payload that DID come from the PC. */
   state.link.dataDead =
-      !firstData_ || (now - lastUpdate_) > 30000UL;
+      !firstData_ || (now - lastUpdate_) > 30000UL || pcAgentDown_;
   /* How stale, in seconds, so a frozen screen can say so instead of just
    * looking current. -1 until the first payload of the session. */
   state.payloadAgeSec =
-      firstData_ ? (int)((now - lastUpdate_) / 1000UL) : -1;
+      lastPcUpdate_ ? (int)((now - lastPcUpdate_) / 1000UL) : -1;
   /* "The PC is off" is not the same as "no payload": the lite endpoint can be
    * feeding real data while the PC sleeps, and then every scene stays useful.
    * Only when nothing is covering do the PC-only screens stop being worth
@@ -288,6 +291,15 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     Serial.printf("[NET] JSON error: %s\n", err.c_str());
     return;
   }
+
+  /* `pc` is the hub's word on whether a PC agent is feeding it. Absent on
+   * the classic one-process server, which is always about the PC. */
+  if (doc["pc"].is<int>()) {
+    pcAgentDown_ = ((int)doc["pc"]) == 0;
+  } else {
+    pcAgentDown_ = false;
+  }
+  if (!pcAgentDown_) lastPcUpdate_ = millis();
 
   HardwareData &hw = state.hw;
   hw.ct = doc["ct"] | hw.ct;

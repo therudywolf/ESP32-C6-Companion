@@ -135,6 +135,14 @@ as RGB565.
 device's notification card. **Capped** at app≤24 / title≤48 / body≤160 chars:
 an uncapped body pushed the frame past `NOCT_TCP_LINE_MAX`.
 
+### `pc` — is a PC agent feeding the hub?
+`pc: 1` when the hub has fresh telemetry from the PC agent, `pc: 0` when the
+agent has been quiet for >12 s (the PC is asleep or off). With `pc: 0` the
+hardware, media and process keys are **absent**; the board treats the link as
+carrying no PC (its PC-only scenes go dark, "последние данные N мин назад"
+counts from the last `pc: 1` payload) while weather, forest, services, events
+and `rc` keep flowing. Absent on the classic one-process server.
+
 ### room forecast (top level, beside the weather keys)
 Fitted on the PC (`roomcast.py`) and sent as an answer, never as inputs:
 `rcok` (0/1 — a model exists), `rct3` / `rct12` (room temperature in 3 h / 12 h,
