@@ -43,6 +43,14 @@ public:
   const char *host() const { return host_.c_str(); }
   uint16_t port() const { return port_; }
   uint16_t panelPort() const { return panelPort_; }
+  /* `[server] token`: what the board says after HELO. A hub on a public host
+   * refuses a link that does not open with it. "" = plain HELO. */
+  const char *token() const { return token_.c_str(); }
+  /* Point the board at another server and persist it to the card: the way
+   * to move from the PC to the hub without a card reader. Empty token keeps
+   * the greeting plain; port 0 keeps the compiled default. */
+  bool setServer(SdStore *sd, const String &host, uint16_t port,
+                 const String &token);
   const char *llmEndpoint() const { return llm_.c_str(); }
   const char *llmModel() const { return llmModel_.c_str(); }
   const char *llmKey() const { return llmKey_.c_str(); }
@@ -80,7 +88,7 @@ private:
   String ssid_[NOCT_WIFI_MAX_NETS], pass_[NOCT_WIFI_MAX_NETS];
   WifiCred nets_[NOCT_WIFI_MAX_NETS] = {};
   int netCount_ = 0;
-  String host_, llm_, llmModel_, llmKey_, skin_, petName_;
+  String host_, llm_, llmModel_, llmKey_, skin_, petName_, token_;
   uint16_t port_ = 0, panelPort_ = 0;
   int alarm_ = -1;
   String zbName_[5];

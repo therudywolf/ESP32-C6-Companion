@@ -47,6 +47,7 @@ void CardConfig::apply(const String &section, const String &key,
     if (key == "host") { host_ = val; applied_++; }
     else if (key == "port") { port_ = (uint16_t)val.toInt(); applied_++; }
     else if (key == "panel") { panelPort_ = (uint16_t)val.toInt(); applied_++; }
+    else if (key == "token") { token_ = val; applied_++; }
     return;
   }
   if (section == "llm") {
@@ -179,6 +180,24 @@ bool CardConfig::rewriteSection(SdStore *sd, const char *section,
   out += "]\n";
   out += body;
   return sd->writeBlob("/nocturne.ini", out.c_str(), out.length());
+}
+
+bool CardConfig::setServer(SdStore *sd, const String &host, uint16_t port,
+                           const String &token) {
+  host_ = host;
+  host_.trim();
+  if (port) port_ = port;
+  token_ = token;
+  token_.trim();
+  String body = "host=" + host_ + "\n";
+  if (port_) body += "port=" + String(port_) + "\n";
+  if (panelPort_) body += "panel=" + String(panelPort_) + "\n";
+  if (token_.length()) body += "token=" + token_ + "\n";
+  bool ok = rewriteSection(sd, "server", body);
+  Serial.printf("[CFG] server -> %s:%u%s%s\n", host_.c_str(), (unsigned)port_,
+                token_.length() ? " (with token)" : "",
+                ok ? " (saved)" : " (NOT saved)");
+  return ok;
 }
 
 bool CardConfig::setZbName(SdStore *sd, int i, const String &name) {

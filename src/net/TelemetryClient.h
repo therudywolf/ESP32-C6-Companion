@@ -16,6 +16,9 @@
 
 class TelemetryClient {
 public:
+  /* The greeting is `HELO <token>` when a token is set: a hub on a public
+   * host drops a link that opens any other way. */
+  void setToken(const char *t) { token_ = t ? t : ""; }
   void setServer(const char *host, uint16_t port) {
     host_ = host;
     port_ = port;
@@ -102,6 +105,7 @@ private:
 
   WiFiClient client_;
   const char *host_ = nullptr;
+  const char *token_ = "";
   uint16_t port_ = 0;
   bool tcpConnected_ = false;
   bool firstData_ = false;
