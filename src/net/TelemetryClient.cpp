@@ -48,7 +48,18 @@ void TelemetryClient::tryConnect(unsigned long now) {
         lwip_fcntl(fd, F_SETFL, fl | O_NONBLOCK);
       }
     }
-    sendLine("HELO\n");
+    /* The greeting names us. A hub on the open internet reads this first
+     * line and drops anything that is not `HELO <its token>`, so the token
+     * has to go out before any other traffic - and before the hub's own
+     * five-second patience runs out. A hub on the LAN sets no token and
+     * still accepts the bare greeting, which is why both forms exist. */
+    if (token_ && *token_) {
+      char greet[96];
+      snprintf(greet, sizeof(greet), "HELO %s\n", token_);
+      sendLine(greet);
+    } else {
+      sendLine("HELO\n");
+    }
   } else {
     tcpConnected_ = false;
     if (failCount_ < 4) failCount_++;

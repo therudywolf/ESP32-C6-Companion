@@ -387,6 +387,7 @@ static void consoleHelp() {
       "  shot            screenshot to the card\n"
       "  mono [0|1]      ч/б + без анимации, для сверки снимков\n"
       "  zb [join|reset]  Zigbee coordinator\n"
+      "  server <host> [port] [token]   куда смотрит плата\n"
       "  reboot"));
 }
 
@@ -828,6 +829,67 @@ static void consoleExec(String line) {
       for (int i = 1; i <= 5; i++)
         Serial.printf("  %d: %s\n", i, cardCfg.zbName(i - 1));
     }
+  } else if (cmd == "server") {
+    /* server <host> [port] [token] - move the board to another hub without a
+     * card reader and without a reflash. The address goes into [server] in
+     * /nocturne.ini, so it outlives both a reboot and a new image, and it is
+     * applied at once: the link drops and comes back up on the new host.
+     *
+     * The token is what a hub on the open internet demands as the first
+     * line; on the LAN there is none and the argument is simply left off.
+     * Bare `server` reports where the board is currently pointed. */
+    if (!arg.length()) {
+      Serial.printf("server %s:%u  panel %u  token %s\n", activeHost,
+                    (unsigned)activePort,
+                    (unsigned)(cardCfg.panelPort() ? cardCfg.panelPort() : 8899),
+                    cardCfg.token()[0] ? "есть" : "нет");
+      Serial.println("server <host> [port] [token]  (- очищает токен)");
+    } else {
+      String h = arg, ps = "", tk = "";
+      int s1 = h.indexOf(' ');
+      if (s1 > 0) {
+        String rest = h.substring(s1 + 1);
+        h = h.substring(0, s1);
+        rest.trim();
+        int s2 = rest.indexOf(' ');
+        if (s2 > 0) {
+          ps = rest.substring(0, s2);
+          tk = rest.substring(s2 + 1);
+        } else {
+          ps = rest;
+        }
+        /* `server host TOKEN` with the port left out: a token is not a
+         * number, and reading one as a port would silently drop it. */
+        bool numeric = ps.length() > 0;
+        for (unsigned i = 0; i < ps.length(); i++)
+          if (!isdigit((unsigned char)ps[i])) numeric = false;
+        if (!numeric && !tk.length()) {
+          tk = ps;
+          ps = "";
+        }
+      }
+      h.trim();
+      tk.trim();
+      /* No token argument KEEPS the stored one: moving the board between two
+       * hubs that share a token is one word, and forgetting to retype it
+       * would otherwise lock the board out of the host it just moved to.
+       * A single "-" is how you actually clear it. */
+      if (!tk.length()) tk = String(cardCfg.token());
+      else if (tk == "-") tk = "";
+      cardCfg.setServer(&sd, h, (uint16_t)ps.toInt(), tk);
+      /* Re-read through cardCfg every time: the client holds the POINTER,
+       * not a copy, and setServer just rewrote the Strings behind it. */
+      activeHost = cardCfg.host();
+      activePort = cardCfg.port();
+      tcp.setServer(activeHost, activePort);
+      tcp.setToken(cardCfg.token());
+      coverClient.begin(activeHost,
+                        cardCfg.panelPort() ? cardCfg.panelPort() : 8899);
+      tcp.reconnect();
+      Serial.printf("-> %s:%u%s, переподключаюсь\n", activeHost,
+                    (unsigned)activePort,
+                    cardCfg.token()[0] ? " (с токеном)" : "");
+    }
   } else if (cmd == "snooze") {
     unsigned long sec = arg.length() ? (unsigned long)arg.toInt() : 300;
     if (sec < 1) sec = 1;
@@ -1107,6 +1169,8 @@ void setup() {
 
   wifi.begin(activeNets, activeNetCount, state.settings.netSel);
   tcp.setServer(activeHost, activePort);
+  /* `[server] token` from the card. Empty on a LAN hub, which greets plain. */
+  tcp.setToken(cardCfg.token());
   /* Zigbee starts LATER, from the loop, once WiFi has associated. Espressif's
    * own WiFi+Zigbee gateway example brings WiFi up first, and starting the
    * 802.15.4 stack ahead of it left WiFi unable to associate at all on this

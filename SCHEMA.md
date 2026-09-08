@@ -271,7 +271,14 @@ state. (It used to replace the whole payload with `{"ct":0,…}`, which both los
 the two most valuable blocks and overwrote live hardware readings with zeros.)
 
 ## Device → server (uplink)
-- `HELO`, `screen:N`, `cmd:claude|status`
+- `HELO` / `HELO <token>`, `screen:N`, `cmd:claude|status`. The greeting is the
+  FIRST line of every connection. A hub with `board_token` set reads that line
+  and drops anything that is not `HELO <its token>`, within five seconds — the
+  only gate a raw TCP port on the open internet has. A hub without a token
+  accepts the bare form, and treats a token-bearing greeting as an unknown
+  uplink line, so one board can move between the two without a reflash. The
+  token comes from `[server] token` on the card; `server <host> [port] [token]`
+  on the USB console writes it there.
 - `wolf:` — pet stats (hunger/joy/energy/mood/alive/sleeping/age)
 - `zbs:` — one line per locally-paired Zigbee sensor, once a minute:
   `zbs:name,temp10,humidity,battery,age_sec,pressure_hpa` (temp ×10; -1 =

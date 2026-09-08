@@ -23,6 +23,16 @@ public:
     host_ = host;
     port_ = port;
   }
+  /* Drop the link and try again at once. Changing the server mid-run would
+   * otherwise keep the old socket alive until it happens to fail, and the
+   * backoff would then hold the new address off for up to a minute. */
+  void reconnect() {
+    client_.stop();
+    tcpConnected_ = false;
+    firstData_ = false;
+    failCount_ = 0;
+    lastAttempt_ = 0;
+  }
   void tick(unsigned long now, bool wifiUp, AppState &state, Graphs &graphs);
   void sendScreen(int n);
   void sendCmd(const char *cmd); /* "claude" | "status" */
