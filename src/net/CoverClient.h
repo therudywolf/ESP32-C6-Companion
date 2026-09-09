@@ -14,7 +14,12 @@ class CoverClient {
 public:
   static const int W = 96, H = 96;
 
+  /* Создаёт фоновую задачу — ровно один раз за жизнь платы. Повторный
+   * вызов только переставляет адрес: вторая задача с тем же буфером на
+   * 18 КБ и теми же флагами — это две загрузки в одну память. */
   void begin(const char *host, int port);
+  /* Сменить адрес на лету, не трогая задачу. Нужно команде `server`. */
+  void setEndpoint(const char *host, int port);
   /* call with the latest cover token each payload; fetches if it changed */
   void update(long tok);
   bool ready() const { return ready_; }
@@ -40,7 +45,10 @@ private:
   void taskLoop();
   bool fetch();
 
-  String host_;
+  /* Не String: адрес пишет петля, а читает задача загрузки, и переприсваивание
+   * String освобождает буфер ровно под чужим указателем. Фиксированный массив
+   * этого класса ошибок не имеет вовсе. */
+  char host_[64] = {0};
   int port_ = 8899;
   volatile long wantTok_ = 0;
   long haveTok_ = 0;

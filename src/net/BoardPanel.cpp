@@ -27,17 +27,20 @@ static const char kPage[] PROGMEM = R"HTML(<!doctype html><html lang=ru><head><m
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Nocturne C6</title>
 <style>
-body{margin:0;background:#0d0a12;color:#eee;font:15px system-ui,sans-serif;padding:12px 12px 40px}
-h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#9a8fa8;margin:18px 0 6px}
-.c{background:#181322;border:1px solid #2c2238;border-radius:10px;padding:10px;margin-bottom:8px}
+:root{--fg:#fff3d6;--dim:#a78a73;--ln:#2a0824;--l2:#561140;--y:#fcee0a;--r:#ff003c;--c:#02d3fb;--g:#1aff8a;--m:ui-monospace,Consolas,monospace}
+body{margin:0;background:#050006;color:var(--fg);font:15px system-ui,sans-serif;padding:12px 12px 40px}
+h1{font-family:var(--m);font-size:18px;margin:0 0 4px;color:var(--y)}
+h2{font-family:var(--m);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--y);margin:18px 0 6px}
+h2::before{content:"// ";color:var(--r)}
+.c{background:linear-gradient(160deg,#140212,#08000c);border:1px solid var(--ln);border-radius:6px;padding:10px;margin-bottom:8px}
 .r{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
-button,select{background:#241b30;color:#eee;border:1px solid #3a2c4a;border-radius:8px;padding:9px 12px;font-size:14px}
-button.on{background:#ff3d5e;color:#120408;border-color:#ff3d5e;font-weight:700}
-input[type=range]{width:100%}input[type=text]{flex:1;padding:9px;border-radius:8px;border:1px solid #3a2c4a;background:#241b30;color:#eee}
-.t{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.t div{background:#241b30;border-radius:8px;padding:8px;text-align:center}
-.t b{display:block;font-size:20px}.t span{font-size:11px;color:#9a8fa8}
-.bar{height:6px;background:#2c2238;border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:#00e0a0}
-small{color:#9a8fa8}#st{font-size:12px;color:#00d0ff;min-height:16px}
+button,select{font-family:var(--m);background:#140212;color:var(--fg);border:1px solid var(--l2);border-radius:6px;padding:9px 12px;font-size:13px}
+button.on{background:var(--y);color:#140c00;border-color:transparent;font-weight:700}
+input[type=range]{width:100%;accent-color:var(--r)}input[type=text]{flex:1;padding:9px;border-radius:6px;border:1px solid var(--l2);background:#140212;color:var(--fg)}
+.t{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.t div{background:#0d0212;border:1px solid var(--ln);border-radius:6px;padding:8px;text-align:center}
+.t b{display:block;font-family:var(--m);font-size:20px;color:var(--y)}.t span{font-family:var(--m);font-size:10px;color:var(--r);text-transform:uppercase;letter-spacing:1px}
+.bar{height:6px;background:#08000c;border:1px solid var(--ln);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--g)}
+small{color:var(--dim)}#st{font-family:var(--m);font-size:12px;color:var(--c);min-height:16px}
 </style></head><body>
 <h1 id=ttl>Nocturne C6</h1><small id=sub>плата · без ПК</small>
 <div id=st></div>
@@ -94,6 +97,10 @@ function hours(sel,v){if(!sel.options.length)for(let h=0;h<24;h++){const o=docum
 function draw(s){S=s;$('ttl').textContent=s.name+' · Nocturne C6';$('sub').textContent='v'+s.ver+' · '+s.ip+(s.pc?' · ПК на связи':' · ПК выключен, плата сама');
 $('clk').textContent=s.clock||'--:--';$('room').textContent=s.room||'—';$('temp').textContent=s.temp;
 $('pname').textContent=s.pet?s.name+' · '+s.stage+' · ур. '+s.lvl:'питомец выключен';$('pstat').textContent=s.pet?s.status:'';
+/* Полоски и кнопки «кормить/играть» при выключенном питомце — это органы
+   управления тем, чего нет. Плата в этом случае и на экране рисует ЛОГОВО
+   без волка; панель должна говорить то же самое. */
+$('petbox').style.display=s.pet?'':'none';
 $('bh').style.width=s.h+'%';$('bj').style.width=s.j+'%';$('be').style.width=s.e+'%';
 if(Date.now()<mute)return;
 const c=s.cfg;document.querySelectorAll('.tg').forEach(e=>tg(e,e.dataset.k,c[e.dataset.k]));

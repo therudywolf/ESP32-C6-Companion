@@ -60,6 +60,9 @@ void TelemetryClient::tryConnect(unsigned long now) {
     } else {
       sendLine("HELO\n");
     }
+    /* Сразу за приветствием — какой экран показан. Хаб мог перезапуститься и
+       не знать этого; сцена сменится нескоро, если карусель выключена. */
+    if (curScreen_ >= 0) sendScreen(curScreen_);
   } else {
     tcpConnected_ = false;
     if (failCount_ < 4) failCount_++;
@@ -99,6 +102,12 @@ bool TelemetryClient::sendLine(const char *line) {
 }
 
 void TelemetryClient::sendScreen(int n) {
+  /* Запоминаем ВСЕГДА, даже когда линка нет: этот номер переотправляется
+     сразу после переподключения. Иначе хаб после своего перезапуска не знает,
+     что показано, пока сцена не сменится сама — а с выключенной каруселью
+     это часы. От этого номера зависит, собирает ли ПК списки процессов, так
+     что экран CPU оставался бы пустым ровно у того, кто на него смотрит. */
+  curScreen_ = n;
   if (!tcpConnected_ || n == lastSentScreen_) return;
   lastSentScreen_ = n;
   char b[24];
@@ -260,17 +269,30 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
   while (tcpConnected_ && client_.available() && budget-- > 0) {
     char c = (char)client_.read();
     if (c == '\n') {
-      if (lineLen_ > 0) {
+      /* Часы свежести штампуются ТОЛЬКО за разобранной строкой. Раньше их
+         двигала любая строка, включая битый JSON и хвост переполнения: экран
+         показывал бы прошлогодние числа как свежие, а признак «связь
+         потеряна» не поднимался бы никогда. */
+      if (!dropping_ && lineLen_ > 0) {
         line_[lineLen_] = '\0';
-        parsePayload(line_, lineLen_, state, graphs);
-        lastUpdate_ = now;
-        firstData_ = true;
+        if (parsePayload(line_, lineLen_, state, graphs)) {
+          lastUpdate_ = now;
+          firstData_ = true;
+        }
       }
+      dropping_ = false;
       lineLen_ = 0;
+    } else if (dropping_) {
+      /* досасываем остаток слишком длинной строки и молчим */
     } else if (lineLen_ < NOCT_TCP_LINE_MAX - 1) {
       line_[lineLen_++] = c;
     } else {
-      lineLen_ = 0; /* oversized line: drop it whole */
+      /* Строка не влезла. Раньше здесь просто обнулялся lineLen_, и её ХВОСТ
+         набирался с начала буфера как самостоятельный payload — обрывок JSON,
+         который разбирался частично или не разбирался вовсе, но часы свежести
+         всё равно переставлял. Теперь строка выбрасывается целиком. */
+      dropping_ = true;
+      lineLen_ = 0;
     }
   }
 
@@ -294,23 +316,37 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
   state.pcOffline = state.link.dataDead && !state.link.liteActive;
 }
 
-void TelemetryClient::parsePayload(const char *line, size_t len,
-                                   AppState &state, Graphs &graphs) {
+bool TelemetryClient::parsePayload(const char *line, size_t len,
+                                   AppState &state, Graphs &graphs,
+                                   bool fromLink) {
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, line, len);
   if (err) {
     Serial.printf("[NET] JSON error: %s\n", err.c_str());
-    return;
+    return false;
   }
 
   /* `pc` is the hub's word on whether a PC agent is feeding it. Absent on
-   * the classic one-process server, which is always about the PC. */
-  if (doc["pc"].is<int>()) {
-    pcAgentDown_ = ((int)doc["pc"]) == 0;
-  } else {
-    pcAgentDown_ = false;
+   * the classic one-process server, which is always about the PC.
+   *
+   * Только для payload С ЛИНКА. Запасной канал (lite) про ПК ничего не знает
+   * и ключа `pc` не несёт — раньше он попадал в ветку else, сбрасывал признак
+   * «агент молчит» и переставлял часы ПК на «сейчас». Причём звали его ровно
+   * тогда, когда ПК заведомо выключен: плата гасила экраны ПК, потом получала
+   * lite-payload и снова показывала замёрзшие числа как свежие. */
+  if (fromLink) {
+    if (doc["pc"].is<int>()) {
+      pcAgentDown_ = ((int)doc["pc"]) == 0;
+    } else {
+      pcAgentDown_ = false;
+    }
+    if (!pcAgentDown_) lastPcUpdate_ = millis();
   }
-  if (!pcAgentDown_) lastPcUpdate_ = millis();
+  /* Принёс ли payload вообще что-нибудь про железо ПК. При pc:0 хаб не шлёт
+     ни одного ключа hw, и прошлые значения остаются в структуре — писать их
+     в графики значило рисовать ровную полку там, где на самом деле разрыв. */
+  const bool hasHw = !doc["ct"].isNull() || !doc["cl"].isNull() ||
+                     !doc["gt"].isNull() || !doc["gl"].isNull();
 
   HardwareData &hw = state.hw;
   hw.ct = doc["ct"] | hw.ct;
@@ -687,7 +723,10 @@ void TelemetryClient::parsePayload(const char *line, size_t len,
     state.alertMetric = -1;
   }
 
-  graphs.onPayload(hw);
+  /* Только когда в payload реально были числа ПК: иначе спарклайн рисует
+     полку из последнего значения вместо честного разрыва. */
+  if (hasHw) graphs.onPayload(hw);
+  return true;
 }
 
 void TelemetryClient::sendClimatePatterns(const analysis::Finding *f, int n,

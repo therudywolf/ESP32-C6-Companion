@@ -66,9 +66,21 @@ void CoverClient::storeToCache(SdStore *sd) {
     sd->pruneDir("/covers", NOCT_COVER_CACHE_MAX);
 }
 
+void CoverClient::setEndpoint(const char *host, int port) {
+  if (host && *host) {
+    strlcpy(host_, host, sizeof(host_));
+  }
+  if (port > 0) port_ = port;
+}
+
 void CoverClient::begin(const char *host, int port) {
-  host_ = host;
-  port_ = port;
+  setEndpoint(host, port);
+  /* Идемпотентно. Команда `server` меняет адрес на живой плате, и раньше
+   * она звала begin() повторно: каждый вызов добавлял ещё одну задачу с
+   * 8 КБ стека, обе крутили один taskLoop() поверх общего буфера обложки
+   * и общих флагов pending_/wantTok_. Две загрузки в одну память — это не
+   * «медленнее», это порванная картинка и утечка стека за раз. */
+  if (task_) return;
   xTaskCreate(taskEntry, "cover", 8192, this, 1, &task_);
 }
 

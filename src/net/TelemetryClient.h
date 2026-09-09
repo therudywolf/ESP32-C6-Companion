@@ -92,7 +92,13 @@ public:
   /* feed an externally-fetched payload (the lite fallback) through
    * the same parser, so weather/forest/services scenes work with the PC off */
   void feedExternal(const char *json, AppState &state, Graphs &graphs) {
-    if (json && *json) parsePayload(json, strlen(json), state, graphs);
+    /* fromLink=false: это запасной канал, а не хаб. Он несёт погоду, лес и
+     * сервисы и НЕ ИМЕЕТ ПРАВА высказываться о свежести ПК. Раньше он гонялся
+     * через тот же разбор, ключа `pc` в нём нет, ветка else сбрасывала
+     * pcAgentDown_ в false и штамповала lastPcUpdate_ — то есть ровно тогда,
+     * когда ПК заведомо молчит, плата начинала считать его живым и показывать
+     * замёрзшие числа как свежие. */
+    if (json && *json) parsePayload(json, strlen(json), state, graphs, false);
   }
   bool connected() const { return tcpConnected_; }
   bool signalLost(unsigned long now) const;
@@ -110,8 +116,11 @@ private:
   /* False when the line did not go out whole. Callers that push in bulk must
    * back off on false rather than keep shovelling into a full socket. */
   bool sendLine(const char *line);
-  void parsePayload(const char *line, size_t len, AppState &state,
-                    Graphs &graphs);
+  /* false, если строка не разобралась. Часы свежести штампует ТОЛЬКО
+   * вызывающий и только по true: иначе битый JSON выглядел как свежие
+   * данные — тишина при этом честнее. */
+  bool parsePayload(const char *line, size_t len, AppState &state,
+                    Graphs &graphs, bool fromLink = true);
 
   WiFiClient client_;
   const char *host_ = nullptr;
@@ -130,8 +139,15 @@ private:
   unsigned long connectTime_ = 0;
   unsigned long lastUpdate_ = 0;
   int lastSentScreen_ = -1;
+  /* Что показано на самом деле. Живёт отдельно от lastSentScreen_, потому что
+     тот обнуляется на каждом соединении. */
+  int curScreen_ = -1;
   char line_[NOCT_TCP_LINE_MAX];
   size_t lineLen_ = 0;
+  /* Строка не влезла в буфер: досасываем её до перевода строки и НЕ разбираем.
+   * Без этого флага хвост длинной строки ложился в буфер с нуля и разбирался
+   * как самостоятельный payload. */
+  bool dropping_ = false;
 };
 
 #endif

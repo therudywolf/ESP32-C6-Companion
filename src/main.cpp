@@ -880,11 +880,16 @@ static void consoleExec(String line) {
       /* Re-read through cardCfg every time: the client holds the POINTER,
        * not a copy, and setServer just rewrote the Strings behind it. */
       activeHost = cardCfg.host();
-      activePort = cardCfg.port();
+      /* Как в setup(): нулевой порт означает «на карте про порт ничего не
+         сказано», а не «подключайся на порт 0». Без этой проверки
+         `server hub` на карте без строки port= уводил плату в никуда. */
+      if (cardCfg.port()) activePort = cardCfg.port();
       tcp.setServer(activeHost, activePort);
       tcp.setToken(cardCfg.token());
-      coverClient.begin(activeHost,
-                        cardCfg.panelPort() ? cardCfg.panelPort() : 8899);
+      /* setEndpoint, а НЕ begin: задача обложек уже поднята в setup(), и
+         второй begin() создавал вторую такую же поверх общего буфера. */
+      coverClient.setEndpoint(activeHost,
+                              cardCfg.panelPort() ? cardCfg.panelPort() : 8899);
       tcp.reconnect();
       Serial.printf("-> %s:%u%s, переподключаюсь\n", activeHost,
                     (unsigned)activePort,
@@ -1760,7 +1765,12 @@ void loop() {
    * loop iteration (~1 kHz) burned cycles and weighted the minute average by
    * loop rate instead of by data. */
   static unsigned long lastHistPayload = 0;
-  if (tcp.connected() && !state.link.signalLost &&
+  /* dataDead — это ещё и «хаб жив, но ПК за ним молчит» (pc:0). Линк при этом
+     в порядке и payload идёт каждые полсекунды, поэтому одного signalLost
+     мало: в архив на карте ложились ПОСЛЕДНИЕ числа выключенного ПК, час за
+     часом, ровной полкой. История, в которой выключенный компьютер держит
+     60 °C всю ночь, хуже отсутствующей — по ней потом делают выводы. */
+  if (tcp.connected() && !state.link.signalLost && !state.link.dataDead &&
       tcp.lastPayloadMs() != lastHistPayload) {
     lastHistPayload = tcp.lastPayloadMs();
     histories.accumulate(state.hw);
