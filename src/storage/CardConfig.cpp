@@ -90,7 +90,13 @@ bool CardConfig::load(SdStore *sd) {
   String text;
   /* One read of the whole file. It is a handful of lines; readAll caps it so a
    * junk file cannot blow the heap. */
-  if (!sd->readAll("/nocturne.ini", text, 2048) || text.length() == 0)
+  /* 4096 и ГОЛОВА файла, а не хвост. Раньше стояло 2048 с хвостовым чтением:
+     конфиг больше двух килобайт молча терял начало — заголовок [wifi] и
+     первую сеть вместе с ним. Пример на карте в examples/ весит 2292 байта,
+     то есть попадал под это сразу, и признаком было только «ничего не
+     распозналось». Перезапись секций читает под 4096 — теперь оба предела
+     совпадают, иначе запись роняла бы то, чего не увидело чтение. */
+  if (!sd->readAll("/nocturne.ini", text, 4096, false) || text.length() == 0)
     return false;
   loaded_ = true;
 
@@ -145,7 +151,10 @@ bool CardConfig::rewriteSection(SdStore *sd, const char *section,
                                 const String &body) {
   if (!sd) return false;
   String text;
-  if (!sd->readAll("/nocturne.ini", text, 4096)) text = "";
+  /* Та же голова, что и в load(): перезапись секции не имеет права видеть
+     файл иначе, чем его видел разбор, иначе она допишет к тому, чего не
+     читала, и потеряет то, что читала. */
+  if (!sd->readAll("/nocturne.ini", text, 4096, false)) text = "";
 
   String want(section);
   want.toLowerCase();

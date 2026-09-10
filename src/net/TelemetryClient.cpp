@@ -54,9 +54,16 @@ void TelemetryClient::tryConnect(unsigned long now) {
      * five-second patience runs out. A hub on the LAN sets no token and
      * still accepts the bare greeting, which is why both forms exist. */
     if (token_ && *token_) {
-      char greet[96];
-      snprintf(greet, sizeof(greet), "HELO %s\n", token_);
-      sendLine(greet);
+      char greet[160];
+      int n = snprintf(greet, sizeof(greet), "HELO %s\n", token_);
+      if (n < 0 || n >= (int)sizeof(greet)) {
+        /* snprintf режет с ХВОСТА, а в хвосте лежит перевод строки: хаб ждал
+           бы продолжения строки до самого таймаута и молча закрыл линк.
+           Лучше сказать это вслух, чем пять секунд гадать. */
+        Serial.println("[NET] токен слишком длинный, приветствие не собрано");
+      } else {
+        sendLine(greet);
+      }
     } else {
       sendLine("HELO\n");
     }

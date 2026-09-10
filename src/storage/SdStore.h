@@ -58,7 +58,13 @@ public:
 
   /* Direct helpers — loop task only. */
   bool appendLine(const char *path, const String &line);
-  bool readAll(const char *path, String &out, size_t maxBytes = NOCT_SD_READ_MAX);
+  /* `fromTail` — что оставить, если файл больше лимита. По умолчанию хвост:
+   * так правильно для журнала. Для КОНФИГА наоборот: там осмысленно начало,
+   * и хвостовое чтение молча съедало заголовок [wifi] вместе с первой сетью
+   * у всякого, чей nocturne.ini перевалил за лимит. Пример на карте в
+   * examples/ весит 2292 байта — то есть перевалил сразу. */
+  bool readAll(const char *path, String &out, size_t maxBytes = NOCT_SD_READ_MAX,
+               bool fromTail = true);
   /* One WINDOW of a file, from `offset`, with the total size handed back so
    * the caller can walk the rest.
    *

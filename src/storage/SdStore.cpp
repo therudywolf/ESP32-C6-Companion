@@ -167,7 +167,8 @@ bool SdStore::appendLine(const char *path, const String &line) {
   return track("append", t0, true);
 }
 
-bool SdStore::readAll(const char *path, String &out, size_t maxBytes) {
+bool SdStore::readAll(const char *path, String &out, size_t maxBytes,
+                      bool fromTail) {
   if (!ok_) return false;
   sync();
   unsigned long t0 = millis();
@@ -179,8 +180,32 @@ bool SdStore::readAll(const char *path, String &out, size_t maxBytes) {
   File f = SD.open(path, FILE_READ);
   if (!f) return false; /* a missing file is not a card failure */
   size_t size = f.size();
-  if (size > maxBytes) f.seek(size - maxBytes);
-  out = f.readString();
+  if (size > maxBytes) {
+    if (fromTail) {
+      f.seek(size - maxBytes);
+      out = f.readString();
+    } else {
+      /* Оставляем НАЧАЛО. Дочитывать до конца и обрезать нельзя: файл может
+         быть сильно больше лимита, а лимит здесь и стоит ради памяти. */
+      out = "";
+      out.reserve(maxBytes + 1);
+      char buf[129];
+      size_t left = maxBytes;
+      while (left) {
+        size_t want = left < sizeof(buf) - 1 ? left : sizeof(buf) - 1;
+        int n = f.read((uint8_t *)buf, want);
+        if (n <= 0) break;
+        buf[n] = '\0';
+        out += buf;
+        left -= (size_t)n;
+      }
+    }
+    Serial.printf("[SD] %s: %u B > лимит %u, оставлен%s\n", path,
+                  (unsigned)size, (unsigned)maxBytes,
+                  fromTail ? " хвост" : "о начало");
+  } else {
+    out = f.readString();
+  }
   f.close();
   return track("read", t0, true);
 }

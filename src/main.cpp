@@ -870,13 +870,24 @@ static void consoleExec(String line) {
       }
       h.trim();
       tk.trim();
+      /* Приведение к uint16_t отбрасывало старшие биты молча: `server hub
+         70000` уводило плату на порт 4464. */
+      long pv = ps.length() ? ps.toInt() : 0;
+      if (ps.length() && (pv < 1 || pv > 65535)) {
+        Serial.println("порт должен быть 1..65535");
+        return;
+      }
+      if (h.length() > 63) {
+        Serial.println("слишком длинный хост");
+        return;
+      }
       /* No token argument KEEPS the stored one: moving the board between two
        * hubs that share a token is one word, and forgetting to retype it
        * would otherwise lock the board out of the host it just moved to.
        * A single "-" is how you actually clear it. */
       if (!tk.length()) tk = String(cardCfg.token());
       else if (tk == "-") tk = "";
-      cardCfg.setServer(&sd, h, (uint16_t)ps.toInt(), tk);
+      cardCfg.setServer(&sd, h, (uint16_t)pv, tk);
       /* Re-read through cardCfg every time: the client holds the POINTER,
        * not a copy, and setServer just rewrote the Strings behind it. */
       activeHost = cardCfg.host();
