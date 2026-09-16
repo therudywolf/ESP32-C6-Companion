@@ -48,6 +48,12 @@ void CardConfig::apply(const String &section, const String &key,
     else if (key == "port") { port_ = (uint16_t)val.toInt(); applied_++; }
     else if (key == "panel") { panelPort_ = (uint16_t)val.toInt(); applied_++; }
     else if (key == "token") { token_ = val; applied_++; }
+    /* The fallback hub. Checked BEFORE "host" would match — it does not,
+       because the comparison is exact, but the order is kept explicit so a
+       future prefix match cannot swallow it. */
+    else if (key == "host2") { host2_ = val; applied_++; }
+    else if (key == "port2") { port2_ = (uint16_t)val.toInt(); applied_++; }
+    else if (key == "token2") { token2_ = val; applied_++; }
     return;
   }
   if (section == "llm") {
@@ -191,6 +197,23 @@ bool CardConfig::rewriteSection(SdStore *sd, const char *section,
   return sd->writeBlob("/nocturne.ini", out.c_str(), out.length());
 }
 
+/* rewriteSection replaces the WHOLE [server] block, so the body has to carry
+   every key the section owns — including the ones this particular call is not
+   changing. Building it in one place is the only way that stays true: with two
+   endpoints written by two functions, the obvious version of setServer() would
+   silently delete the fallback, and the board would look fine until the day
+   the PC slept. */
+String CardConfig::serverSection() const {
+  String body = "host=" + host_ + "\n";
+  if (port_) body += "port=" + String(port_) + "\n";
+  if (panelPort_) body += "panel=" + String(panelPort_) + "\n";
+  if (token_.length()) body += "token=" + token_ + "\n";
+  if (host2_.length()) body += "host2=" + host2_ + "\n";
+  if (port2_) body += "port2=" + String(port2_) + "\n";
+  if (token2_.length()) body += "token2=" + token2_ + "\n";
+  return body;
+}
+
 bool CardConfig::setServer(SdStore *sd, const String &host, uint16_t port,
                            const String &token) {
   host_ = host;
@@ -198,14 +221,29 @@ bool CardConfig::setServer(SdStore *sd, const String &host, uint16_t port,
   if (port) port_ = port;
   token_ = token;
   token_.trim();
-  String body = "host=" + host_ + "\n";
-  if (port_) body += "port=" + String(port_) + "\n";
-  if (panelPort_) body += "panel=" + String(panelPort_) + "\n";
-  if (token_.length()) body += "token=" + token_ + "\n";
-  bool ok = rewriteSection(sd, "server", body);
+  bool ok = rewriteSection(sd, "server", serverSection());
   Serial.printf("[CFG] server -> %s:%u%s%s\n", host_.c_str(), (unsigned)port_,
                 token_.length() ? " (with token)" : "",
                 ok ? " (saved)" : " (NOT saved)");
+  return ok;
+}
+
+bool CardConfig::setFallback(SdStore *sd, const String &host, uint16_t port,
+                             const String &token) {
+  host2_ = host;
+  host2_.trim();
+  port2_ = port;              /* 0 here means "same port as the primary" */
+  token2_ = token;
+  token2_.trim();
+  bool ok = rewriteSection(sd, "server", serverSection());
+  if (host2_.length())
+    Serial.printf("[CFG] запасной хаб -> %s:%u%s%s\n", host2_.c_str(),
+                  (unsigned)(port2_ ? port2_ : port_),
+                  token2_.length() ? " (с токеном)" : "",
+                  ok ? " (записано)" : " (НЕ записано)");
+  else
+    Serial.printf("[CFG] запасной хаб убран%s\n",
+                  ok ? " (записано)" : " (НЕ записано)");
   return ok;
 }
 

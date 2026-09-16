@@ -51,6 +51,26 @@ public:
    * the greeting plain; port 0 keeps the compiled default. */
   bool setServer(SdStore *sd, const String &host, uint16_t port,
                  const String &token);
+
+  /* `[server] host2/port2/token2` — the hub to fall back on when the first
+   * one does not answer.
+   *
+   * It exists for one reason: the private half of the payload. Notification
+   * text, the track playing, the process list — all of it comes from the PC,
+   * and the link is plain TCP because the board cannot afford a TLS
+   * handshake (LiteClient needs a 46 KB free block; the board has ~33 KB
+   * with Zigbee up). While the PC is awake the board talks to the PC over
+   * the LAN and none of that leaves the house. When the PC sleeps there IS
+   * no private half — `pc:0`, hardware keys absent — so the fallback hub can
+   * carry weather, the forest, the room and the clock over the WAN without
+   * carrying anything worth reading.
+   *
+   * "" = no fallback; the board then behaves exactly as it did before. */
+  const char *host2() const { return host2_.c_str(); }
+  uint16_t port2() const { return port2_; }
+  const char *token2() const { return token2_.c_str(); }
+  bool setFallback(SdStore *sd, const String &host, uint16_t port,
+                   const String &token);
   const char *llmEndpoint() const { return llm_.c_str(); }
   const char *llmModel() const { return llmModel_.c_str(); }
   const char *llmKey() const { return llmKey_.c_str(); }
@@ -88,8 +108,12 @@ private:
   String ssid_[NOCT_WIFI_MAX_NETS], pass_[NOCT_WIFI_MAX_NETS];
   WifiCred nets_[NOCT_WIFI_MAX_NETS] = {};
   int netCount_ = 0;
+  /* The whole [server] block as it should stand on the card right now. */
+  String serverSection() const;
+
   String host_, llm_, llmModel_, llmKey_, skin_, petName_, token_;
-  uint16_t port_ = 0, panelPort_ = 0;
+  String host2_, token2_;
+  uint16_t port_ = 0, panelPort_ = 0, port2_ = 0;
   int alarm_ = -1;
   String zbName_[5];
   bool loaded_ = false;

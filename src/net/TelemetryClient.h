@@ -22,7 +22,31 @@ public:
   void setServer(const char *host, uint16_t port) {
     host_ = host;
     port_ = port;
+    /* A new primary is an instruction, not a hint: go there now rather than
+       finishing out the minute on the fallback. */
+    onFallback_ = false;
+    primaryRetryAt_ = 0;
   }
+  /* The hub to try when the first one stops answering.
+   *
+   * The board holds ONE link, so this is not redundancy for its own sake: the
+   * primary is the PC on the LAN, where the private half of the payload
+   * (notification text, the current track, the process list) never leaves the
+   * house. The fallback is the hub on the open internet, which can only ever
+   * carry the public half — because the private half exists only while the PC
+   * is awake, and while the PC is awake the board is on the primary.
+   *
+   * host = nullptr or "" disables it; port 0 means "the primary's port".
+   * The token is separate: a hub on a public host demands one, a hub on the
+   * LAN usually has none. */
+  void setFallback(const char *host, uint16_t port, const char *token) {
+    host2_ = (host && *host) ? host : nullptr;
+    port2_ = port;
+    token2_ = token ? token : "";
+  }
+  bool hasFallback() const { return host2_ != nullptr; }
+  /* Which hub is being used right now — for the console and the `brd:` line. */
+  bool onFallback() const { return onFallback_; }
   /* Drop the link and try again at once. Changing the server mid-run would
    * otherwise keep the old socket alive until it happens to fail, and the
    * backoff would then hold the new address off for up to a minute. */
@@ -126,6 +150,15 @@ private:
   const char *host_ = nullptr;
   const char *token_ = "";
   uint16_t port_ = 0;
+  /* The fallback hub, and which of the two tryConnect() is currently aiming
+   * at. `primaryRetryAt_` is what brings the board home: sitting on the
+   * fallback it would otherwise stay there for as long as the board runs,
+   * even after the PC woke up an hour ago. */
+  const char *host2_ = nullptr;
+  const char *token2_ = "";
+  uint16_t port2_ = 0;
+  bool onFallback_ = false;
+  unsigned long primaryRetryAt_ = 0;
   bool tcpConnected_ = false;
   bool firstData_ = false;
   /* The hub sends `pc:0` when its PC agent has gone quiet - the payload keeps

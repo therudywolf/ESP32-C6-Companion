@@ -388,6 +388,7 @@ static void consoleHelp() {
       "  mono [0|1]      ч/б + без анимации, для сверки снимков\n"
       "  zb [join|reset]  Zigbee coordinator\n"
       "  server <host> [port] [token]   куда смотрит плата\n"
+      "  server2 <host> [port] [token]  запасной хаб (- убрать)\n"
       "  reboot"));
 }
 
@@ -843,7 +844,15 @@ static void consoleExec(String line) {
                     (unsigned)activePort,
                     (unsigned)(cardCfg.panelPort() ? cardCfg.panelPort() : 8899),
                     cardCfg.token()[0] ? "есть" : "нет");
+      if (cardCfg.host2()[0])
+        Serial.printf("запасной %s:%u  token %s%s\n", cardCfg.host2(),
+                      (unsigned)(cardCfg.port2() ? cardCfg.port2() : activePort),
+                      cardCfg.token2()[0] ? "есть" : "нет",
+                      tcp.onFallback() ? "   <- СЕЙЧАС НА НЁМ" : "");
+      else
+        Serial.println("запасного хаба нет");
       Serial.println("server <host> [port] [token]  (- очищает токен)");
+      Serial.println("server2 <host> [port] [token]  (- убирает запасной)");
     } else {
       String h = arg, ps = "", tk = "";
       int s1 = h.indexOf(' ');
@@ -906,6 +915,81 @@ static void consoleExec(String line) {
                     (unsigned)activePort,
                     cardCfg.token()[0] ? " (с токеном)" : "");
     }
+  } else if (cmd == "server2") {
+    /* The hub to fall back on when the primary stops answering.
+     *
+     * The point is not uptime, it is where the private half of the payload
+     * travels. Notification text, the current track and the process list come
+     * from the PC and ride a plain TCP link the board cannot encrypt, so the
+     * primary is the PC on the LAN and that traffic stays in the house. When
+     * the PC sleeps there is no private half at all — `pc:0` — and the board
+     * may safely take weather, the forest, the room and the clock off a hub
+     * on the open internet.
+     *
+     * `server2 -` removes it and the board goes back to a single endpoint. */
+    if (!arg.length()) {
+      if (cardCfg.host2()[0])
+        Serial.printf("запасной хаб %s:%u  token %s%s\n", cardCfg.host2(),
+                      (unsigned)(cardCfg.port2() ? cardCfg.port2() : activePort),
+                      cardCfg.token2()[0] ? "есть" : "нет",
+                      tcp.onFallback() ? "   <- сейчас на нём" : "");
+      else
+        Serial.println("запасного хаба нет");
+      Serial.println("server2 <host> [port] [token]   |   server2 -");
+      return;
+    }
+    if (arg == "-") {
+      cardCfg.setFallback(&sd, "", 0, "");
+      tcp.setFallback(nullptr, 0, "");
+      Serial.println("запасной хаб убран");
+      return;
+    }
+    String h = arg, ps = "", tk = "";
+    int s1 = h.indexOf(' ');
+    if (s1 > 0) {
+      String rest = h.substring(s1 + 1);
+      h = h.substring(0, s1);
+      rest.trim();
+      int s2 = rest.indexOf(' ');
+      if (s2 > 0) {
+        ps = rest.substring(0, s2);
+        tk = rest.substring(s2 + 1);
+      } else {
+        ps = rest;
+      }
+      /* Same trap as in `server`: a token is not a number, and reading one
+         as a port would drop it without a word. */
+      bool numeric = ps.length() > 0;
+      for (unsigned i = 0; i < ps.length(); i++)
+        if (!isdigit((unsigned char)ps[i])) numeric = false;
+      if (!numeric && !tk.length()) {
+        tk = ps;
+        ps = "";
+      }
+    }
+    h.trim();
+    tk.trim();
+    long pv = ps.length() ? ps.toInt() : 0;
+    if (ps.length() && (pv < 1 || pv > 65535)) {
+      Serial.println("порт должен быть 1..65535");
+      return;
+    }
+    if (h.length() > 63) {
+      Serial.println("слишком длинный хост");
+      return;
+    }
+    /* Unlike `server`, an omitted token here means an EMPTY token, not "keep
+       what was there": the fallback is usually the hub that needs one while
+       the primary does not, so silently inheriting the primary's token would
+       be the wrong guess in the common case. `-` is still accepted. */
+    if (tk == "-") tk = "";
+    cardCfg.setFallback(&sd, h, (uint16_t)pv, tk);
+    /* The client holds POINTERS into cardCfg; setFallback just rewrote the
+       Strings behind them, so re-read rather than reusing the locals. */
+    tcp.setFallback(cardCfg.host2(), cardCfg.port2(), cardCfg.token2());
+    Serial.printf("запасной -> %s:%u%s\n", cardCfg.host2(),
+                  (unsigned)(cardCfg.port2() ? cardCfg.port2() : activePort),
+                  cardCfg.token2()[0] ? " (с токеном)" : "");
   } else if (cmd == "snooze") {
     unsigned long sec = arg.length() ? (unsigned long)arg.toInt() : 300;
     if (sec < 1) sec = 1;
@@ -1187,6 +1271,13 @@ void setup() {
   tcp.setServer(activeHost, activePort);
   /* `[server] token` from the card. Empty on a LAN hub, which greets plain. */
   tcp.setToken(cardCfg.token());
+  /* `[server] host2` — where to go when the primary stops answering. Absent
+     on a card that predates it, and the board then behaves exactly as before:
+     one endpoint, the same backoff, no switching. */
+  tcp.setFallback(cardCfg.host2(), cardCfg.port2(), cardCfg.token2());
+  if (cardCfg.host2()[0])
+    Serial.printf("[NET] запасной хаб: %s:%u\n", cardCfg.host2(),
+                  (unsigned)(cardCfg.port2() ? cardCfg.port2() : activePort));
   /* Zigbee starts LATER, from the loop, once WiFi has associated. Espressif's
    * own WiFi+Zigbee gateway example brings WiFi up first, and starting the
    * 802.15.4 stack ahead of it left WiFi unable to associate at all on this

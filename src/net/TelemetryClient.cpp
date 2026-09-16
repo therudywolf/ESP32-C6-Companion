@@ -20,18 +20,27 @@ void TelemetryClient::tryConnect(unsigned long now) {
   unsigned long backoff = NOCT_TCP_RECONNECT_INTERVAL_MS
                           << (failCount_ < 4 ? failCount_ : 4);
   if (backoff > NOCT_TCP_RECONNECT_MAX_MS) backoff = NOCT_TCP_RECONNECT_MAX_MS;
+
   if (now - lastAttempt_ < backoff) return;
   lastAttempt_ = now;
+
+  /* Which hub this attempt is for. port2_ == 0 means "same port as the
+     primary" — the common case, since both hubs are the same program. */
+  const char *host = onFallback_ ? host2_ : host_;
+  uint16_t port = onFallback_ ? (port2_ ? port2_ : port_) : port_;
+  const char *token = onFallback_ ? token2_ : token_;
+
   client_.stop();
   client_.setTimeout(3); /* read/stream timeout (s); connect bounded separately */
-  Serial.printf("[NET] TCP connect %s:%u...\n", host_, port_);
+  Serial.printf("[NET] TCP connect %s:%u%s...\n", host, port,
+                onFallback_ ? " (запасной)" : "");
   /* Bounded connect: on arduino-esp32 3.x setTimeout() governs only reads, so
    * without an explicit connect timeout an unreachable host blocks this call —
    * on the main render loop — for the lwip default (multi-second). Passing the
    * timeout caps that stall so the UI/animation stay responsive when the PC is
    * off (the lite fallback still supplies scene data on its own task). */
-  if (client_.connect(host_, port_, NOCT_TCP_CONNECT_TIMEOUT_MS)) {
-    Serial.println("[NET] TCP connected");
+  if (client_.connect(host, port, NOCT_TCP_CONNECT_TIMEOUT_MS)) {
+    Serial.printf("[NET] TCP connected%s\n", onFallback_ ? " (запасной хаб)" : "");
     tcpConnected_ = true;
     firstData_ = false;
     connectTime_ = now;
@@ -53,9 +62,9 @@ void TelemetryClient::tryConnect(unsigned long now) {
      * has to go out before any other traffic - and before the hub's own
      * five-second patience runs out. A hub on the LAN sets no token and
      * still accepts the bare greeting, which is why both forms exist. */
-    if (token_ && *token_) {
+    if (token && *token) {
       char greet[160];
-      int n = snprintf(greet, sizeof(greet), "HELO %s\n", token_);
+      int n = snprintf(greet, sizeof(greet), "HELO %s\n", token);
       if (n < 0 || n >= (int)sizeof(greet)) {
         /* snprintf режет с ХВОСТА, а в хвосте лежит перевод строки: хаб ждал
            бы продолжения строки до самого таймаута и молча закрыл линк.
@@ -73,6 +82,17 @@ void TelemetryClient::tryConnect(unsigned long now) {
   } else {
     tcpConnected_ = false;
     if (failCount_ < 4) failCount_++;
+    if (host2_ && failCount_ >= NOCT_TCP_FALLBACK_AFTER) {
+      /* Switch. Both directions reset the counter, so the new endpoint gets
+         its own fair run of attempts instead of inheriting a ceiling backoff
+         from the one that just failed. */
+      onFallback_ = !onFallback_;
+      failCount_ = 0;
+      lastAttempt_ = 0;
+      if (onFallback_) primaryRetryAt_ = now + NOCT_TCP_PRIMARY_RETRY_MS;
+      Serial.printf("[NET] переключаюсь на %s хаб\n",
+                    onFallback_ ? "запасной" : "основной");
+    }
   }
 }
 
@@ -267,6 +287,37 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
     Serial.println("[NET] TCP dropped");
     client_.stop();
     tcpConnected_ = false;
+  }
+  /* Возвращение домой.
+   *
+   * Плата держит один линк, а tryConnect() вызывается ТОЛЬКО когда линка нет —
+   * значит, сидя на запасном хабе и будучи всем довольной, она не спросила бы
+   * про основной никогда. Первая версия этой проверки жила внутри tryConnect()
+   * и не срабатывала ни разу: ПК поднимался, а плата оставалась на сервере до
+   * ближайшего обрыва Wi-Fi.
+   *
+   * Пробуем ОТДЕЛЬНЫМ коротким сокетом, не трогая рабочий. Если основной молчит
+   * — ничего не произошло, линк цел, и мы не устроили себе переподключение (а с
+   * ним и повторный запрос архива климата) на ровном месте. Стоит это обычно
+   * около миллисекунды: закрытый порт на живой машине отвечает RST сразу, и
+   * только полностью выключенный ПК обойдётся в полный NOCT_TCP_CONNECT_TIMEOUT_MS.
+   */
+  if (tcpConnected_ && onFallback_ && host_ &&
+      (long)(now - primaryRetryAt_) >= 0) {
+    primaryRetryAt_ = now + NOCT_TCP_PRIMARY_RETRY_MS;
+    WiFiClient probe;
+    bool alive = probe.connect(host_, port_, NOCT_TCP_CONNECT_TIMEOUT_MS);
+    Serial.printf("[NET] проверяю основной %s:%u -> %s\n", host_, port_,
+                  alive ? "отвечает" : "молчит");
+    if (alive) {
+      probe.stop();
+      Serial.println("[NET] основной хаб снова отвечает — возвращаюсь");
+      client_.stop();
+      tcpConnected_ = false;
+      onFallback_ = false;
+      failCount_ = 0;
+      lastAttempt_ = 0;   /* без паузы: адрес уже проверен, он живой */
+    }
   }
   if (!tcpConnected_) tryConnect(now);
 

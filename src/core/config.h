@@ -44,6 +44,17 @@
 #define NOCT_TCP_CONNECT_TIMEOUT_MS 1500 /* bounded connect: an unreachable PC (off) stalls the render loop at most this long (was 5000) */
 #define NOCT_TCP_RECONNECT_INTERVAL_MS 2000 /* base retry gap; grows via backoff below */
 #define NOCT_TCP_RECONNECT_MAX_MS 30000 /* backoff ceiling while the PC stays offline, so the UI stops stuttering */
+/* Consecutive failed connects before the board tries the fallback hub. Three
+   attempts under the backoff above is roughly fourteen seconds: long enough
+   that a hub restarting (or a switch losing a frame) does not move the board
+   off the LAN, short enough that a PC going to sleep is noticed inside a
+   quarter of a minute. */
+#define NOCT_TCP_FALLBACK_AFTER 3
+/* How often, while sitting on the fallback, to spend one bounded connect
+   checking whether the primary is back. A minute costs at most 1.5 s of gap
+   per minute in the worst case (primary still down) and brings the board home
+   within a minute of the PC waking. */
+#define NOCT_TCP_PRIMARY_RETRY_MS 60000
 #define NOCT_SIGNAL_GRACE_MS 8000  /* after connect, before "no signal" */
 #define NOCT_SIGNAL_TIMEOUT_MS 5000 /* silence after first data = stale */
 
@@ -180,6 +191,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.43.5"
+#define NOCT_VERSION "1.44.0"
 
 #endif
