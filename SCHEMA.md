@@ -250,10 +250,11 @@ Every field is optional; the sentinel means "no change this time".
 | `ok` / `stale` / `src` | both | `src` is `live` (real API) / `sessions` / `stats-cache` |
 
 Only the machine holding a fresh Claude OAuth token can produce the real
-percentages. That is **hub-host** (`monitoring/tgbot/claude_meter.py`), which
-publishes them into its state file; `nocturne-lite` republishes them and the PC
-server relays them via `claude_remote_url`. Never copy the credential to a second
-machine — two refreshers race on refresh-token rotation.
+percentages, and that is rarely the PC: it is whichever host refreshes the token.
+That host publishes them into a small JSON file, and the server relays it via
+`claude_remote_url`. Never copy the credential to a second machine — two
+refreshers race on refresh-token rotation, and the loser starts handing out
+expired tokens.
 
 > **The firmware MERGES this block, it does not replace it** — a key that is
 > missing *or* `null` leaves the previous value alone. That is what lets one

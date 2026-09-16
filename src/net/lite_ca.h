@@ -1,15 +1,16 @@
 /*
  * Nocturne C6 — pinned root CAs for the lite fallback endpoint.
  *
- * The fallback host (owner.ru, a public Caddy vhost) serves a Let's Encrypt
- * cert; pinning the LE roots lets LiteClient verify the TLS chain instead of
- * setInsecure(), so an on-path attacker can neither read the bearer token nor
- * spoof the payload (e.g. forge a RED-ALERT screen).
+ * The fallback host is expected to be a public vhost behind Caddy with a Let's
+ * Encrypt cert; pinning the LE roots lets LiteClient verify the TLS chain
+ * instead of setInsecure(), so an on-path attacker can neither read the bearer
+ * token nor spoof the payload (e.g. forge a RED-ALERT screen). Point it
+ * elsewhere and this bundle still works as long as the cert roots at LE.
  *
  * BOTH LE trust anchors are pinned so the pin survives LE's RSA/ECDSA split:
  *   - ISRG Root X1: RSA intermediates (R10-R13) chain here.
  *   - ISRG Root X2: ECDSA intermediates (E5-E8) chain here. Caddy serves ECDSA
- *     by default, so the live owner.ru cert actually roots at X2 (X1 only
+ *     by default, so a cert issued to such a vhost actually roots at X2 (X1 only
  *     cross-signs X2 in the served chain). Pinning X2 directly removes the
  *     dependency on that cross-sign being present. Both valid until 2035/2040.
  *   setCACert() accepts a multi-cert PEM bundle; LITE_CA_BUNDLE concatenates both.
