@@ -74,10 +74,16 @@ void load(Settings &s) {
   if (!sane)
     memcpy(s.carFreq, carousel::PRESETS[s.carPreset].freq, sizeof(s.carFreq));
   int savedBits = p.getInt("scnBits", 16); /* 16 = the ring before ДОМ */
-  if (savedBits < SCENE_FORZA) {
-    for (int i = savedBits; i < SCENE_FORZA; i++) s.sceneMask |= (1u << i);
+  /* Граница здесь исключающая, поэтому в ней должно стоять SCENE_COUNT.
+     Стояла последняя сцена кольца — и тогда сама она в «новые, включить их»
+     не попадала никогда. Хуже: ниже в scnBits писалось то же самое значение,
+     так что на следующей загрузке условие уже не выполнялось, и последняя
+     сцена оставалась выключенной навсегда, ничем себя не выдавая.
+     check_panel.py теперь следит за этим шаблоном во всей прошивке. */
+  if (savedBits < SCENE_COUNT) {
+    for (int i = savedBits; i < SCENE_COUNT; i++) s.sceneMask |= (1u << i);
     Serial.printf("[CFG] ring grew %d -> %d scenes; new ones enabled\n",
-                  savedBits, (int)SCENE_FORZA);
+                  savedBits, (int)SCENE_COUNT);
   }
   s.zbAlert = p.getBool("zbAl", false);
   s.zbTempMin = p.getInt("zbTmin", -99);
@@ -141,7 +147,7 @@ void save(const Settings &s) {
   p.putBytes("slot1", s.slot[1], sizeof(s.slot[1]));
   p.putBytes("slot2", s.slot[2], sizeof(s.slot[2]));
   p.putUInt("scnMask", s.sceneMask | 1u);
-  p.putInt("scnBits", (int)SCENE_FORZA);
+  p.putInt("scnBits", (int)SCENE_COUNT);
   p.putBool("zbAl", s.zbAlert);
   p.putInt("zbTmin", s.zbTempMin);
   p.putInt("zbTmax", s.zbTempMax);

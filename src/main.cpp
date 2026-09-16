@@ -1483,7 +1483,7 @@ void loop() {
       persist = true;
     }
     if (state.rcPin != -2) { /* pinned "home" scene, -1 = the den */
-      cfg.pinnedScene = (state.rcPin >= 0 && state.rcPin < SCENE_FORZA)
+      cfg.pinnedScene = (state.rcPin >= 0 && state.rcPin < SCENE_COUNT)
                             ? state.rcPin
                             : -1;
       persist = true;
@@ -1696,6 +1696,18 @@ void loop() {
     if (persist) {
       settingsDirty = true;
       settingsDirtyAt = now;
+      /* И сразу сказать наверх, что получилось.
+       *
+       * Отчёт cfg: ехал прицепом к отчёту о волке — раз в две секунды. Значит
+       * после нажатия в панели контрол до двух секунд показывал СТАРОЕ
+       * значение, а на следующем опросе мог дёрнуться назад: панель рисует
+       * то, что отчитала плата. Ровно это и ощущается как «тупит».
+       *
+       * Замерено на круге панель -> плата -> отчёт: было 0.9-2.1 с (среднее
+       * 1.8), из которых почти всё — ожидание этих двух секунд. Отчёт стоит
+       * одну строку в сокет, а команды приходят не чаще, чем человек жмёт;
+       * живое перетаскивание ползунка коалесцируется тем же settingsDirty. */
+      tcp.sendCfg(cfg);
     }
     Serial.printf("[RC] seq=%ld screen=%d theme=%d action='%s' say='%s'\n",
                   state.rcSeq, state.rcScreen, state.rcTheme,

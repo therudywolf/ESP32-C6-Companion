@@ -311,7 +311,11 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
     switch (ev) {
     case EV_REPEAT:
     case EV_SHORT:
-      if (++scenePickSel_ >= SCENE_FORZA) scenePickSel_ = SCENE_DASH;
+      /* SCENE_COUNT, а не SCENE_FORZA. Forza — это САМА последняя сцена, а
+         не граница за ней: с прежним условием курсор заворачивался на ней
+         же, и в меню «экраны в карусели» до Forza нельзя было доехать — то
+         есть включить её с платы было невозможно вообще. */
+      if (++scenePickSel_ >= SCENE_COUNT) scenePickSel_ = SCENE_DASH;
       break;
     case EV_LONG:
       s.sceneMask ^= (1u << scenePickSel_);
@@ -474,7 +478,7 @@ void SceneManager::handleInput(ButtonEvent ev, UiCtx &ui) {
   case EV_TRIPLE: {
     /* home gesture: jump to the pinned scene if the owner set one, else DEN */
     int h = ui.st.settings.pinnedScene;
-    gotoScene((h >= 0 && h < SCENE_FORZA) ? (SceneId)h : SCENE_DEN, ui);
+    gotoScene((h >= 0 && h < SCENE_COUNT) ? (SceneId)h : SCENE_DEN, ui);
     break;
   }
   case EV_LONG: {
@@ -619,9 +623,9 @@ void SceneManager::menuRowValue(int row, const Settings &s, char *out,
     break;
   case MI_SCENES: {
     int on = 0;
-    for (int i = SCENE_DASH; i < SCENE_FORZA; i++)
+    for (int i = SCENE_DASH; i < SCENE_COUNT; i++)
       if ((s.sceneMask >> i) & 1u) on++;
-    snprintf(out, cap, "%d/%d", on + 1, SCENE_FORZA); /* +1 = ЛОГОВО */
+    snprintf(out, cap, "%d/%d", on + 1, (int)SCENE_COUNT); /* +1 = ЛОГОВО */
     break;
   }
   case MI_ELEMS: {
@@ -1464,7 +1468,11 @@ void SceneManager::drawScenePicker(UiCtx &ui) {
   g.setTextSize(1);
   textAt(g, 8, 24, "ЭКРАНЫ В КАРУСЕЛИ (ЛОГОВО всегда вкл)", ORANGE);
 
-  const int first = SCENE_DASH, last = SCENE_FORZA - 1; /* DASH..HISTORY */
+  /* DASH..FORZA — весь хвост кольца, кроме ЛОГОВА, которое не выключается.
+     Комментарий тут говорил «DASH..HISTORY» и был верен ровно до того дня,
+     когда кольцо доросло до ДОМА; граница осталась на SCENE_FORZA и молча
+     прятала из списка три последние сцены. */
+  const int first = SCENE_DASH, last = SCENE_COUNT - 1;
   const int total = last - first + 1;
   const int kVisible = 5, rowH = 22;
   int idx = scenePickSel_ - first;
