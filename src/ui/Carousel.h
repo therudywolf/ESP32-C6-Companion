@@ -143,7 +143,10 @@ static const Preset PRESETS[] = {
                   FQ_TWICE, FQ_EVERY, FQ_HALF, FQ_OFF, FQ_OFF, FQ_OFF, FQ_OFF,
                   FQ_OFF, FQ_HALF, FQ_HALF, FQ_OFF, FQ_EVERY, FQ_OFF,
                   FQ_OFF)},
-    /* 4 — тихо: three screens, slowly. What sits on a desk at night. */
+    /* 4 — тихо: the den twice, plus the overview, the room and the sky
+       occasionally. What sits on a desk at night. Grew from three screens to
+       four when ДОМ joined the ring; the test guards the PROPORTION now, so
+       the next screen added here has to be a deliberate choice. */
     {"тихо",
      NOCT_CAR_ROW(FQ_TWICE, FQ_EVERY, FQ_OFF, FQ_OFF, FQ_OFF, FQ_OFF, FQ_OFF,
                   FQ_OFF, FQ_OFF, FQ_OFF, FQ_HALF, FQ_OFF, FQ_OFF, FQ_OFF,

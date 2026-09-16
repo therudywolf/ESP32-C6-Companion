@@ -1,0 +1,101 @@
+# Релиз по тегу: собрать прошивку и приложить её к выпуску.
+#
+# Тегов в репозитории восемьдесят с лишним, а выпусков было три: собирать и
+# прикладывать образ приходилось руками, и почти всегда не приходилось. Тег
+# теперь делает это сам.
+#
+# ВАЖНО про образ: настоящий secrets.h в git не попадает, и CI собирает
+# против примера. Значит приложенный .bin — это ДОКАЗАТЕЛЬСТВО СБОРКИ, а не
+# готовый к прошивке образ: в нём нет ни вашей сети, ни адресов хабов, ни
+# токенов. Прошивать его можно, но плата пойдёт искать сеть из примера —
+# поэтому либо собирайте у себя, либо кладите всё на карту в nocturne.ini,
+# который переопределяет скомпилированные значения.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0          # нужна история, чтобы собрать заметки
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Stub secrets
+        run: cp include/secrets.h.example include/secrets.h
+
+      # Тот же набор проверок, что и в CI. Выпуск, который не прошёл тесты,
+      # хуже отсутствия выпуска: его скачают.
+      - name: Checks
+        run: |
+          python tools/check_schema.py
+          python tools/check_contrast.py
+          pio test -e native
+
+      - name: Build firmware
+        run: pio run -e nocturne-c6
+
+      - name: Collect artefacts
+        run: |
+          mkdir -p out
+          cp .pio/build/nocturne-c6/firmware.bin out/
+          cp .pio/build/nocturne-c6/firmware.elf out/
+          cd out && sha256sum firmware.bin firmware.elf > SHA256SUMS
+
+      - name: Release notes
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          {
+            echo "## Что изменилось"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --no-merges --format='- %s' "${PREV}..${TAG}"
+            else
+              git log --no-merges --format='- %s' -20
+            fi
+            echo
+            echo "## Про приложенный образ"
+            echo
+            echo 'Собран против `include/secrets.h.example`: это доказательство'
+            echo 'сборки, а не готовый образ. Вашей сети, адресов хабов и токенов'
+            echo 'в нём нет — положите их в `/nocturne.ini` на карту или соберите'
+            echo 'у себя со своим `secrets.h`.'
+            echo
+            echo '```'
+            cat out/SHA256SUMS
+            echo '```'
+          } > NOTES.md
+          echo "size=$(stat -c%s out/firmware.bin)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: NOTES.md
+          files: |
+            out/firmware.bin
+            out/firmware.elf
+            out/SHA256SUMS

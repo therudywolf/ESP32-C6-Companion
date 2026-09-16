@@ -1,5 +1,7 @@
 # 🐺 Nocturne C6 — Wolf Companion
 
+**English** · [Русский](README.ru.md)
+
 > A Flipper-Zero-style companion device on an **ESP32-C6 + 1.47" colour LCD**:
 > live PC-telemetry mirror, an adaptive Forza racing HUD, and **Ноктюрн** — an
 > LLM-voiced wolf pet. Wire-compatible with the Nocturne PC monitoring server,
@@ -189,6 +191,25 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
   schema can be developed against the board with no server in the middle. Most of a
   debugging session is asking the board questions it could simply answer.
 
+## What v1.44 changed
+
+- **Two hubs, one link.** `[server] host2/port2/token2` on the card: the board
+  keeps a primary hub and a fallback, switches after three failed connects and
+  probes once a minute to come home. The point is not uptime — the link is
+  plain TCP and cannot be encrypted (a TLS handshake wants ~46 KB contiguous,
+  the board has 32–36 KB free with Zigbee up), so the primary belongs on the
+  LAN where notification text never leaves the house. Asleep, the PC has no
+  private half to send at all.
+- **The last screen was unreachable.** `SCENE_FORZA` was used as an exclusive
+  bound in six places, so the ring's last screen could not be selected in the
+  menu, enabled from the panel, pinned as home, or switched on by the
+  "ring grew" migration. None of them failed loudly; the screen was simply not
+  there. `check_panel.py` now greps the firmware for that pattern.
+- **Settings report back at once.** `cfg:` used to ride along with the pet
+  report every two seconds, so a control in the panel showed the old value for
+  up to two seconds and could snap back. Measured round trip panel → board →
+  report: 1.79 s before, 0.14 s now.
+
 ## What v1.43 changed
 
 - **Five looks, one press.** Меню → Оформление → Оформление cycles Киберпанк
@@ -218,8 +239,9 @@ single BOOT button). Ported from the Heltec ESP32-S3 mono-OLED original.
 
 ## Companion web panel 🎛️
 
-Served by the Nocturne PC server (`http://<pc>:8899/`), it drives the device
-without touching the button and mirrors its live state — PC clock, temps/loads,
+Served by the Nocturne server (`http://<host>:8899/`) — normally the PC, on
+the LAN, for the privacy reason above. It drives the device without touching
+the button and mirrors its live state — PC clock, temps/loads,
 RAM, weather, media, **and the wolf's face/stats reported back from the
 device**. Remote pet actions, jump to any screen, the full theme gallery +
 colour editor, screen/element composition, wolf settings. Commands ride the

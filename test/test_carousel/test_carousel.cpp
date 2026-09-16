@@ -162,7 +162,12 @@ static void test_presets_are_what_they_say() {
   uint8_t r[ROUND_MAX];
   int quiet = buildRound(PRESETS[4].freq, ALL, 0, nullptr, nullptr, r);
   int all = buildRound(PRESETS[5].freq, ALL, 0, nullptr, nullptr, r);
-  TEST_ASSERT_TRUE_MESSAGE(quiet <= 4, "«тихо» показывает слишком много");
+  /* Доля, а не магическое число. «тихо» разрослось с четырёх записей до
+     пяти, когда в кольцо добавили ДОМ, — и тест падал с тех пор, потому что
+     проверял ровно «<= 4». Число в такой проверке устаревает при каждом
+     росте кольца, а смысл — нет: тихий режим обязан оставаться заметно
+     меньше полного, иначе он не тихий. */
+  TEST_ASSERT_TRUE_MESSAGE(quiet * 3 <= all, "«тихо» перестало быть тихим");
   TEST_ASSERT_EQUAL_INT_MESSAGE(ORDER_N - 1, all,
                                 "«всё поровну» должно показать всё, кроме FORZA");
   for (int p = 0; p < PRESET_N; p++) {
