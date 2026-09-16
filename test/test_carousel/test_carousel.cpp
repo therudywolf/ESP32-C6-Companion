@@ -168,8 +168,12 @@ static void test_presets_are_what_they_say() {
      росте кольца, а смысл — нет: тихий режим обязан оставаться заметно
      меньше полного, иначе он не тихий. */
   TEST_ASSERT_TRUE_MESSAGE(quiet * 3 <= all, "«тихо» перестало быть тихим");
-  TEST_ASSERT_EQUAL_INT_MESSAGE(ORDER_N - 1, all,
-                                "«всё поровну» должно показать всё, кроме FORZA");
+  /* ORDER_N, а не ORDER_N - 1: FORZA в кольце ORDER и так НЕТ — на неё
+     переключается сам гоночный режим, а не карусель. Вычитать её второй раз
+     значит требовать от «всё поровну» показать на один экран меньше, чем в
+     кольце вообще есть. Тест падал именно здесь. */
+  TEST_ASSERT_EQUAL_INT_MESSAGE(ORDER_N, all,
+                                "«всё поровну» должно показать всё кольцо");
   for (int p = 0; p < PRESET_N; p++) {
     int n = buildRound(PRESETS[p].freq, ALL, 0, nullptr, nullptr, r);
     TEST_ASSERT_TRUE_MESSAGE(n > 0, "режим, который ничего не показывает");
