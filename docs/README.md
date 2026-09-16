@@ -1,19 +1,28 @@
-# Документация
+# Documentation
 
-| | о чём |
+**English** · [Русский](README.ru.md)
+
+| | what it covers |
 |---|---|
-| [SETTINGS-MAP](SETTINGS-MAP.md) | каждая настройка: где крутится, как зовётся на проводе и в NVS, что по умолчанию |
+| [SETTINGS-MAP](SETTINGS-MAP.md) | every setting: where it lives in the menu, its name on the wire and in NVS, its default |
 
-Основное лежит выше: [README](../README.md) — сборка и устройство,
-[SCHEMA](../SCHEMA.md) — формат пакета и все поля протокола.
+The main documents are one level up: [README](../README.md) — building and how
+the thing is put together, [SCHEMA](../SCHEMA.md) — the payload format and
+every protocol field.
 
 ---
 
-Здесь же раньше лежали десять брифов — заданий, написанных для сессий, которые
-придут без контекста. Они своё отработали и убраны: это была рабочая переписка,
-а не документация, и в ней подробно описывалась домашняя инфраструктура
-владельца — адреса, имена хостов, схема мониторинга. Для публичного репозитория
-это лишнее в обе стороны: читателю не нужно, владельцу не стоит.
+Ten briefs used to live here — tasks written for sessions that would arrive
+without any context. They have done their job and are gone, and they are gone
+**from the history as well**, not merely deleted in a later commit: they
+described the owner's home infrastructure in detail — addresses, host names,
+the monitoring layout — and this repository is public. A file that is only
+deleted stays one click away in any fork.
 
-В истории git они остались. Если нужно поднять — `git log --diff-filter=D
---name-only -- docs/`.
+One of them survives, and on purpose: [`BRIEF-5-motion-sensors`][b5] is about
+the Aqara RTCGQ11LM and nothing else — what the hardware can and cannot say,
+and why "no motion" is not among the things it can say. There is no address,
+host name or token in it. It was written before the sensors were in hand, so
+its "pairing" section is a plan rather than a report.
+
+[b5]: https://github.com/therudywolf/ESP32-C6-Companion/blob/f0ad2f7/docs/BRIEF-5-motion-sensors.md

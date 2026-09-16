@@ -1,19 +1,28 @@
 # Nocturne wire schema
 
-The device payload is **newline-delimited JSON** over TCP (PC server, port 8888)
-or HTTPS (the always-on *nocturne-lite* fallback). Three codebases must agree
-on it:
+**English** · [Русский](SCHEMA.ru.md)
+
+The device payload is **newline-delimited JSON** over TCP (a hub, port 8888) or
+HTTPS (the optional always-on *lite* endpoint). Producers must agree on it:
 
 | Producer | What it emits | Where |
 |---|---|---|
-| **PC server** (`NocturneServer/monitor.py` → `payload.py`) | the full payload over TCP | `build_payload()` |
-| **lite fallback** (`nocturne-lite/app.py`) | a SUBSET (weather + forest/svc + events + clk) over HTTPS | `build_payload()` |
+| **hub** (`NocturneServer`, `python -m hub`) | the full payload over TCP | `payload.py :: build_payload()` |
+| **lite endpoint** (any host the card's `[lite]` section points at) | a SUBSET (weather + forest/svc + events + clk) over HTTPS | its own `build_payload()` |
 | **firmware** (`ESP32-C6-Companion`) | the consumer — **canonical parser** | `src/net/TelemetryClient.cpp :: parsePayload()` |
+
+Since v1.44.0 the board can hold **two hubs** — a primary and a fallback — but
+both speak this same schema from the same codebase, so there is nothing extra
+to agree on: the difference between them is where they run, not what they say.
 
 > The firmware parser is the source of truth. A field rename on a producer that
 > isn't mirrored here **silently desyncs the board** — especially the lite
-> fallback, which the board depends on with the PC off. Keep this file in sync
-> with `parsePayload()` and the two `build_payload()`s.
+> endpoint, which the board leans on with the PC off. Keep this file in sync
+> with `parsePayload()` and every `build_payload()`.
+>
+> `tools/check_schema.py` enforces the part that can be enforced: every key the
+> firmware reads must be named **in this file and in its Russian counterpart**.
+> A translation that quietly falls behind is worse than no translation.
 
 String fields are truncated by the firmware to the buffer sizes below (`copyStr`);
 emit shorter and you're safe. Integers default to `-1`/`0` when absent.
@@ -411,9 +420,9 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   quietly failed forty writes looks exactly like a healthy one until someone
   opens the archive and finds a hole in it.
 - `cfg:` — CSV mirror of device settings, so the panel reflects the board.
-  **Twenty fields since v1.12** — the panel's key list must match position for
-  position, because a short list silently drops the tail (which is exactly what
-  happened to `pinned`/`slot`/`night*` until v1.14.1).
+  **Thirty-five fields since v1.43.0** — the panel's key list must match
+  position for position, because a short list silently drops the tail (which is
+  exactly what happened to `pinned`/`slot`/`night*` until v1.14.1).
   Fields, in order:
 
   `petllm, wchat, wtone, led, flip, bglight, bright, carousel, timeout,
@@ -428,4 +437,6 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   Fields 16-20 were **appended** in v1.9.0 — a panel that splits by index and
   ignores the tail keeps working. Only ever append here, never reorder.
 
-_Last synced with `parsePayload()` at firmware v1.9.0. `tools/check_schema.py` enforces that every key the firmware reads is named here._
+_Last synced with `parsePayload()` at firmware v1.44.1. `tools/check_schema.py`
+enforces that every key the firmware reads is named here — and in
+[SCHEMA.ru.md](SCHEMA.ru.md)._

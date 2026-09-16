@@ -2,7 +2,11 @@
 
 [English](README.md) · **Русский**
 
-> Настольный компаньон в духе Flipper Zero на **ESP32-C6с цветным экраном
+[![CI](https://github.com/therudywolf/ESP32-C6-Companion/actions/workflows/ci.yml/badge.svg)](https://github.com/therudywolf/ESP32-C6-Companion/actions/workflows/ci.yml)
+[![Выпуск](https://img.shields.io/github/v/release/therudywolf/ESP32-C6-Companion?display_name=tag&label=%D0%B2%D1%8B%D0%BF%D1%83%D1%81%D0%BA)](https://github.com/therudywolf/ESP32-C6-Companion/releases)
+[![Лицензия: MIT](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-blue.svg)](LICENSE)
+
+> Настольный компаньон в духе Flipper Zero на **ESP32-C6 с цветным экраном
 > 1.47"**: живое зеркало телеметрии ПК, адаптивный гоночный HUD для Forza и
 > **Ноктюрн** — волк-питомец, говорящий голосом языковой модели. Совместим по
 > проводу с сервером Ноктюрна и настраивается целиком — с самой платы или из
@@ -77,6 +81,15 @@ pio device monitor                               # консоль, 115200
 Zigbee (для проверки, кто виноват в проблемах с Wi-Fi), `nocturne-c6-lint` —
 сборка с проверкой раскладки экранов, `native` — тесты на хосте.
 
+## Выпуски
+
+Тег собирает прошивку и прикладывает её к выпуску вместе с `firmware.elf` и
+`SHA256SUMS`. Важно понимать, что именно приложено: настоящего `secrets.h` в
+git нет, и CI собирает против примера. Образ — это **доказательство сборки**, а
+не готовый к прошивке файл: вашей сети, адресов хабов и токенов в нём нет.
+Либо собирайте у себя, либо кладите всё на карту в `nocturne.ini`, который
+переопределяет скомпилированные значения.
+
 ## Веб-панель 🎛️
 
 Панель отдаёт сервер Ноктюрна (`http://<хост>:8899/`) — обычно это ПК, в
@@ -92,8 +105,8 @@ Zigbee (для проверки, кто виноват в проблемах с 
 
 ## Документация
 
-- [SCHEMA.md](SCHEMA.md) — формат пакета и все поля протокола.
-- [docs/SETTINGS-MAP.md](docs/SETTINGS-MAP.md) — каждая настройка: путь в
+- [SCHEMA.ru.md](SCHEMA.ru.md) — формат пакета и все поля протокола.
+- [docs/SETTINGS-MAP.ru.md](docs/SETTINGS-MAP.ru.md) — каждая настройка: путь в
   меню, ключ `rc`, ключ NVS, индекс в `cfg:`, значение по умолчанию.
 - Сервер — в отдельном репозитории
   [NocturneServer](https://github.com/therudywolf/NocturneServer).
