@@ -177,12 +177,16 @@ void drawAnalysis(UiCtx &ui) {
     uint16_t pc = tend == barometer::TEND_FALL_FAST   ? WARN
                   : tend == barometer::TEND_RISE_FAST ? INFO
                                                       : TEXT;
-    snprintf(v, sizeof(v), "%d", z.pressure);
-    if (w.okP3) fmtDelta(a, sizeof(a), w.dP10_3h, "за 3ч");
+    /* мм рт. ст., как на ДОМе и в панели хаба. Цвет и пороги выше считаются
+     * в гПа: переводится только то, что читает человек. */
+    snprintf(v, sizeof(v), "%d", barometer::toMm(z.pressure));
+    if (w.okP3)
+      fmtDelta(a, sizeof(a), barometer::tenthsToMm(w.dP10_3h), "за 3ч");
     else snprintf(a, sizeof(a), "3ч -");
-    if (w.okP24) fmtDelta(b, sizeof(b), w.dP10_24h, "за сут");
+    if (w.okP24)
+      fmtDelta(b, sizeof(b), barometer::tenthsToMm(w.dP10_24h), "за сут");
     else snprintf(b, sizeof(b), "сут -");
-    quantity(g, 214, 26, 102, CH, "давление", v, "гПа", pc, a, b);
+    quantity(g, 214, 26, 102, CH, "давление", v, "мм", pc, a, b);
   } else {
     quantity(g, 214, 26, 102, CH, "давление", "-", nullptr, DIM, nullptr,
              nullptr);

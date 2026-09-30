@@ -283,7 +283,7 @@ void drawHome(UiCtx &ui) {
       /* Pressure is the one reading here that is about the OUTDOORS - a
        * building leaks, so the needle tracks the atmosphere. mmHg because
        * that is the unit a Russian forecast quotes. */
-      snprintf(v, sizeof(v), "%d", (z.pressure * 3) / 4);
+      snprintf(v, sizeof(v), "%d", barometer::toMm(z.pressure));
       uint16_t pc = tend == barometer::TEND_FALL_FAST   ? WARN
                     : tend == barometer::TEND_RISE_FAST ? INFO
                                                         : TEXT;
@@ -348,9 +348,12 @@ void drawHome(UiCtx &ui) {
     textAt(g, c.x, y2, z.name[0] ? z.name : NOCT_ZB_NET_NAME,
            stale ? DIM : ORANGE);
     if (ui.st.zbTrendOk) {
-      int dp = ui.st.zbPress10Delta3h;
-      snprintf(v, sizeof(v), "%+d.%d гПа/3ч",
-               dp / 10, abs(dp % 10));
+      /* In mm, like the reading above it: hPa here put two units for one
+       * quantity on the same screen. */
+      char d[12];
+      barometer::fmtTenths(d, sizeof(d),
+                           barometer::tenthsToMm(ui.st.zbPress10Delta3h));
+      snprintf(v, sizeof(v), "%s мм/3ч", d);
       textAt(g, c.x + 116, y2, v, DIM);
     }
     textRight(g, c.x + c.w, y2, age, stale ? CRIT : DIM);

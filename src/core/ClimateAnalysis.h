@@ -250,13 +250,15 @@ inline int analyse(const Windows &w, int temp10, int rh, int hourLocal,
   };
 
   /* ── pressure: shape first, because shape outranks magnitude ──────────── */
+  /* Thresholds are tenths of hPa, as WMO quotes them; the TEXT is mm Hg,
+   * because a person reads it: 6 hPa is 4.5 mm, 8 hPa is 6 mm. */
   const int r3 = w.okP3 ? per3h(w.dP10_3h, 3) : 0;
   const int r1 = w.okP1 ? per3h(w.dP10_1h, 1) : 0;
   const int r6 = w.okP6 ? per3h(w.dP10_6h, 6) : 0;
 
   if (w.okP3 && r3 <= -60) {
     add(PAT_STORM_IMMINENT, 2, "Резкий обвал давления",
-        "падение больше 6 гПа за 3 часа: фронт уже здесь");
+        "падение больше 4,5 мм за 3 часа: фронт уже здесь");
   }
 
   /* A reversal is the most informative thing two windows can say, so it is
@@ -279,11 +281,11 @@ inline int analyse(const Windows &w, int temp10, int rh, int hourLocal,
 
   if (w.okP12 && w.dP10_12h <= -80) {
     add(PAT_DEEPENING, 1, "Циклон углубляется",
-        "больше 8 гПа за 12 часов: устойчивая непогода, не шквал");
+        "больше 6 мм за 12 часов: устойчивая непогода, не шквал");
   }
   if (w.okP12 && w.dP10_12h >= 80) {
     add(PAT_RIDGE_BUILDING, 0, "Антициклон строится",
-        "больше 8 гПа за 12 часов вверх: устойчивая ясная погода");
+        "больше 6 мм за 12 часов вверх: устойчивая ясная погода");
     /* Clear skies radiate heat away, so the night under a building ridge runs
      * colder than the day suggests. This is about the SKY, inferred from
      * pressure - not from the room thermometer, which knows only the

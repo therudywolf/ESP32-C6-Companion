@@ -131,6 +131,30 @@ inline bool headacheWatch(Tendency t) {
   return t == TEND_FALL_FAST;
 }
 
+/* ── what a person reads: millimetres of mercury ──────────────────────────
+ * Everything above counts in hPa: Zigbee reports it and the WMO bands are
+ * quoted in it. People read mm Hg — the unit a Russian forecast uses and the
+ * one the hub panel shows — so the conversion happens only where text is
+ * drawn, never inside a threshold. x3/4 stays within 0.07 mm of 0.750062
+ * across the range a barometer occupies, and it ROUNDS: the home screen used
+ * to truncate, drawing 757 for 1010 hPa while the panel beside it said 758. */
+inline int toMm(int hpa) { return (hpa * 3 + 2) / 4; }
+
+/* Tenths of hPa to tenths of mm, rounded half away from zero. */
+inline int tenthsToMm(int d10) {
+  long v = (long)d10 * 3;
+  return (int)(v >= 0 ? (v + 2) / 4 : -((-v + 2) / 4));
+}
+
+/* "+0.8", "-0.4", "0.0". The sign is taken from the value itself: "%+d.%d"
+ * of (t / 10, |t % 10|) printed a fall of 0.4 as "+0.4", because t / 10 is 0
+ * there and a zero carries no sign. */
+inline void fmtTenths(char *out, size_t cap, int t) {
+  int a = t < 0 ? -t : t;
+  snprintf(out, cap, "%s%d.%d", t > 0 ? "+" : (t < 0 ? "-" : ""), a / 10,
+           a % 10);
+}
+
 } // namespace barometer
 
 #endif

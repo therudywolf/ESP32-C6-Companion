@@ -656,9 +656,9 @@ static void consoleExec(String line) {
                               state.zbDewPoint10, state.zbPressPct,
                               state.zbTempPct, state.zbHumPct,
                               state.zbAbsHum10, w);
-      Serial.printf("trend := %+d.%d hPa/3h -> %s (%d pattern(s))\n",
-                    state.zbPress10Delta3h / 10,
-                    abs(state.zbPress10Delta3h % 10),
+      char dh[12];
+      barometer::fmtTenths(dh, sizeof(dh), state.zbPress10Delta3h);
+      Serial.printf("trend := %s hPa/3h -> %s (%d pattern(s))\n", dh,
                     barometer::forecast(
                         barometer::classify(state.zbPress10Delta3h, 3)),
                     state.zbFindCount);
@@ -2067,8 +2067,9 @@ void loop() {
       if (state.zbTrendOk) {
         tcp.sendZbTrend(dP, dT, dH);
         auto t = barometer::classify(dP, 3);
-        Serial.printf("[BARO] 3h: %+d.%d hPa - %s\n", dP / 10, abs(dP % 10),
-                      barometer::forecast(t));
+        char dh[12];
+        barometer::fmtTenths(dh, sizeof(dh), dP);
+        Serial.printf("[BARO] 3h: %s hPa - %s\n", dh, barometer::forecast(t));
       }
 
       /* The other windows. Three hours is the WMO standard and stays exactly

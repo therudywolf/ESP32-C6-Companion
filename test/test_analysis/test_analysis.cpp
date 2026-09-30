@@ -14,6 +14,7 @@
  */
 #include <unity.h>
 
+#include "core/Barometer.h"
 #include "core/ClimateAnalysis.h"
 
 void setUp() {}
@@ -278,8 +279,39 @@ static void test_warm_for_sleep_only_at_night() {
   TEST_ASSERT_FALSE(has(n, analysis::PAT_WARM_FOR_SLEEP));
 }
 
+static void test_mm_rounds_to_what_the_panel_shows() {
+  /* The home screen truncated: 1010 hPa drew as 757 while the hub panel,
+   * rounding 757.56, said 758. One sensor, two numbers. */
+  TEST_ASSERT_EQUAL_INT(758, barometer::toMm(1010));
+  TEST_ASSERT_EQUAL_INT(760, barometer::toMm(1013));
+  /* Tenths: the same rounding the panel applies to a change. */
+  TEST_ASSERT_EQUAL_INT(8, barometer::tenthsToMm(10));
+  TEST_ASSERT_EQUAL_INT(-8, barometer::tenthsToMm(-10));
+  TEST_ASSERT_EQUAL_INT(45, barometer::tenthsToMm(60));
+  TEST_ASSERT_EQUAL_INT(60, barometer::tenthsToMm(80));
+  TEST_ASSERT_EQUAL_INT(0, barometer::tenthsToMm(0));
+}
+
+static void test_a_small_fall_keeps_its_minus() {
+  /* "%+d.%d" of (t / 10, |t % 10|) printed -0.4 as "+0.4": t / 10 is 0
+   * there, and a zero has no sign. A fall announced as a rise. */
+  char s[12];
+  barometer::fmtTenths(s, sizeof(s), -4);
+  TEST_ASSERT_EQUAL_STRING("-0.4", s);
+  barometer::fmtTenths(s, sizeof(s), barometer::tenthsToMm(-5));
+  TEST_ASSERT_EQUAL_STRING("-0.4", s);
+  barometer::fmtTenths(s, sizeof(s), 8);
+  TEST_ASSERT_EQUAL_STRING("+0.8", s);
+  barometer::fmtTenths(s, sizeof(s), 0);
+  TEST_ASSERT_EQUAL_STRING("0.0", s);
+  barometer::fmtTenths(s, sizeof(s), -45);
+  TEST_ASSERT_EQUAL_STRING("-4.5", s);
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_mm_rounds_to_what_the_panel_shows);
+  RUN_TEST(test_a_small_fall_keeps_its_minus);
   RUN_TEST(test_dew_point_known_value);
   RUN_TEST(test_dew_point_saturated_equals_air);
   RUN_TEST(test_dew_point_rejects_impossible_inputs);

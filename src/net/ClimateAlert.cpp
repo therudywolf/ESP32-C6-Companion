@@ -125,14 +125,19 @@ void ClimateAlert::tick(unsigned long now, AppState &st, PetBrain &brain,
       lastTend_ = tend;
       tendQuietUntil_ = now + 6UL * 3600UL * 1000UL;
       int dp = st.zbPress10Delta3h;
-      snprintf(msg, sizeof(msg), "%+d.%d гПа/3ч - %s", dp / 10, abs(dp % 10),
+      /* The card is read by a person, so mm; the log mirrors the wire, so
+       * hPa. Both with the sign of the value — "%+d.%d" of (dp/10, |dp%10|)
+       * announced a fall of 0.4 as a rise. */
+      char dmm[12], dhpa[12];
+      barometer::fmtTenths(dmm, sizeof(dmm), barometer::tenthsToMm(dp));
+      barometer::fmtTenths(dhpa, sizeof(dhpa), dp);
+      snprintf(msg, sizeof(msg), "%s мм/3ч - %s", dmm,
                barometer::forecast((barometer::Tendency)tend));
       ui.alertCard(barometer::headacheWatch((barometer::Tendency)tend)
                        ? SceneManager::AL_WARN
                        : SceneManager::AL_WEATHER,
                    "ПОГОДА", msg);
-      Serial.printf("[BARO] alert: %+d.%d hPa/3h - %s\n", dp / 10,
-                    abs(dp % 10),
+      Serial.printf("[BARO] alert: %s hPa/3h - %s\n", dhpa,
                     barometer::forecast((barometer::Tendency)tend));
       switch ((barometer::Tendency)tend) {
       case barometer::TEND_FALL_FAST:
