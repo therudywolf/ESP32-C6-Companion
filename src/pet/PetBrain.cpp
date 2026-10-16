@@ -208,15 +208,100 @@ PhraseCtx PetBrain::makeCtx(AppState &st) {
   return c;
 }
 
+/* What kind of program the owner is in, as a bucket key. The table answers
+ * "app.code" or "idle.app.browser" with lines about THAT kind of program and
+ * walks back to plain "app" for anything it does not know. Order matters:
+ * the first needle wins, so "obsidian" is tested before "obs" and
+ * "yandexmusic" before "yandex". */
+static const char *appKey(const char *app) {
+  if (!app || !*app) return nullptr;
+  char low[32];
+  size_t n = 0;
+  for (; app[n] && n < sizeof(low) - 1; n++)
+    low[n] = (char)tolower((unsigned char)app[n]);
+  low[n] = 0;
+  static const char *const kMap[][2] = {
+      {"obsidian", "notes"},    {"notion", "notes"},      {"onenote", "notes"},
+      {"yandexmusic", "music"}, {"spotify", "music"},     {"aimp", "music"},
+      {"foobar", "music"},      {"chrome", "browser"},    {"msedge", "browser"},
+      {"firefox", "browser"},   {"opera", "browser"},     {"brave", "browser"},
+      {"yandex", "browser"},    {"browser", "browser"},   {"telegram", "telegram"},
+      {"gram", "telegram"},     {"discord", "discord"},   {"slack", "discord"},
+      {"cursor", "code"},       {"devenv", "code"},       {"idea", "code"},
+      {"pycharm", "code"},      {"clion", "code"},        {"rider", "code"},
+      {"webstorm", "code"},     {"sublime", "code"},      {"notepad++", "code"},
+      {"windsurf", "code"},     {"code", "code"},         {"windowsterminal", "terminal"},
+      {"pwsh", "terminal"},     {"powershell", "terminal"}, {"cmd", "terminal"},
+      {"wezterm", "terminal"},  {"alacritty", "terminal"}, {"ssh", "terminal"},
+      {"steam", "game"},        {"forza", "game"},        {"terraria", "game"},
+      {"minecraft", "game"},    {"javaw", "game"},        {"epicgames", "game"},
+      {"obs", "stream"},        {"photoshop", "art"},     {"blender", "art"},
+      {"krita", "art"},         {"gimp", "art"},          {"figma", "art"},
+      {"aseprite", "art"},      {"winword", "office"},    {"excel", "office"},
+      {"powerpnt", "office"},   {"outlook", "office"},    {"vlc", "video"},
+      {"mpv", "video"},         {"mpc-hc", "video"},      {"potplayer", "video"},
+      {"lm studio", "llm"},     {"lmstudio", "llm"},      {"gpt4all", "llm"},
+      {"ollama", "llm"},        {"llama", "llm"},         {"claude", "claude"},
+      {"docker", "docker"},     {"vmmem", "docker"},      {"wsl", "docker"},
+      {"vmconnect", "vm"},      {"vmwp", "vm"},           {"virtualbox", "vm"},
+      {"vmware", "vm"},         {"qbittorrent", "torrent"}, {"utorrent", "torrent"},
+      {"taskmgr", "taskmgr"},   {"procexp", "taskmgr"},   {"game", "game"},
+  };
+  for (auto &m : kMap)
+    if (strstr(low, m[0])) return m[1];
+  return nullptr;
+}
+
+/* Weather as a bucket key; shared by the idle remark and the "weather just
+ * changed" trigger, which used to say the generic line every time while
+ * "weather.rain" and "weather.cold" sat in the table unread. */
+static const char *weatherKind(int w, int temp) {
+  if ((w >= 71 && w <= 77) || w == 85 || w == 86) return "snow";
+  if ((w >= 51 && w <= 67) || (w >= 80 && w <= 82)) return "rain";
+  if (w >= 95) return "storm";
+  if (w == 45 || w == 48) return "fog";
+  if (temp <= -5) return "cold";
+  if (temp >= 28) return "hot";
+  if (w >= 0 && w <= 1) return "clear";
+  if (w >= 2 && w <= 3) return "cloudy";
+  return nullptr;
+}
+
+/* A day the wolf has something to say about. */
+static const char *holiday(const struct tm &t) {
+  int m = t.tm_mon, d = t.tm_mday;
+  if ((m == 11 && d >= 20) || (m == 0 && d <= 10)) return "newyear";
+  if ((m == 9 && d >= 25) || (m == 10 && d == 1)) return "halloween";
+  if (t.tm_yday == 255) return "programmer"; /* 256-й день года */
+  if (m == 6 && t.tm_wday == 5 && d + 7 > 31) return "sysadmin";
+  if (m == 3 && d == 12) return "cosmonautics";
+  if (m == 1 && d == 14) return "valentine";
+  if (m == 1 && d == 23) return "feb23";
+  if (m == 2 && d == 8) return "mar8";
+  return nullptr;
+}
+
 String PetBrain::idleBucket(AppState &st, const PhraseCtx &c) {
   /* Ordered by how much the remark would reveal that the wolf is actually
    * looking: the screen the owner opened beats the weather. A coin flip at
    * each step keeps one loud fact (a track on repeat all evening) from owning
-   * every idle line. */
+   * every idle line. A holiday goes first: it lasts a day, and a wolf that
+   * notices Halloween on Halloween is worth more than one more remark on
+   * the CPU. */
+  time_t tnow = time(nullptr);
+  struct tm tmv;
+  bool cal = tnow >= 1700000000L && localtime_r(&tnow, &tmv);
+  if (cal) {
+    const char *h = holiday(tmv);
+    if (h && random(2) == 0) return String("idle.holiday.") + h;
+  }
   if (c.scene[0] && random(2) == 0) return String("idle.scene.") + c.scene;
   if (c.track[0] && random(2) == 0) return "idle.media";
   if (c.gpu >= 50) return "idle.gpu";
-  if (c.app[0] && random(2) == 0) return "idle.app";
+  if (c.app[0] && random(2) == 0) {
+    const char *k = appKey(c.app);
+    return k ? String("idle.app.") + k : String("idle.app");
+  }
   if (c.roomT10 != -32768 && random(2) == 0) {
     if (c.roomT10 >= 270) return "idle.room.warm";
     if (c.roomT10 <= 180) return "idle.room.cold";
@@ -224,15 +309,23 @@ String PetBrain::idleBucket(AppState &st, const PhraseCtx &c) {
     if (c.roomRh >= 0 && c.roomRh <= 30) return "idle.room.dry";
   }
   if (c.temp != -999 && random(2) == 0) {
-    int w = st.weather.wmoCode;
-    if ((w >= 71 && w <= 77) || w == 85 || w == 86) return "idle.weather.snow";
-    if ((w >= 51 && w <= 67) || (w >= 80 && w <= 82)) return "idle.weather.rain";
-    if (c.temp <= -5) return "idle.weather.cold";
-    if (c.temp >= 28) return "idle.weather.hot";
-    if (w <= 1) return "idle.weather.clear";
+    const char *k = weatherKind(st.weather.wmoCode, c.temp);
+    if (k) return String("idle.weather.") + k;
   }
   if (c.mood == 0 && random(2) == 0) return "idle.mood.sad";
   if (c.mood == 2 && random(3) == 0) return "idle.mood.happy";
+  if (cal && random(4) == 0) {
+    if (tmv.tm_wday == 1) return "idle.weekday.monday";
+    if (tmv.tm_wday == 5) return "idle.weekday.friday";
+    if (tmv.tm_wday == 0 || tmv.tm_wday == 6) return "idle.weekend";
+  }
+  if (cal && random(5) == 0) {
+    int m = tmv.tm_mon;
+    return m <= 1 || m == 11 ? "idle.season.winter"
+           : m <= 4          ? "idle.season.spring"
+           : m <= 7          ? "idle.season.summer"
+                             : "idle.season.autumn";
+  }
   if (c.hour >= 0 && random(2) == 0) {
     if (c.hour < 6) return "idle.night";
     if (c.hour < 11) return "idle.morning";
@@ -254,14 +347,15 @@ int PetBrain::toneForBucket(const char *b) {
   if (rootIs(b, "alert") || rootIs(b, "faint") || rootIs(b, "event"))
     return TONE_TENSE;
   if (rootIs(b, "fed") || rootIs(b, "played") || rootIs(b, "pet") ||
-      rootIs(b, "wake") || rootIs(b, "revive"))
+      rootIs(b, "wake") || rootIs(b, "revive") || rootIs(b, "birthday"))
     return TONE_HAPPY;
   if (rootIs(b, "hunger") || rootIs(b, "bored") || rootIs(b, "sleepy"))
     return TONE_LOW;
   return TONE_NEUTRAL;
 }
 
-void PetBrain::show(const String &p, unsigned long now, int tone) {
+void PetBrain::show(const String &p, unsigned long now, int tone,
+                    const char *bucket, bool report) {
   phrase_ = p;
   speechStart_ = now;
   /* hold long enough to read: 8 s + 60 ms/char */
@@ -269,6 +363,14 @@ void PetBrain::show(const String &p, unsigned long now, int tone) {
   thinking_ = false;
   lastSpeech_ = now;
   speechTone_ = tone;
+  if (report && p.length()) {
+    spokenPending_ = true;
+    spokenAt_ = now;
+    spokenTone_ = tone;
+    strncpy(spokenBucket_, bucket ? bucket : "", sizeof(spokenBucket_) - 1);
+    spokenBucket_[sizeof(spokenBucket_) - 1] = 0;
+    spokenSeq_++;
+  }
 }
 
 void PetBrain::trigger(const char *bucket, const char *eventRu,
@@ -305,7 +407,7 @@ void PetBrain::trigger(const char *bucket, const char *eventRu,
     const char *tod = c.hour < 0 ? "" : c.hour < 6 ? ".night"
                     : c.hour < 11 ? ".morning" : "";
     snprintf(b, sizeof(b), "%s%s", bucket, strchr(bucket, '.') ? "" : tod);
-    show(cache_->pick(b, c), now, toneForBucket(bucket));
+    show(cache_->pick(b, c), now, toneForBucket(bucket), b);
   }
 }
 
@@ -361,17 +463,18 @@ void PetBrain::tick(unsigned long now, AppState &st) {
         if (ok) {
           llmFailStreak_ = 0; /* LLM is healthy again */
           cache_->remember(pendingBucket_, reply);
-          show(reply, now, tone);
+          show(reply, now, tone, pendingBucket_);
         } else {
           if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
-          show(cache_->pick(pendingBucket_, makeCtx(st)), now, tone);
+          show(cache_->pick(pendingBucket_, makeCtx(st)), now, tone,
+               pendingBucket_);
         }
       }
     } else if (thinking_ && now - speechStart_ > NOCT_LLM_TIMEOUT_MS + 4000UL) {
       if (++llmFailStreak_ >= 2) llmSuppressUntil_ = now + kLlmSuppressMs;
       thinking_ = false; /* belt & braces: task wedged — fall back */
       show(cache_->pick(pendingBucket_, makeCtx(st)), now,
-           toneForBucket(pendingBucket_));
+           toneForBucket(pendingBucket_), pendingBucket_);
     }
   }
 
@@ -445,6 +548,23 @@ void PetBrain::tick(unsigned long now, AppState &st) {
     trigger("sleepy", "ты очень устал и хочешь спать", now, st, false);
   } else if (pet_->energy() > 45) {
     lowEnergyFired_ = false;
+  }
+
+  /* 3.4) birthdays. A wolf-day is a real hour, so a round hundred comes every
+   * four days or so - often enough to notice, rare enough to mean something.
+   * The first reading only latches: a reboot is not a birthday. */
+  {
+    uint32_t age = pet_->ageDays();
+    if (lastAgeSeen_ && age > lastAgeSeen_ && pet_->isAlive() &&
+        age / 100 != lastAgeSeen_ / 100) {
+      bool big = age / 1000 != lastAgeSeen_ / 1000;
+      char ev[96];
+      snprintf(ev, sizeof(ev), "тебе исполнилось %lu волчьих дней - круглая дата",
+               (unsigned long)age);
+      trigger(big ? "birthday.big" : "birthday", ev, now, st, false);
+      diary(ev);
+    }
+    lastAgeSeen_ = age;
   }
 
   /* 3.5) the wolf knows what time it is. It has had an NTP clock since 1.7.7
@@ -531,8 +651,11 @@ void PetBrain::tick(unsigned long now, AppState &st) {
   }
 
   if (st.weatherReceived && st.weather.wmoCode != lastWmo_) {
-    if (lastWmo_ != -999)
-      trigger("weather", "погода за окном сменилась", now, st, false);
+    if (lastWmo_ != -999) {
+      const char *k = weatherKind(st.weather.wmoCode, st.weather.temp);
+      String b = k ? String("weather.") + k : String("weather");
+      trigger(b.c_str(), "погода за окном сменилась", now, st, false);
+    }
     lastWmo_ = st.weather.wmoCode;
   }
 
@@ -598,7 +721,9 @@ void PetBrain::tick(unsigned long now, AppState &st) {
           low.indexOf("steam") >= 0)
         ev = "хозяин запустил игру " + app + " — пожелай удачной катки";
       if (lastApp_.length()) {
-        trigger("app", ev.c_str(), now, st, false);
+        const char *k = appKey(app.c_str());
+        String b = k ? String("app.") + k : String("app");
+        trigger(b.c_str(), ev.c_str(), now, st, false);
         diary(("запуск " + app).c_str()); /* remember the owner's habits */
       }
       lastApp_ = app;

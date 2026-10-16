@@ -136,9 +136,15 @@ const char *inManner() { return def().manner; }
 bool phraseFits(const char *phrase) {
   if (gKind == PK_WOLF || !phrase) return true;
   /* Both cases of the root, and the adjective ("волчьим"). Cyrillic is two
-   * bytes a letter, so a plain substring search works on the UTF-8. */
-  return !strstr(phrase, "волк") && !strstr(phrase, "Волк") &&
-         !strstr(phrase, "волч") && !strstr(phrase, "Волч");
+   * bytes a letter, so a plain substring search works on the UTF-8.
+   * Since v1.45 the wolf also wears a hooded cloak and keeps two sickles:
+   * those lines are his too, and a dog in a hood would be a different pet. */
+  static const char *const kOnlyWolf[] = {"волк", "Волк", "волч", "Волч",
+                                          "серп", "Серп", "капюшон", "Капюшон",
+                                          "плащ", "Плащ"};
+  for (const char *w : kOnlyWolf)
+    if (strstr(phrase, w)) return false;
+  return true;
 }
 
 } // namespace petkind

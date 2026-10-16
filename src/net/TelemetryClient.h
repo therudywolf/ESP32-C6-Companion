@@ -63,6 +63,9 @@ public:
   /* report wolf state upstream so the companion app can show it */
   void sendWolf(int hunger, int joy, int energy, int mood, bool alive,
                 bool sleeping, unsigned long ageDays);
+  /* What the wolf just said: `spk:seq,tone,bucket,text`. Text goes last and
+   * may hold commas; it is cut on a UTF-8 boundary, never mid-letter. */
+  void sendSpeech(uint32_t seq, int tone, const char *bucket, const String &text);
   /* report current device settings upstream so the panel mirrors the board */
   void sendCfg(const Settings &s);
   /* Report a local Zigbee sensor upstream. The board is the coordinator now,

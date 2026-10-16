@@ -45,25 +45,29 @@ risk) and mirrored upstream to the server.
 is a style plus a palette, a background and a dot pass; each of the four can be
 adjusted separately afterwards.
 
-## What changed in v1.44
+## What changed in v1.45
 
-- **Two hubs, one link.** `[server] host2/port2/token2` on the card: the board
-  holds a primary hub and a fallback, moves to the fallback after three failed
-  connects and probes once a minute to see whether the primary is back. The
-  point is not reliability: the link is plain TCP and cannot be encrypted (a
-  TLS handshake wants roughly 46 KB of contiguous heap, and the board has
-  32–36 KB free with Zigbee up). So the primary hub belongs on the local
-  network, where notification text never leaves the house. While the PC sleeps
-  there is no private half of the payload at all.
-- **The last screen was unreachable.** `SCENE_FORZA` was used as an exclusive
-  bound in six places, and the last screen of the ring could not be chosen in
-  the menu, turned on from the panel, pinned as home, or enabled by the "the
-  ring grew" migration. None of the six crashed — the screen simply was not
-  there. `check_panel.py` now looks for that pattern in the firmware.
-- **Settings report back at once.** `cfg:` used to ride along with the pet
-  report every two seconds, so a control in the panel showed a stale value for
-  up to two seconds and could jump back. Measured round trip panel → board →
-  report: was 1.79 s, now 0.14 s.
+- **The board says out loud what it says.** A new uplink line
+  `spk:<seq>,<tone>,<bucket>,<text>` goes to the hub every time the wolf
+  speaks on its own, so a second body — a desktop companion on the PC — says
+  the same line at the same moment instead of making up its own. Lines the
+  hub sent with `say` are not echoed back. Details in `SCHEMA.md`.
+- **Seven times more to say.** The built-in phrase table grew from 313 to
+  2271 lines in 163 buckets: holidays, weather by kind (snow, rain, storm,
+  fog, frost, heat), weekdays and seasons, the program in front of the owner,
+  the room climate, the time of day — with night, morning, pup and elder
+  flavours where they fit. The weather trigger now really asks for
+  `weather.<kind>`; before, those lines were never picked.
+- **Numbers compare as numbers.** A condition like `{temp>=10}` used to
+  compare the filled-in text, and "минус 10" read as zero. The picker also
+  lost its 48-line cap: a two-pass reservoir draw takes any bucket size.
+- **A third line when two are not enough.** The speech card on the other
+  screens measures the line first and grows to three lines instead of
+  cutting it.
+- **Birthdays.** Every hundredth day of the wolf's life gets its own line,
+  every thousandth a bigger one.
+- **The cloak stays with the wolf.** Lines about the hood, the cloak and the
+  sickles are the wolf's alone; the dog, the cat and the fox skip them.
 
 ## Build and flash
 

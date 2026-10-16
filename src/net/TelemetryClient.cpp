@@ -159,6 +159,29 @@ void TelemetryClient::sendWolf(int hunger, int joy, int energy, int mood,
   sendLine(b);
 }
 
+void TelemetryClient::sendSpeech(uint32_t seq, int tone, const char *bucket,
+                                 const String &text) {
+  if (!tcpConnected_ || !text.length()) return;
+  char b[320];
+  int n = snprintf(b, sizeof(b), "spk:%lu,%d,%s,", (unsigned long)seq, tone,
+                   bucket && *bucket ? bucket : "-");
+  if (n < 0 || n >= (int)sizeof(b) - 2) return;
+  /* Обрезать по границе буквы, а не байта: хаб уже однажды получал от
+     платы русские строки, разрезанные посреди буквы, и терял их целиком. */
+  const char *s = text.c_str();
+  size_t len = text.length();
+  size_t room = sizeof(b) - 2 - (size_t)n;
+  if (len > room) {
+    len = room;
+    while (len > 0 && ((uint8_t)s[len] & 0xC0) == 0x80) len--;
+  }
+  for (size_t i = 0; i < len; i++)
+    b[n++] = (s[i] == '\n' || s[i] == '\r') ? ' ' : s[i];
+  b[n++] = '\n';
+  b[n] = 0;
+  sendLine(b);
+}
+
 /* Таблица частот карусели одной строкой цифр: "2122233..." */
 static const char *carFreqStr(const Settings &s) {
   static char buf[SCENE_COUNT + 1];

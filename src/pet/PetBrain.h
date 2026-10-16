@@ -21,8 +21,27 @@ public:
   void begin(WolfPet *pet, LlmClient *llm, PhraseCache *cache, SdStore *sd);
   void onAction(int action); /* ACT_FEED / ACT_PLAY / ACT_TALK from the UI */
   void tick(unsigned long now, AppState &st);
-  /* remote: make the wolf say a literal line right now (companion app). */
-  void sayNow(const String &text) { show(text, millis()); }
+  /* remote: make the wolf say a literal line right now (companion app). Not
+   * reported back up: the line came FROM the hub, and echoing it would hand
+   * the desktop its own words as if the board had thought of them. */
+  void sayNow(const String &text) {
+    show(text, millis(), TONE_NEUTRAL, "say", /*report=*/false);
+  }
+  /* Drained by main for the uplink (`spk:`): the line the wolf has just said
+   * on its own, so its other body - the desktop pet - says the same thing
+   * instead of inventing a second opinion. One line at a time; a line nobody
+   * collected within a few seconds is stale and is dropped. */
+  bool takeSpoken(String &text, int &tone, String &bucket, uint32_t &seq,
+                  unsigned long now) {
+    if (!spokenPending_) return false;
+    spokenPending_ = false;
+    if (now - spokenAt_ > 10000UL) return false;
+    text = phrase_;
+    tone = spokenTone_;
+    bucket = spokenBucket_;
+    seq = spokenSeq_;
+    return true;
+  }
   /* console: one draw from a bucket with the live context, not spoken */
   String samplePhrase(const char *bucket, AppState &st) {
     return cache_->pick(bucket, makeCtx(st));
@@ -76,7 +95,8 @@ private:
   void trigger(const char *bucket, const char *eventRu, unsigned long now,
                AppState &st, bool urgent, bool forceLlm = false,
                bool solicited = false);
-  void show(const String &p, unsigned long now, int tone = TONE_NEUTRAL);
+  void show(const String &p, unsigned long now, int tone = TONE_NEUTRAL,
+            const char *bucket = "", bool report = true);
   static int toneForBucket(const char *bucket);
   String buildContext(const char *eventRu, AppState &st);
   /* What the wolf can see, for the cache path. The LLM path gets the same
@@ -118,6 +138,14 @@ private:
   unsigned long reactionAt_ = 0;   /* when the last action fired */
   int speechTone_ = -1;            /* tone of the latest utterance (main → LED) */
   const char *viewSceneName_ = nullptr; /* scene the owner is viewing */
+
+  /* the spk: mailbox (see takeSpoken) */
+  bool spokenPending_ = false;
+  unsigned long spokenAt_ = 0;
+  int spokenTone_ = TONE_NEUTRAL;
+  char spokenBucket_[40] = {0};
+  uint32_t spokenSeq_ = 0;
+  uint32_t lastAgeSeen_ = 0;       /* for the every-hundred-days birthday */
 
   /* edge detection */
   bool lastAlert_ = false;

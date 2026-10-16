@@ -290,6 +290,14 @@ the two most valuable blocks and overwrote live hardware readings with zeros.)
   token comes from `[server] token` on the card; `server <host> [port] [token]`
   on the USB console writes it there.
 - `wolf:` — pet stats (hunger/joy/energy/mood/alive/sleeping/age)
+- `spk:` (v1.45) — what the wolf has just said, sent at once:
+  `spk:seq,tone,bucket,text`. `seq` counts utterances (the same line twice is
+  two utterances), `tone` is 0 neutral / 1 happy / 2 tense / 3 low, `bucket` is
+  the phrase-table path the line came from (`fed`, `idle.weather.rain`,
+  `app.code`; `-` for a model reply with none). **Text is the last field and
+  may contain commas** — split at most three times. It is cut on a UTF-8
+  boundary, never mid-letter. A line the hub itself sent down with `say` is
+  NOT reported back: the desktop pet would hear its own words as the board's.
 - `zbs:` — one line per locally-paired Zigbee sensor, once a minute:
   `zbs:name,temp10,humidity,battery,age_sec,pressure_hpa` (temp ×10; -1 =
   unknown; names come from `nocturne.ini` and must not contain commas). This is how the server —

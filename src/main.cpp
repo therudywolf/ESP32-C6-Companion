@@ -1841,6 +1841,16 @@ void loop() {
                     sd.lastOpMs());
   }
 
+  /* whatever the wolf just said goes up at once: the desktop body shows the
+   * same line, so the two bodies speak with one voice */
+  {
+    String text, bucket;
+    int tone;
+    uint32_t seq;
+    if (brain.takeSpoken(text, tone, bucket, seq, now) && tcp.connected())
+      tcp.sendSpeech(seq, tone, bucket.c_str(), text);
+  }
+
   /* report wolf state upstream every 2 s so the companion app can show it */
   static unsigned long lastWolfReport = 0;
   if (tcp.connected() && now - lastWolfReport > 2000) {

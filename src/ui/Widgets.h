@@ -104,9 +104,10 @@ void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color);
 
 /* Word-wrap text into a box at the current font, breaking overlong words by
  * characters (UTF-8 aware). Returns the next y after the last line drawn.
- * Stops at maxLines / box bottom. */
+ * Stops at maxLines / box bottom. draw=false only measures: the same
+ * wrapping, no pixels - so a box can be sized to its text first. */
 int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
-             int maxLines, uint16_t color);
+             int maxLines, uint16_t color, bool draw = true);
 
 /* Like textWrap, but renders inline COLOUR emoji from the emoji atlas: emoji
  * codepoints are blitted as 18x18 bitmaps, other text drawn with the current

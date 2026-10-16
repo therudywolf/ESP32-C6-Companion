@@ -1945,8 +1945,19 @@ void SceneManager::draw(UiCtx &ui) {
     const String &p = ui.brain.phrase();
     if (p.length()) {
       /* taller card resting in the lower-CENTRE (was jammed at the bottom
-       * edge: oh=46 rest y=122). 14 px of breathing room below it. */
-      const int oh = 58, mx = 6, restGap = 14;
+       * edge: oh=46 rest y=122). 14 px of breathing room below it.
+       *
+       * Two lines of F_MED hold ~50 characters, and the phrase table allows
+       * 70: one line in five lost its ending here, mid-word, with nothing to
+       * show it was cut. The card grows a third line for those - measured,
+       * not guessed, with the same wrapping that draws it. */
+      const int mx = 6, restGap = 14;
+      const int txPre = s.furry ? mx + 52 : mx + 12;
+      g.setFont(&theme::F_MED);
+      const int needY = widgets::textWrap(g, p.c_str(), 0, 0, NOCT_W - mx - txPre - 6,
+                                          18, 3, TEXT, /*draw=*/false);
+      const int lines = needY > 2 * 18 ? 3 : 2;
+      const int oh = lines == 3 ? 76 : 58;
       float env = ui.brain.speechEnvelope(ui.now);
       if (env > 0.001f) {
         /* ease-out cubic on the slide */
@@ -1972,7 +1983,7 @@ void SceneManager::draw(UiCtx &ui) {
         textAt(g, tx, oy + 6, petkind::name(), ACCENT);
         g.setFont(&theme::F_MED);
         widgets::textWrap(g, p.c_str(), tx, oy + 20,
-                          NOCT_W - mx - tx - 6, 18, 2, TEXT);
+                          NOCT_W - mx - tx - 6, 18, lines, TEXT);
       }
     }
   }

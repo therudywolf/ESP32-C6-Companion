@@ -68,13 +68,13 @@ void pawPrint(LGFX_Sprite &g, int cx, int cy, uint16_t color) {
 
 /* UTF-8 word-wrap with hard char-break for overlong words. */
 int textWrap(LGFX_Sprite &g, const char *s, int x, int y, int w, int lineH,
-             int maxLines, uint16_t color) {
+             int maxLines, uint16_t color, bool draw) {
   String line;
   String word;
   int lines = 0;
   auto flush = [&](bool force) {
     if (line.length() == 0 && !force) return;
-    textAt(g, x, y, line.c_str(), color);
+    if (draw) textAt(g, x, y, line.c_str(), color);
     y += lineH;
     lines++;
     line = "";
