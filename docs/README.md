@@ -25,4 +25,4 @@ and why "no motion" is not among the things it can say. There is no address,
 host name or token in it. It was written before the sensors were in hand, so
 its "pairing" section is a plan rather than a report.
 
-[b5]: https://github.com/therudywolf/ESP32-C6-Companion/blob/f0ad2f7/docs/BRIEF-5-motion-sensors.md
+[b5]: https://github.com/therudywolf/ESP32-C6-Companion/blob/v1.23.0/docs/BRIEF-5-motion-sensors.md

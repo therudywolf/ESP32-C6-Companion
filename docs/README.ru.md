@@ -24,4 +24,4 @@ RTCGQ11LM и ни про что больше: что это железо уме�
 хоста, ни токена в нём нет. Написан он до того, как датчики оказались в руках,
 так что раздел «привязка» там — план, а не отчёт.
 
-[b5]: https://github.com/therudywolf/ESP32-C6-Companion/blob/f0ad2f7/docs/BRIEF-5-motion-sensors.md
+[b5]: https://github.com/therudywolf/ESP32-C6-Companion/blob/v1.23.0/docs/BRIEF-5-motion-sensors.md

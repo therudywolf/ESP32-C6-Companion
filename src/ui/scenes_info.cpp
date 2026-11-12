@@ -653,7 +653,7 @@ void drawServices(UiCtx &ui) {
              e.ms > 500 ? WARN : TEXT);
       /* -10, а не -14: колонка отдаёт имени ровно столько, сколько
        * остаётся от задержки, и четыре лишних пикселя отступа — это
-       * половина буквы в F_MED. «OneToThree» на них и не помещалось. */
+       * половина буквы в F_MED. Длинное имя сервиса на них и не помещалось. */
       nameRight = cx0 + COLW - 10 - mw;
     }
     /* name clipped by display width so multi-byte Cyrillic never cuts mid-glyph
