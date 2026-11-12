@@ -35,6 +35,7 @@ void ZbHub::restore() {}
 #include <esp_task_wdt.h>
 
 #include "Zigbee.h"
+#include "core/HeapWatch.h"
 
 namespace {
 
@@ -137,6 +138,7 @@ public:
                        const esp_zb_zcl_attribute_t *attribute,
                        uint8_t src_endpoint,
                        esp_zb_zcl_addr_t src_address) override {
+    heapwatch::Scope hws(heaptag::ZB);
     if (!attribute) return;
     Slot *s = slotFor(src_address.u.short_addr, src_endpoint);
     if (!s) return;

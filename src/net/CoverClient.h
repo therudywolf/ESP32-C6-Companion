@@ -22,6 +22,9 @@ public:
   void setEndpoint(const char *host, int port);
   /* call with the latest cover token each payload; fetches if it changed */
   void update(long tok);
+  /* Download the current cover again, past the card cache — console `cover`,
+   * so the cost of a fetch can be measured without waiting for a new track. */
+  void forceRefetch();
   bool ready() const { return ready_; }
   const uint16_t *data() const { return buf_; }
 
@@ -55,6 +58,9 @@ private:
   volatile bool pending_ = false;
   volatile bool ready_ = false;
   long cachedTok_ = 0;  /* token already written to the card, don't rewrite it */
+  volatile bool skipCache_ = false; /* forceRefetch: the card must not answer */
+  long missTok_ = 0;                /* token already looked for on the card */
+  volatile long inFlightTok_ = 0;   /* token the fetch task is downloading now */
   uint16_t buf_[W * H]; /* 18 KB RGB565 framebuffer for the cover */
   TaskHandle_t task_ = nullptr;
 };

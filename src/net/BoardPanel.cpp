@@ -3,6 +3,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
+#include "core/HeapWatch.h"
 #include "core/TextUtil.h"
 #include "core/config.h"
 #include "pet/Achievements.h"
@@ -160,6 +161,7 @@ void BoardPanel::tick(bool wifiUp, bool enabled) {
   }
   /* The least important thing on the board stands aside first. */
   if (ESP.getFreeHeap() < kHeapFloor) return;
+  heapwatch::Scope hws(heaptag::PANEL);
   srv_->handleClient();
 }
 

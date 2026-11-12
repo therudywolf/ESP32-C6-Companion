@@ -6,6 +6,7 @@
 #include <esp_heap_caps.h>
 #include <esp_sntp.h>
 
+#include "core/HeapWatch.h"
 #include "net/lite_ca.h"
 
 void LiteClient::begin(const char *url, const char *token) {
@@ -13,11 +14,45 @@ void LiteClient::begin(const char *url, const char *token) {
   token_ = token ? token : "";
   if (!url_.length()) return;
   mux_ = xSemaphoreCreateMutex();
-  xTaskCreate(taskEntry, "lite", 12288, this, 1, &task_);
+  /* No task yet — startTask() makes it the first time a fetch can happen.
+   *
+   * It used to be created here, at boot, with a 12 KB stack. But the fetch is
+   * a TLS handshake that needs a 46 KB contiguous block, and with WiFi and the
+   * Zigbee coordinator up the largest free block is ~14 KB: in normal running
+   * the task could never fetch anything and just held 12 KB — over a third of
+   * a free heap whose low-water mark kept hitting zero. */
+}
+
+bool LiteClient::startTask() {
+  if (task_) return true;
+  size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  if (largest < kTlsBlock) {
+    static bool said = false;
+    if (!said) {
+      said = true;
+      Serial.printf("[LITE] not started: largest free block %u B < %u, "
+                    "TLS could not run anyway\n",
+                    (unsigned)largest, (unsigned)kTlsBlock);
+    }
+    return false;
+  }
+  if (xTaskCreate(taskEntry, "lite", kStackBytes, this, 1, &task_) != pdPASS) {
+    task_ = nullptr;
+    return false;
+  }
+  Serial.println("[LITE] fallback task started");
+  return true;
+}
+
+void LiteClient::debugFetchNow() {
+  if (startTask()) pending_ = true;
+  else Serial.println("[LITE] no fetch: the task cannot start (see above)");
 }
 
 void LiteClient::tick(unsigned long now, bool pcDown) {
   if (!url_.length() || !mux_) return;
+  if (!pcDown) downSince_ = 0;
+  else if (!downSince_) downSince_ = now ? now : 1;
   if (!pcDown) {
     /* PC is back: drop any unconsumed fallback so a later PC-down can't be
      * served a stale payload. gen_ also invalidates a fetch already in flight —
@@ -30,10 +65,12 @@ void LiteClient::tick(unsigned long now, bool pcDown) {
     xSemaphoreGive(mux_);
     return;
   }
+  if (now - downSince_ < kGraceMs) return;
   /* one in flight at a time; steady cadence when healthy, faster after a fail */
   unsigned long iv = ok_ ? kIntervalMs : kRetryMs;
   if (!pending_ && !ready_ && now - lastReq_ >= iv) {
     lastReq_ = now;
+    if (!startTask()) return;
     pending_ = true;
   }
 }
@@ -94,7 +131,7 @@ bool LiteClient::fetch(String &out) {
    * board, and say so, once per dry spell. */
   size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
   static bool warned = false;
-  if (largest < 46 * 1024) {
+  if (largest < kTlsBlock) {
     if (!warned) {
       warned = true;
       Serial.printf("[LITE] skipped: largest free block %u B < 46 KB\n",
@@ -103,6 +140,7 @@ bool LiteClient::fetch(String &out) {
     return false;
   }
   warned = false;
+  heapwatch::Scope hws(heaptag::LITE);
   WiFiClientSecure client;
   client.setCACert(LITE_CA_BUNDLE); /* verify chain vs pinned ISRG Root X1+X2 — no MITM, no leak */
   HTTPClient http;

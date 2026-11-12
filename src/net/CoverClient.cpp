@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 
+#include "core/HeapWatch.h"
 #include "core/config.h"
 #include "storage/SdStore.h"
 
@@ -38,11 +39,20 @@ bool CoverClient::dominant(uint8_t &dr, uint8_t &dg, uint8_t &db) const {
 }
 
 bool CoverClient::serveFromCache(SdStore *sd) {
-  if (!sd || !sd->ok()) return false;
+  if (!sd || !sd->ok() || skipCache_) return false;
   long want = wantTok_;
   if (!pending_ || want <= 0 || want == haveTok_) return false;
+  /* One look per token. This runs every loop while the fetch is pending, and
+   * a miss used to be re-tried each time — six card opens in 1.2 s at boot,
+   * 4 KB of heap apiece (the FATFS window), exactly while the download
+   * itself was emptying the heap. */
+  if (want == missTok_) return false;
   char path[40];
   coverPath(path, sizeof(path), want);
+  if (!sd->exists(path)) {
+    missTok_ = want;
+    return false;
+  }
   if (!sd->readBlob(path, buf_, sizeof(buf_))) return false;
   /* Beat the fetch task to it: clear the request so nothing downloads what we
    * just read off the card. */
@@ -85,10 +95,24 @@ void CoverClient::begin(const char *host, int port) {
 }
 
 void CoverClient::update(long tok) {
-  if (tok > 0 && tok != haveTok_) {
+  /* Not the one being downloaded right now either. This runs every loop, and
+   * haveTok_ only changes once the fetch is done — so during the download it
+   * re-armed pending_ for the very same token, and every new track was
+   * fetched twice, back to back: twice the 18 KB and twice the ~10 KB of
+   * heap the TCP window pins in WiFi buffers. Every boot log showed it. */
+  if (tok > 0 && tok != haveTok_ && tok != inFlightTok_) {
     wantTok_ = tok;
     pending_ = true;
   }
+}
+
+void CoverClient::forceRefetch() {
+  long tok = haveTok_ > 0 ? haveTok_ : wantTok_;
+  if (tok <= 0) return;
+  skipCache_ = true;
+  haveTok_ = 0;
+  wantTok_ = tok;
+  pending_ = true;
 }
 
 void CoverClient::taskEntry(void *self) {
@@ -100,18 +124,23 @@ void CoverClient::taskLoop() {
     if (pending_ && WiFi.status() == WL_CONNECTED) {
       pending_ = false;
       long want = wantTok_;
+      inFlightTok_ = want;
       ready_ = false; /* UI must not read buf_ while fetch() overwrites it */
       if (fetch()) {
         haveTok_ = want;
         ready_ = true;
         Serial.printf("[COVER] fetched tok=%ld\n", want);
       }
+      inFlightTok_ = 0;
+      skipCache_ = false;
     }
     vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
 bool CoverClient::fetch() {
+  heapwatch::Scope hws(heaptag::COVER);
+  const uint32_t h0 = ESP.getFreeHeap();
   const int want = W * H * 2;
   HTTPClient http;
   String url = String("http://") + host_ + ":" + port_ + "/cover.bin";
@@ -119,6 +148,7 @@ bool CoverClient::fetch() {
   http.setTimeout(8000);
   http.setConnectTimeout(4000);
   int code = http.GET();
+  const uint32_t h1 = ESP.getFreeHeap();
   if (code != 200) {
     http.end();
     return false;
@@ -142,6 +172,11 @@ bool CoverClient::fetch() {
       vTaskDelay(pdMS_TO_TICKS(5));
     }
   }
+  const uint32_t h2 = ESP.getFreeHeap();
   http.end();
+  Serial.printf("[COVER] heap free: start %u, after GET %u, after body %u, "
+                "after end %u\n",
+                (unsigned)h0, (unsigned)h1, (unsigned)h2,
+                (unsigned)ESP.getFreeHeap());
   return got == want;
 }

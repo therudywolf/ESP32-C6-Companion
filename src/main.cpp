@@ -22,6 +22,7 @@
 #include "secrets.h"
 
 #include "core/Graphs.h"
+#include "core/HeapWatch.h"
 #include "core/HourHistory.h"
 #include "core/SettingsStore.h"
 #include "core/Types.h"
@@ -183,6 +184,7 @@ static void logTelemetryRow(int ct, int gt, int cl, int gl, int ram) {
   sd.enqueueAppend(path, row);
   /* Same sample, second consumer: the rollup that turns a month of rows into
    * "your GPU idles hotter than it used to". */
+  heapwatch::Scope hws(heaptag::ARCHIVE);
   archive.onMinute(date, ct, gt, cl, gl, ram);
 }
 
@@ -387,6 +389,10 @@ static void consoleHelp() {
       "  shot            screenshot to the card\n"
       "  mono [0|1]      ч/б + без анимации, для сверки снимков\n"
       "  zb [join|reset]  Zigbee coordinator\n"
+      "  mem             heap now, stack headroom per task\n"
+      "  heap [reset|walk|deep N]  heap lows per 10 ms window: when, during\n"
+      "                  what, who failed; walk = blocks by size now vs at the low\n"
+      "  cover           fetch the current cover again, past the card cache\n"
       "  server <host> [port] [token]   куда смотрит плата\n"
       "  server2 <host> [port] [token]  запасной хаб (- убрать)\n"
       "  reboot"));
@@ -410,7 +416,7 @@ static void consoleExec(String line) {
     Serial.printf("v%s  up %lus  heap %u KB (min %u)  board %.1fC\n",
                   NOCT_VERSION, millis() / 1000UL,
                   (unsigned)(ESP.getFreeHeap() / 1024),
-                  (unsigned)(ESP.getMinFreeHeap() / 1024), state.boardTemp);
+                  (unsigned)(heapwatch::bootMin() / 1024), state.boardTemp);
     Serial.printf("wifi %s %ddBm  ip %s  tcp %d  payload %lus ago\n",
                   state.link.ssid, state.link.rssi, WiFi.localIP().toString().c_str(),
                   state.link.tcpConnected,
@@ -496,7 +502,7 @@ static void consoleExec(String line) {
   } else if (cmd == "mem") {
     Serial.printf("heap %u KB free (min %u), largest block %u B\n",
                   (unsigned)(ESP.getFreeHeap() / 1024),
-                  (unsigned)(ESP.getMinFreeHeap() / 1024),
+                  (unsigned)(heapwatch::bootMin() / 1024),
                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     static const char *tn[] = {"loopTask", "llm", "lite", "cover",
                                "Zigbee_main"};
@@ -505,6 +511,26 @@ static void consoleExec(String line) {
       if (h)
         Serial.printf("  %-12s stack headroom %u B\n", n,
                       (unsigned)uxTaskGetStackHighWaterMark(h));
+    }
+  } else if (cmd == "cover") {
+    coverClient.forceRefetch();
+    Serial.println("cover: refetch requested, card cache bypassed");
+  } else if (cmd == "heap") {
+    if (arg == "reset") {
+      heapwatch::resetStats();
+      Serial.println("heap stats reset (boot-min kept)");
+    } else if (arg == "walk") {
+      heapwatch::walk(Serial);
+    } else if (arg.startsWith("deep ")) {
+      long b = arg.substring(5).toInt();
+      if (b >= 512 && b <= 65536) {
+        heapwatch::setDeep((uint32_t)b);
+        Serial.printf("deep threshold %ld B, stats reset\n", b);
+      } else {
+        Serial.println("usage: heap deep <512..65536>");
+      }
+    } else {
+      heapwatch::report(Serial);
     }
   } else if (cmd == "probe") {
     /* Plain HTTP GET to the control panel: a bounded, cheap RX truth-teller.
@@ -1110,6 +1136,7 @@ static void serviceConsole() {
     if (c == '\n') {
       String line = buf;
       buf = "";
+      heapwatch::Scope hws(heaptag::CONSOLE);
       consoleExec(line);
       return; /* one command per pass: never stall the frame on a paste */
     }
@@ -1138,6 +1165,10 @@ void setup() {
   Serial.begin(115200);
   delay(100);
   Serial.printf("\n[BOOT] Nocturne C6 v%s\n", NOCT_VERSION);
+  /* First, so boot-time dips are on record too. From here on the "min free
+   * heap" of the whole firmware is heapwatch::bootMin(), never
+   * ESP.getMinFreeHeap(): local monitoring makes the latter a 10 ms window. */
+  heapwatch::begin();
 
   settings::readBootInfo(state.boot); /* why we restarted, before anything else */
 #ifdef NOCT_ZIGBEE
@@ -1409,13 +1440,19 @@ void loop() {
                tmNow.tm_min);
   }
 
-  tcp.tick(now, wifi.connected(), state, graphs);
+  {
+    heapwatch::Scope hws(heaptag::LINK);
+    tcp.tick(now, wifi.connected(), state, graphs);
+  }
   coverClient.update(state.media.coverTok); /* refetch cover on track change */
   /* Card first: a repeated track is one SD read instead of an 18 KB download,
    * and it works the instant the scene appears. Both calls are loop-task only —
    * the fetch task must never touch SPI. */
-  coverClient.serveFromCache(&sd);
-  coverClient.storeToCache(&sd);
+  {
+    heapwatch::Scope hws(heaptag::SD);
+    coverClient.serveFromCache(&sd);
+    coverClient.storeToCache(&sd);
+  }
 
   /* standalone fallback: when the PC is unreachable, pull weather/forest/
    * services from the always-on lite endpoint and feed the same
@@ -1906,6 +1943,7 @@ void loop() {
   pet.setNightRest(state.link.nightActive);
   if (state.settings.petEnabled) {
     pet.tick(now);
+    heapwatch::Scope hws(heaptag::BRAIN);
     brain.tick(now, state);
   } else {
     state.link.llmBusy = false;
@@ -2033,11 +2071,15 @@ void loop() {
   {
     static int lastHistMode = -1;
     int m = sceneMgr.historyMode();
-    if (m == 2 && lastHistMode != 2) archive.loadSeries();
+    if (m == 2 && lastHistMode != 2) {
+      heapwatch::Scope hws(heaptag::ARCHIVE);
+      archive.loadSeries();
+    }
     lastHistMode = m;
   }
 
   serviceConsole();
+  heapwatch::poll(Serial);
   /* The board's own web page - the panel that works with the PC off. */
   boardPanel.tick(wifi.connected(), state.settings.webPanel);
   /* Bring the coordinator up only after WiFi has a link: with both stacks on
@@ -2045,9 +2087,13 @@ void loop() {
   static bool zbStarted = false;
   if (!zbStarted && wifi.connected()) {
     zbStarted = true;
+    heapwatch::Scope hws(heaptag::ZB);
     zb.begin(&sd, &cardCfg);
   }
-  zb.tick(now, state, graphs);
+  {
+    heapwatch::Scope hws(heaptag::ZB);
+    zb.tick(now, state, graphs);
+  }
   state.link.zbUp = zb.running();
   state.zbJoinSecs = zb.joinSecsLeft(now);
   /* Thresholds the owner set in the panel; edge-triggered, hysteretic, and
@@ -2058,6 +2104,7 @@ void loop() {
    * day — about 2 KB, under a megabyte a year. */
   if (zb.takeLogDue() && state.zb.count > 0) {
     char date[12], hm[8];
+    heapwatch::Scope hws(heaptag::CLIMLOG);
     if (clockParts(date, sizeof(date), hm, sizeof(hm)))
       climateLog.append(date, hm, state.zb.list[0]);
   }
@@ -2069,6 +2116,7 @@ void loop() {
     static unsigned long lastTrend = 0;
     if (state.zb.count > 0 && (lastTrend == 0 || now - lastTrend > 300000UL)) {
       lastTrend = now;
+      heapwatch::Scope hws(heaptag::CLIMLOG);
       int dT = 0, dH = 0, dP = 0;
       state.zbTrendOk = climateLog.trend(3, dT, dH, dP);
       state.zbTemp10Delta3h = dT;
@@ -2157,25 +2205,41 @@ void loop() {
    * would re-send a month every time the router blinks. The receiver merges
    * by timestamp, so re-sending what it already has is free of consequence -
    * only of a little traffic. */
-  static bool wasLinked = false;
+  /* Not on the link-up edge itself, but NOCT_LINK_BACK_DELAY_MS later. The
+   * moment a link comes up is also when the cover is fetched and the first
+   * payloads are parsed; with the export on top, the heap ran dry at every
+   * boot — measured: the export's own file opens failed (4 KB each, the FATFS
+   * window), and so did WiFi TX buffers for its rows, in the loop task and in
+   * lwIP's. Twenty seconds later all of that is over. */
+  static unsigned long linkedSince = 0;
+  static bool linkBackChecked = false;
   static unsigned long lastAutoDump = 0;
   bool linked = tcp.connected();
-  if (linked && !wasLinked && !climateLog.exportActive() &&
-      (lastAutoDump == 0 || now - lastAutoDump > 3600000UL)) {
-    if (climateLog.exportBegin(3) && tcp.sendClimateCsvBegin(3)) {
-      lastAutoDump = now;
-      Serial.println("[CSV] link back: mirroring 3 days of archive");
-    } else {
-      climateLog.exportAbort();
+  if (!linked) {
+    linkedSince = 0;
+    linkBackChecked = false;
+  } else if (!linkedSince) {
+    linkedSince = now ? now : 1;
+  }
+  if (linked && !linkBackChecked && now - linkedSince >= NOCT_LINK_BACK_DELAY_MS &&
+      !climateLog.exportActive()) {
+    linkBackChecked = true;
+    if (lastAutoDump == 0 || now - lastAutoDump > 3600000UL) {
+      if (climateLog.exportBegin(3) && tcp.sendClimateCsvBegin(3)) {
+        lastAutoDump = now;
+        Serial.println("[CSV] link back: mirroring 3 days of archive");
+      } else {
+        climateLog.exportAbort();
+      }
     }
   }
-  wasLinked = linked;
 
   static unsigned long lastPump = 0;
   /* The row in flight, kept across iterations so a refused send can retry it. */
   static char exRow[80] = {0};
   if ((climateLog.exportActive() || exRow[0]) && now - lastPump >= 100) {
     lastPump = now;
+    heapwatch::Scope hws(heaptag::EXPORT);
     /* Rate limit, not just a burst cap. This block sits in the main loop,
      * which spins at frame rate - without the 100 ms gate the "30 rows per
      * call" ran thirty times a second, buried the socket, and sendLine tore a
@@ -2239,7 +2303,7 @@ void loop() {
       frameBusyUs = 0;
       frameCount = 0;
       state.heapFreeKb = (int)(ESP.getFreeHeap() / 1024);
-      state.heapMinKb = (int)(ESP.getMinFreeHeap() / 1024);
+      state.heapMinKb = (int)(heapwatch::bootMin() / 1024);
       state.heapLargestKb =
           (int)(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024);
       state.uptimeSec = now / 1000UL;
@@ -2260,6 +2324,7 @@ void loop() {
   /* frame */
   if (frameTimer.check(now)) {
     unsigned long frameT0 = micros();
+    heapwatch::enter(heaptag::DRAW);
     UiCtx ui{display.fb, state, graphs, pet,        brain,
              now,        &forza.state(), forzaLive, &histories,
              coverClient.ready() ? coverClient.data() : nullptr,
@@ -2276,6 +2341,7 @@ void loop() {
       if (hm2 != lastHomeMode || (hm2 > 0 && now - lastClimLoad > 120000UL)) {
         lastHomeMode = hm2;
         lastClimLoad = now;
+        heapwatch::Scope hws(heaptag::CLIMLOG);
         climateSeriesOk =
             hm2 > 0 && climateLog.loadSeries(hm2 == 1 ? 1 : 7, climateSeries);
       }
@@ -2290,6 +2356,7 @@ void loop() {
     if (theme::uiStyle == theme::STYLE_LED && dots == 0) dots = 1;
     if (dots > 0) display.applyDots(dots == 1 ? 3 : 4, theme::BG);
     display.push();
+    heapwatch::leave(heaptag::DRAW);
     frameBusyUs += micros() - frameT0;
     frameCount++;
     /* drain queued SD writes at most ~2x/sec — each is an open/append/close, so
@@ -2302,6 +2369,7 @@ void loop() {
                              : "zigbee не запущен");
     }
     if (sceneMgr.takeShotRequest()) {
+      heapwatch::Scope hws(heaptag::SHOT);
       bool okShot = saveScreenshot();
       if (okShot) ach.bump(Achievements::ACH_SHOT);
       sceneMgr.toast(okShot ? "снимок сохранен" : "снимок: нет карты");
@@ -2313,6 +2381,7 @@ void loop() {
 
     static unsigned long lastFlush = 0;
     if (now - lastFlush > 500) {
+      heapwatch::Scope hws(heaptag::SD);
       sd.flush(); /* bounded to NOCT_SD_FLUSH_MAX entries per call */
       lastFlush = now;
       /* The card can go away at runtime — SdStore gives up on it after a run of
@@ -2335,7 +2404,7 @@ void loop() {
           "ago, lost %d, dead %d | ct=%d gt=%d cl=%d gl=%d ram=%.1f/%.1f "
           "| board %.1fC (max %.1f)\n",
           (unsigned)(ESP.getFreeHeap() / 1024),
-          (unsigned)(ESP.getMinFreeHeap() / 1024), sceneMgr.currentScene(),
+          (unsigned)(heapwatch::bootMin() / 1024), sceneMgr.currentScene(),
           tcp.connected(), state.link.llmBusy,
           tcp.hasData() ? age / 1000UL : 9999UL, state.link.signalLost,
           state.link.dataDead, state.hw.ct, state.hw.gt, state.hw.cl,

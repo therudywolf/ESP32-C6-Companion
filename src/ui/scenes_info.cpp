@@ -2,6 +2,7 @@
  * EVENTS, SYSINFO. */
 #include <WiFi.h>
 
+#include "core/HeapWatch.h"
 #include "core/config.h"
 #include "ui/Scenes.h"
 
@@ -925,7 +926,7 @@ void drawSysInfo(UiCtx &ui) {
   y += rowH;
   snprintf(v, sizeof(v), "heap: %u KB (min %u)   плата: %.0fC (пик %.0f)",
            (unsigned)(ESP.getFreeHeap() / 1024),
-           (unsigned)(ESP.getMinFreeHeap() / 1024), ui.st.boardTemp,
+           (unsigned)(heapwatch::bootMin() / 1024), ui.st.boardTemp,
            ui.st.boardTempMax);
   /* the board's own temperature turns amber once the backlight guard engages */
   textAt(g, 18, y, v,

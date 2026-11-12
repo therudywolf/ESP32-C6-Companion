@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 
+#include "core/HeapWatch.h"
 #include "core/TextUtil.h"
 #include "pet/PetKind.h"
 
@@ -137,6 +138,7 @@ bool LlmClient::callOnce(const char *base, const String &context,
                   base);
     return false;
   }
+  heapwatch::Scope hws(heaptag::LLM);
   HTTPClient http;
   String url = String(base) + "/v1/chat/completions";
   if (!http.begin(url)) return false;
@@ -145,33 +147,49 @@ bool LlmClient::callOnce(const char *base, const String &context,
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", String("Bearer ") + apiKey_);
 
-  JsonDocument req;
-  req["model"] = model;
-  req["max_tokens"] = NOCT_LLM_MAX_TOKENS;
-  req["temperature"] = 0.9;
-  req["stream"] = false;
-  JsonArray msgs = req["messages"].to<JsonArray>();
-  JsonObject sys = msgs.add<JsonObject>();
-  sys["role"] = "system";
-  sys["content"] = String(petkind::llmIdentity()) + kSystemPromptTail;
-  JsonObject usr = msgs.add<JsonObject>();
-  usr["role"] = "user";
-  usr["content"] = context;
-
+  /* Memory, in this order, because the heap is ~32 KB and this call used to
+   * hold all of it at once: the request document AND its text through the
+   * whole round trip, then the full reply as a String AND a full copy of it
+   * in a second document — reasoning text included, up to 800 tokens of it.
+   * The nightly journal (big model, longest prompt) is the worst case and
+   * runs at midnight, right where the heap's low-water mark kept stepping
+   * down. Now: the document dies before the request goes out, the text
+   * before the reply arrives, and the reply keeps only the one string read. */
   String body;
-  serializeJson(req, body);
+  {
+    JsonDocument req;
+    req["model"] = model;
+    req["max_tokens"] = NOCT_LLM_MAX_TOKENS;
+    req["temperature"] = 0.9;
+    req["stream"] = false;
+    JsonArray msgs = req["messages"].to<JsonArray>();
+    JsonObject sys = msgs.add<JsonObject>();
+    sys["role"] = "system";
+    sys["content"] = String(petkind::llmIdentity()) + kSystemPromptTail;
+    JsonObject usr = msgs.add<JsonObject>();
+    usr["role"] = "user";
+    usr["content"] = context;
+    serializeJson(req, body);
+  }
 
   unsigned long t0 = millis();
   int code = http.POST(body);
+  body = String();
   if (code != 200) {
     Serial.printf("[LLM] %s -> HTTP %d\n", base, code);
     http.end();
     return false;
   }
 
+  JsonDocument filter;
+  filter["choices"][0]["message"]["content"] = true;
   JsonDocument resp;
-  DeserializationError err = deserializeJson(resp, http.getString());
-  http.end();
+  DeserializationError err;
+  {
+    String raw = http.getString();
+    http.end();
+    err = deserializeJson(resp, raw, DeserializationOption::Filter(filter));
+  }
   if (err) {
     Serial.printf("[LLM] JSON error: %s\n", err.c_str());
     return false;

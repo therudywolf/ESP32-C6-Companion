@@ -2,6 +2,34 @@
 
 #include <esp_wifi.h>
 
+#include "core/config.h"
+
+/* Bring the WiFi driver up ourselves, before Arduino does, to cap its RX
+ * buffers (see NOCT_WIFI_DYN_RX_BUFS for why). Arduino hard-codes 32 in
+ * wifiLowLevelInit() and has no setting for it. It does not need one: the
+ * IDF's esp_wifi_init() returns ESP_OK at once when the driver is already
+ * initialised — checked in this build's own libesp_wifi.a, where the first
+ * thing the function does is `if (s_wifi_inited) return 0`. So Arduino's
+ * call becomes a no-op and the rest of its setup (netifs, events, RAM-only
+ * storage) runs exactly as before. Every other field is Arduino's own
+ * dynamic-buffer profile, copied, so nothing but the RX cap changes. */
+static void capDriverRxBuffers() {
+  static bool done = false;
+  if (done) return;
+  done = true;
+  Network.begin(); /* netif + default event loop; idempotent, Arduino's too */
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  cfg.static_tx_buf_num = 0;
+  cfg.dynamic_tx_buf_num = 32;
+  cfg.tx_buf_type = 1;
+  cfg.cache_tx_buf_num = 4; /* can't be zero, per Arduino */
+  cfg.static_rx_buf_num = 4;
+  cfg.dynamic_rx_buf_num = NOCT_WIFI_DYN_RX_BUFS;
+  esp_err_t err = esp_wifi_init(&cfg);
+  Serial.printf("[NET] wifi driver: at most %d rx frames in heap (Arduino: 32) - %s\n",
+                NOCT_WIFI_DYN_RX_BUFS, esp_err_to_name(err));
+}
+
 void WifiManager::begin(const WifiCred *nets, size_t count, int forcedIdx) {
   count_ = 0;
   for (size_t i = 0; i < count && count_ < NOCT_WIFI_MAX_NETS; i++) {
@@ -9,6 +37,7 @@ void WifiManager::begin(const WifiCred *nets, size_t count, int forcedIdx) {
     nets_[count_++] = nets[i];
   }
   forced_ = (forcedIdx >= 0 && forcedIdx < (int)count_) ? forcedIdx : -1;
+  capDriverRxBuffers();
   WiFi.mode(WIFI_STA);
   WiFi.persistent(false);
   WiFi.setHostname("nocturne-c6"); /* friendly name on the router's client list */

@@ -62,6 +62,18 @@
 #define NOCT_WIFI_RETRY_INTERVAL_MS 8000
 #define NOCT_WIFI_CONNECT_TIMEOUT_MS 15000
 #define NOCT_WIFI_MAX_NETS 5
+/* How many received frames the WiFi driver may hold in heap at once. Each is
+ * a 2360 B allocation on this chip (measured by the failed-alloc hook), kept
+ * until lwIP and the socket owner have consumed it. Arduino allows 32 — 75 KB
+ * on a board with ~32 KB free — so any burst of traffic used to hand the
+ * driver the whole heap: the boot low-water mark sat at 0 for a month. Eight
+ * is 19 KB worst case, still above the AMPDU block-ack window of 6 and the
+ * driver's floor of static_rx_buf_num (4). Frames past the cap are dropped by
+ * the driver, which is what happened anyway once malloc failed; TCP resends. */
+#define NOCT_WIFI_DYN_RX_BUFS 8
+/* The 3-day archive mirror after a (re)connect waits this long, so it does
+ * not land on top of the cover fetch and the first payloads. */
+#define NOCT_LINK_BACK_DELAY_MS 20000UL
 
 /* ── LLM (LM Studio) ──────────────────────────────────────────────────── */
 #define NOCT_LLM_TIMEOUT_MS 25000      /* JIT model load can take ~13 s cold */
@@ -191,6 +203,6 @@
  * NOCT_BRIGHT_MAX is 100% as far as the UI is concerned — never divide the
  * displayed percentage by 255, or the menu tops out at "82%". */
 #define NOCT_BRIGHT_MAX 210
-#define NOCT_VERSION "1.45.0"
+#define NOCT_VERSION "1.45.1"
 
 #endif

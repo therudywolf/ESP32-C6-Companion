@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <lwip/sockets.h>
 
+#include "core/HeapWatch.h"
 #include "core/TextUtil.h"
 #include "ui/SceneIds.h"
 
@@ -23,6 +24,7 @@ void TelemetryClient::tryConnect(unsigned long now) {
 
   if (now - lastAttempt_ < backoff) return;
   lastAttempt_ = now;
+  heapwatch::Scope hws(heaptag::CONNECT);
 
   /* Which hub this attempt is for. port2_ == 0 means "same port as the
      primary" — the common case, since both hubs are the same program. */
@@ -328,6 +330,7 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
   if (tcpConnected_ && onFallback_ && host_ &&
       (long)(now - primaryRetryAt_) >= 0) {
     primaryRetryAt_ = now + NOCT_TCP_PRIMARY_RETRY_MS;
+    heapwatch::Scope hws(heaptag::CONNECT);
     WiFiClient probe;
     bool alive = probe.connect(host_, port_, NOCT_TCP_CONNECT_TIMEOUT_MS);
     Serial.printf("[NET] проверяю основной %s:%u -> %s\n", host_, port_,
@@ -400,6 +403,7 @@ void TelemetryClient::tick(unsigned long now, bool wifiUp, AppState &state,
 bool TelemetryClient::parsePayload(const char *line, size_t len,
                                    AppState &state, Graphs &graphs,
                                    bool fromLink) {
+  heapwatch::Scope hws(heaptag::PARSE);
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, line, len);
   if (err) {
