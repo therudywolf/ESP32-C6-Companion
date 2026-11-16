@@ -166,10 +166,32 @@ int PetBrain::clockHour() {
   return -1;
 }
 
+/* Background and system processes the wolf must never comment on. Mirrors
+ * SILENT_APPS in the desktop wolf. Names of 5+ letters match as a substring
+ * ("MicrosoftEdgeUpdate" hits "update"), shorter ones only exactly. */
 static bool sysProcess(const String &app) {
-  return app == "System Idle Process" || app == "Idle" ||
-         app.startsWith("System") || app.startsWith("pythonw") ||
-         app == "dwm.exe" || app == "Registry"; /* pythonw = monitor.py */
+  static const char *const SILENT[] = {
+      "msedgewebview2", "webview2", "msmpeng", "mpdefendercoreservice",
+      "searchindexer", "searchhost", "searchapp", "svchost", "wuauclt",
+      "musnotification", "usoclient", "trustedinstaller", "tiworker",
+      "googleupdate", "microsoftedgeupdate", "update", "updater", "installer",
+      "setup", "runtimebroker", "applicationframehost", "textinputhost",
+      "shellexperiencehost", "startmenuexperiencehost", "lockapp", "sihost",
+      "taskhostw", "backgroundtaskhost", "ctfmon", "dwm", "conhost",
+      "openconsole", "csrss", "winlogon", "fontdrvhost", "widgets",
+      "securityhealth", "smartscreen", "dllhost", "wmiprvse", "system", "idle",
+      "registry", "pythonw", /* pythonw = the hub itself */
+  };
+  String low = app;
+  low.trim();
+  low.toLowerCase();
+  if (low.endsWith(".exe")) low.remove(low.length() - 4);
+  if (!low.length()) return false;
+  for (const char *n : SILENT) {
+    size_t nl = strlen(n);
+    if (low == n || (nl >= 5 && low.indexOf(n) >= 0)) return true;
+  }
+  return false;
 }
 
 PhraseCtx PetBrain::makeCtx(AppState &st) {
@@ -767,7 +789,8 @@ void PetBrain::tick(unsigned long now, AppState &st) {
       else if (st.hw.gl >= 50)
         angle = "видеокарта хозяина занята на " + String(st.hw.gl) +
                 " процентов — прокомментируй чем";
-      else if (st.process.cpuNames[0].length())
+      else if (st.process.cpuNames[0].length() &&
+               !sysProcess(st.process.cpuNames[0]))
         angle = "хозяин сейчас сидит в " + st.process.cpuNames[0] +
                 " — подколи или похвали";
       else if (st.weatherReceived)

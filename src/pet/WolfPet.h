@@ -60,6 +60,10 @@ private:
   unsigned long lastDecayMs_ = 0;
   unsigned long lastSaveMs_ = 0;
   uint32_t ageAccumMs_ = 0;
+  /* hunger and boredom drain in tenths of a point per decay step: a full
+   * belly lasts ~4.7 h awake, not an hour. */
+  uint8_t hungerTenths_ = 0;
+  uint8_t happyTenths_ = 0;
   bool nightRest_ = false;
   bool dirty_ = false; /* unsaved stat change — skips the periodic NVS write
                           while nothing changed (e.g. the pet is fainted) */

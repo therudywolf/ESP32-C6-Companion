@@ -53,19 +53,21 @@ void WolfPet::tick(unsigned long now) {
     }
     if (sleeping_) {
       energy_ += 6;
-      hunger_ -= 1;
+      hungerTenths_ += 2; /* 0.2 of a point per step while asleep */
       if (energy_ >= 96) {
         sleeping_ = false;
         happy_ += 3; /* woke up refreshed */
       }
     } else {
-      hunger_ -= 2;
-      happy_ -= 1;
+      hungerTenths_ += 4; /* 0.4 per step: 100 -> "hungry" (<25) in ~4.7 h */
+      happyTenths_ += 4;
       energy_ -= 1;
       /* 18 by day; 60 in quiet hours, so the animal goes to bed with the
        * house rather than staying up until it drops. */
       if (energy_ <= (nightRest_ ? 60 : 18)) sleeping_ = true;
     }
+    while (hungerTenths_ >= 10) { hungerTenths_ -= 10; hunger_--; }
+    while (happyTenths_ >= 10) { happyTenths_ -= 10; happy_--; }
     clampAll();
     if (hunger_ == 0 && happy_ == 0 && energy_ == 0) {
       alive_ = false;
